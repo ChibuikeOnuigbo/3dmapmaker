@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>360 Panorama with Sky & Ground</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+      background: #000;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 100;
+      color: white;
+      font-family: sans-serif;
+      background: rgba(0,0,0,0.4);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    input {
+      display: block;
+      margin: 5px 0;
+    }
+    #zoomSlider {
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <label>Panorama (horizontal): <input type="file" id="panoInput" accept="image/*"></label>
+    <label>Sky (top): <input type="file" id="skyInput" accept="image/*"></label>
+    <label>Ground (bottom): <input type="file" id="groundInput" accept="image/*"></label>
+    <label>Zoom: <input type="range" id="zoomSlider" min="30" max="100" value="75"></label>
+  </div>
+  <canvas id="viewer"></canvas>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.155/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.155/examples/jsm/controls/OrbitControls.js";
+
+    let scene, camera, renderer, controls;
+    let panoMesh, skyMesh, groundMesh;
+    const canvas = document.getElementById("viewer");
+
+    init();
+    animate();
+
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+      camera.position.set(0, 0, 0.1);
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.enableZoom = true;
+
+      // Limit vertical looking to avoid ugly stretched clusters
+      controls.minPolarAngle = Math.PI / 3;   // ~60° down
+      controls.maxPolarAngle = 2 * Math.PI / 3; // ~120° up
+
+      window.addEventListener("resize", onWindowResize);
+
+      // Default pano sphere
+      const sphereGeo = new THREE.SphereGeometry(500, 60, 40);
+      sphereGeo.scale(-1, 1, 1); // Invert so we see inside
+      const defaultMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+      panoMesh = new THREE.Mesh(sphereGeo, defaultMat);
+      scene.add(panoMesh);
+
+      // Sky dome (upper hemisphere)
+      const skyGeo = new THREE.SphereGeometry(500, 60, 40, 0, Math.PI * 2, 0, Math.PI / 2);
+      skyGeo.scale(-1, 1, 1);
+      const skyMat = new THREE.MeshBasicMaterial({ color: 0x3366ff, side: THREE.BackSide });
+      skyMesh = new THREE.Mesh(skyGeo, skyMat);
+      scene.add(skyMesh);
+
+      // Ground plane
+      const groundGeo = new THREE.CircleGeometry(500, 64);
+      const groundMat = new THREE.MeshBasicMaterial({ color: 0x444444, side: THREE.DoubleSide });
+      groundMesh = new THREE.Mesh(groundGeo, groundMat);
+      groundMesh.rotation.x = -Math.PI / 2;
+      scene.add(groundMesh);
+
+      // Hook up file inputs
+      document.getElementById("panoInput").addEventListener("change", e => loadTexture(e, panoMesh, true));
+      document.getElementById("skyInput").addEventListener("change", e => loadTexture(e, skyMesh, false));
+      document.getElementById("groundInput").addEventListener("change", e => loadTexture(e, groundMesh, false));
+
+      // Zoom slider
+      document.getElementById("zoomSlider").addEventListener("input", e => {
+        camera.fov = e.target.value;
+        camera.updateProjectionMatrix();
+      });
+    }
+
+    function loadTexture(event, mesh, isSphere) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const texture = new THREE.TextureLoader().load(url, () => {
+        URL.revokeObjectURL(url);
+      });
+      texture.minFilter = THREE.LinearFilter;
+
+      if (isSphere) {
+        mesh.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+      } else {
+        mesh.material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+      }
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>

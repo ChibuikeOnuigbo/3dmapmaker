@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced 3D Campus Navigation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a2a3a, #0d1b2a);
+            color: #fff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+
+        .header.hidden {
+            transform: translateY(-100%);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #4cc9f0, #4361ee);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 80px);
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .viewer-container {
+            flex: 1;
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: #000;
+        }
+
+        #viewer {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            perspective: 1000px;
+            cursor: grab;
+        }
+
+        #viewer.dragging {
+            cursor: grabbing;
+        }
+
+        .sphere-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transition: transform 0.1s linear;
+        }
+
+        .sphere-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            transform-origin: center;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            border-radius: 50%;
+        }
+
+        .sphere-face.active {
+            opacity: 1;
+        }
+
+        /* UI Controls */
+        .ui-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 40;
+        }
+
+        .ui-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .ui-btn:hover {
+            background: rgba(67, 97, 238, 0.8);
+            transform: scale(1.1);
+        }
+
+        /* Speed Controls */
+        .speed-controls {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 40;
+            backdrop-filter: blur(10px);
+        }
+
+        .speed-controls label {
+            font-size: 14px;
+            color: #4cc9f0;
+        }
+
+        .speed-slider {
+            width: 150px;
+        }
+
+        /* 360 Viewer Controls */
+        .viewer-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-btn:hover {
+            background: rgba(67, 97, 238, 0.8);
+            transform: scale(1.1);
+        }
+
+        /* Mobile Joystick */
+        .joystick-container {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            z-index: 25;
+            display: none;
+        }
+
+        .joystick-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+
+        .joystick-handle {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(67, 97, 238, 0.8);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Navigation panel */
+        .nav-panel {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-height: 100%;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .nav-panel.hidden {
+            transform: translateX(100%);
+        }
+
+        .panel-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #4cc9f0;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            background: #4361ee;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn:hover {
+            background: #3a56d4;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #4cc9f0;
+        }
+
+        .btn-danger {
+            background: #f72585;
+        }
+
+        .btn-warning {
+            background: #f7b32b;
+        }
+
+        .node-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .node-item {
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .node-item.active {
+            background: rgba(67, 97, 238, 0.3);
+            border-left: 3px solid #4361ee;
+        }
+
+        .node-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .node-action-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+        }
+
+        .delete-btn {
+            background: #f72585;
+        }
+
+        .delete-btn:hover {
+            background: #e11575;
+        }
+
+        /* Upload modal */
+        .upload-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a2a3a;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #4cc9f0;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+            background: #2d3748;
+            color: white;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        /* 360 Upload Modal */
+        .upload-360-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-360-content {
+            background: #1a2a3a;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .image-upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .image-upload-item {
+            border: 1px dashed #4a5568;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .image-upload-item h4 {
+            margin-bottom: 0.5rem;
+            color: #4cc9f0;
+        }
+
+        .image-preview {
+            width: 100%;
+            height: 100px;
+            background: #2d3748;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        /* Transition overlay */
+        .transition-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .transition-overlay.active {
+            opacity: 1;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem;
+            background: #4361ee;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        /* Hamburger menu */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 30px;
+            height: 21px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .hamburger span {
+            display: block;
+            height: 3px;
+            width: 100%;
+            background-color: white;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger.active span:nth-child(1) {
+            transform: translateY(9px) rotate(45deg);
+        }
+
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger.active span:nth-child(3) {
+            transform: translateY(-9px) rotate(-45deg);
+        }
+
+        /* Loading indicator */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 1.5rem;
+            z-index: 10;
+        }
+
+        /* Mobile detection and adjustments */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+                padding: 0.5rem;
+                height: calc(100vh - 60px);
+            }
+
+            .nav-panel {
+                width: 100%;
+                max-height: 40vh;
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-radius: 12px 12px 0 0;
+                z-index: 90;
+            }
+
+            .hamburger {
+                display: flex;
+            }
+
+            .joystick-container {
+                display: block;
+            }
+
+            .viewer-controls {
+                bottom: 150px;
+                gap: 10px;
+            }
+
+            .control-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+
+            .speed-controls {
+                bottom: 150px;
+                right: 10px;
+            }
+
+            .speed-slider {
+                width: 120px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header" id="header">
+        <div class="logo">CampusNav 360</div>
+        <button class="hamburger" id="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <button class="btn back-btn" onclick="goBack()">Back to Main Page</button>
+    </div>
+
+    <div class="main-container">
+        <div class="viewer-container">
+            <div id="viewer">
+                <div class="sphere-container" id="sphereContainer">
+                    <!-- Sphere faces will be dynamically created -->
+                </div>
+                
+                <div class="loading" id="loadingIndicator">Loading 360° View...</div>
+                
+                <div class="transition-overlay" id="transitionOverlay"></div>
+
+                <!-- UI Controls -->
+                <div class="ui-controls">
+                    <button class="ui-btn" id="toggleHeaderBtn" title="Toggle Header">👤</button>
+                    <button class="ui-btn" id="togglePanelBtn" title="Toggle Panel">📋</button>
+                    <button class="ui-btn" id="fullscreenBtn" title="Fullscreen">⛶</button>
+                </div>
+
+                <!-- Speed Controls -->
+                <div class="speed-controls">
+                    <label for="rotationSpeed">Rotation Speed</label>
+                    <input type="range" id="rotationSpeed" class="speed-slider" min="0.1" max="3" step="0.1" value="1">
+                </div>
+
+                <!-- Mobile Joystick -->
+                <div class="joystick-container" id="joystickContainer">
+                    <div class="joystick-base">
+                        <div class="joystick-handle" id="joystickHandle"></div>
+                    </div>
+                </div>
+
+                <!-- Viewer Controls -->
+                <div class="viewer-controls">
+                    <button class="control-btn" id="moveForward">↑</button>
+                    <button class="control-btn" id="moveLeft">←</button>
+                    <button class="control-btn" id="moveBackward">↓</button>
+                    <button class="control-btn" id="moveRight">→</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-panel" id="navPanel">
+            <div class="panel-section">
+                <div class="panel-title">Navigation</div>
+                <div class="form-group">
+                    <label>Current Location: <span id="currentLocation">Entrance</span></label>
+                </div>
+                <button class="btn" id="uploadBaseBtn">Upload Base Image</button>
+                <button class="btn btn-secondary" id="saveDataBtn">Save Data</button>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">Locations</div>
+                <div class="node-list" id="nodeList">
+                    <!-- Locations will be populated here -->
+                </div>
+                <button class="btn" id="addLocationBtn">Add New Location</button>
+            </div>
+
+            <div class="panel-section">
+                <div class="panel-title">360° Images</div>
+                <div class="form-group">
+                    <label>Status: <span id="imagesStatus">Base image only</span></label>
+                </div>
+                <button class="btn" id="uploadHorizontalBtn">Upload Horizontal Images</button>
+                <button class="btn" id="uploadVerticalBtn">Upload Vertical Images</button>
+                <button class="btn btn-warning" id="manage360ImagesBtn">Manage All 360° Images</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Base Image Upload Modal -->
+    <div class="upload-modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-title" id="modalTitle">Upload Base Image</div>
+            <div class="form-group">
+                <label for="imageUpload">Select Image</label>
+                <input type="file" id="imageUpload" class="form-control" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="locationName">Location Name</label>
+                <input type="text" id="locationName" class="form-control" placeholder="Enter location name">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelUpload">Cancel</button>
+                <button class="btn" id="confirmUpload">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 360 Images Upload Modal -->
+    <div class="upload-360-modal" id="upload360Modal">
+        <div class="modal-360-content">
+            <div class="modal-title" id="modal360Title">Upload 360° Images</div>
+            
+            <div class="form-group">
+                <label>Select Images for Different Directions</label>
+                <div class="image-upload-grid">
+                    <!-- Horizontal Images -->
+                    <div class="image-upload-item">
+                        <h4>Front</h4>
+                        <div class="image-preview" id="previewFront">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="front" accept="image/*">
+                    </div>
+                    <div class="image-upload-item">
+                        <h4>Back</h4>
+                        <div class="image-preview" id="previewBack">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="back" accept="image/*">
+                    </div>
+                    <div class="image-upload-item">
+                        <h4>Left</h4>
+                        <div class="image-preview" id="previewLeft">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="left" accept="image/*">
+                    </div>
+                    <div class="image-upload-item">
+                        <h4>Right</h4>
+                        <div class="image-preview" id="previewRight">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="right" accept="image/*">
+                    </div>
+                    
+                    <!-- Vertical Images -->
+                    <div class="image-upload-item">
+                        <h4>Up</h4>
+                        <div class="image-preview" id="previewUp">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="up" accept="image/*">
+                    </div>
+                    <div class="image-upload-item">
+                        <h4>Down</h4>
+                        <div class="image-preview" id="previewDown">
+                            <span>No image</span>
+                        </div>
+                        <input type="file" class="form-control image-upload-input" data-direction="down" accept="image/*">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancel360Upload">Cancel</button>
+                <button class="btn" id="confirm360Upload">Save All Images</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">Operation completed successfully!</div>
+
+    <script>
+        // Enhanced data structure for 360° navigation
+        let campusData = {
+            locations: [],
+            currentLocation: null,
+            settings: {
+                movementSpeed: 0.5,
+                rotationSpeed: 1,
+                transitionDuration: 800
+            }
+        };
+
+        // Current viewer state
+        let viewerState = {
+            yaw: 0,        // Horizontal rotation
+            pitch: 0,      // Vertical rotation
+            isDragging: false,
+            lastX: 0,
+            lastY: 0,
+            isTransitioning: false,
+            isInputFocused: false
+        };
+
+        // Load data from localStorage
+        function loadData() {
+            const savedData = localStorage.getItem('campusNav360Data');
+            if (savedData) {
+                campusData = JSON.parse(savedData);
+            }
+
+            // Initialize with default location if empty
+            if (campusData.locations.length === 0) {
+                createLocation('Entrance', 'https://via.placeholder.com/800x600/2d3748/ffffff?text=Welcome+to+Campus');
+                campusData.currentLocation = campusData.locations[0].id;
+            }
+
+            updateUI();
+            initializeViewer();
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('campusNav360Data', JSON.stringify(campusData));
+            showNotification('Data saved successfully!');
+        }
+
+        // Create a new location
+        function createLocation(name, baseImage = null) {
+            const id = 'loc-' + Date.now();
+            const location = {
+                id,
+                name,
+                baseImage,
+                // 360° images for different directions
+                images360: {
+                    front: baseImage, // Use base image as front by default
+                    back: null,
+                    left: null,
+                    right: null,
+                    up: null,
+                    down: null
+                },
+                // Navigation links to other locations
+                links: {
+                    north: null,
+                    south: null,
+                    east: null,
+                    west: null
+                },
+                position: { x: 0, y: 0 } // For 2D map
+            };
+
+            campusData.locations.push(location);
+            return location;
+        }
+
+        // Delete a location and its images
+        function deleteLocation(locationId) {
+            if (campusData.locations.length <= 1) {
+                showNotification('Cannot delete the only location!');
+                return;
+            }
+
+            const location = campusData.locations.find(loc => loc.id === locationId);
+            if (!location) return;
+
+            // Revoke blob URLs to free memory
+            if (location.baseImage && location.baseImage.startsWith('blob:')) {
+                URL.revokeObjectURL(location.baseImage);
+            }
+            
+            Object.values(location.images360).forEach(imgUrl => {
+                if (imgUrl && imgUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(imgUrl);
+                }
+            });
+
+            // Remove location from array
+            campusData.locations = campusData.locations.filter(loc => loc.id !== locationId);
+
+            // Update current location if needed
+            if (campusData.currentLocation === locationId) {
+                campusData.currentLocation = campusData.locations[0].id;
+            }
+
+            // Remove links to this location from other locations
+            campusData.locations.forEach(loc => {
+                Object.keys(loc.links).forEach(direction => {
+                    if (loc.links[direction] === locationId) {
+                        loc.links[direction] = null;
+                    }
+                });
+            });
+
+            saveData();
+            updateUI();
+            initializeViewer();
+            showNotification('Location deleted successfully!');
+        }
+
+        // Get current location object
+        function getCurrentLocation() {
+            return campusData.locations.find(loc => loc.id === campusData.currentLocation);
+        }
+
+        // Initialize the 360° viewer with enhanced curved projection
+        function initializeViewer() {
+            const currentLocation = getCurrentLocation();
+            if (!currentLocation) return;
+
+            createSphereFaces(currentLocation);
+            updateViewerTransform();
+        }
+
+        // Create sphere faces for 360° view with enhanced curvature
+        function createSphereFaces(location) {
+            const sphereContainer = document.getElementById('sphereContainer');
+            sphereContainer.innerHTML = '';
+
+            const faces = [
+                { id: 'front', transform: 'rotateY(0deg) translateZ(500px) rotateY(0deg)' },
+                { id: 'back', transform: 'rotateY(180deg) translateZ(500px) rotateY(0deg)' },
+                { id: 'right', transform: 'rotateY(90deg) translateZ(500px) rotateY(0deg)' },
+                { id: 'left', transform: 'rotateY(-90deg) translateZ(500px) rotateY(0deg)' },
+                { id: 'up', transform: 'rotateX(90deg) translateZ(500px) rotateX(0deg)' },
+                { id: 'down', transform: 'rotateX(-90deg) translateZ(500px) rotateX(0deg)' }
+            ];
+
+            faces.forEach(face => {
+                const faceDiv = document.createElement('div');
+                faceDiv.className = 'sphere-face';
+                faceDiv.id = `face-${face.id}`;
+                faceDiv.style.transform = face.transform;
+                
+                // Apply curvature to create spherical effect
+                faceDiv.style.borderRadius = '50%';
+                
+                // Set background image if available
+                const imageUrl = location.images360[face.id];
+                if (imageUrl) {
+                    faceDiv.style.backgroundImage = `url(${imageUrl})`;
+                    faceDiv.classList.add('active');
+                }
+                
+                sphereContainer.appendChild(faceDiv);
+            });
+
+            // Show loading until images are ready
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = 'block';
+            
+            // Hide loading after a short delay
+            setTimeout(() => {
+                loadingIndicator.style.display = 'none';
+            }, 1000);
+        }
+
+        // Update viewer transform based on current yaw and pitch
+        function updateViewerTransform() {
+            const sphereContainer = document.getElementById('sphereContainer');
+            sphereContainer.style.transform = `rotateY(${viewerState.yaw}deg) rotateX(${viewerState.pitch}deg)`;
+        }
+
+        // Enhanced transition between locations with immersive effect
+        function moveToLocation(direction) {
+            if (viewerState.isTransitioning) return;
+            
+            const currentLocation = getCurrentLocation();
+            if (!currentLocation) return;
+
+            const targetLocationId = currentLocation.links[direction];
+            if (!targetLocationId) {
+                // Prompt to create new location
+                promptNewLocation(direction);
+                return;
+            }
+
+            // Find target location
+            const targetLocation = campusData.locations.find(loc => loc.id === targetLocationId);
+            if (!targetLocation) return;
+
+            // Start transition
+            viewerState.isTransitioning = true;
+            const transitionOverlay = document.getElementById('transitionOverlay');
+            transitionOverlay.classList.add('active');
+
+            // Enhanced transition effect with zoom and blur
+            const viewer = document.getElementById('viewer');
+            viewer.style.filter = 'blur(5px)';
+            
+            // Simulate immersive transition
+            setTimeout(() => {
+                // Update current location
+                campusData.currentLocation = targetLocationId;
+                
+                // Reset viewer orientation
+                viewerState.yaw = 0;
+                viewerState.pitch = 0;
+                
+                // Update viewer with new location
+                initializeViewer();
+                updateUI();
+
+                // End transition
+                setTimeout(() => {
+                    transitionOverlay.classList.remove('active');
+                    viewer.style.filter = 'none';
+                    viewerState.isTransitioning = false;
+                }, 300);
+            }, campusData.settings.transitionDuration);
+        }
+
+        // Prompt to create a new location
+        function promptNewLocation(direction) {
+            const directionNames = {
+                north: 'North',
+                south: 'South', 
+                east: 'East',
+                west: 'West'
+            };
+            
+            if (confirm(`No location found to the ${directionNames[direction]}. Would you like to create one?`)) {
+                openUploadModal(directionNames[direction]);
+            }
+        }
+
+        // Open base image upload modal
+        function openUploadModal(direction = '') {
+            const modal = document.getElementById('uploadModal');
+            const modalTitle = document.getElementById('modalTitle');
+            modalTitle.textContent = direction ? 
+                `Create Location to the ${direction}` : 
+                'Upload Base Image';
+            modal.style.display = 'flex';
+
+            // Set up the upload handler
+            const confirmBtn = document.getElementById('confirmUpload');
+            confirmBtn.onclick = () => {
+                const fileInput = document.getElementById('imageUpload');
+                const nameInput = document.getElementById('locationName');
+
+                if (!fileInput.files.length) {
+                    alert('Please select an image file.');
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                const name = nameInput.value || (direction ? `Location ${direction}` : 'New Location');
+
+                // Create blob URL for the image
+                const imgURL = URL.createObjectURL(file);
+
+                // Create new location
+                const currentLocation = getCurrentLocation();
+                const newLocation = createLocation(name, imgURL);
+
+                // Link locations if direction is specified
+                if (direction && currentLocation) {
+                    const directionMap = {
+                        'North': 'north',
+                        'South': 'south', 
+                        'East': 'east',
+                        'West': 'west'
+                    };
+                    
+                    const dirKey = directionMap[direction];
+                    if (dirKey) {
+                        currentLocation.links[dirKey] = newLocation.id;
+                        
+                        // Set opposite link
+                        const oppositeDirections = {
+                            north: 'south',
+                            south: 'north',
+                            east: 'west', 
+                            west: 'east'
+                        };
+                        newLocation.links[oppositeDirections[dirKey]] = currentLocation.id;
+                    }
+                }
+
+                modal.style.display = 'none';
+                fileInput.value = '';
+                nameInput.value = '';
+
+                saveData();
+                updateUI();
+                showNotification('Location created successfully!');
+            };
+
+            // Cancel button
+            document.getElementById('cancelUpload').onclick = () => {
+                modal.style.display = 'none';
+                fileInput.value = '';
+                nameInput.value = '';
+            };
+        }
+
+        // Open 360 images upload modal
+        function open360UploadModal() {
+            const currentLocation = getCurrentLocation();
+            if (!currentLocation) {
+                showNotification('Please select a location first!');
+                return;
+            }
+
+            const modal = document.getElementById('upload360Modal');
+            modal.style.display = 'flex';
+
+            // Load current images into previews
+            Object.keys(currentLocation.images360).forEach(direction => {
+                const preview = document.getElementById(`preview${direction.charAt(0).toUpperCase() + direction.slice(1)}`);
+                const imageUrl = currentLocation.images360[direction];
+                
+                if (imageUrl) {
+                    preview.innerHTML = `<img src="${imageUrl}" alt="${direction}">`;
+                } else {
+                    preview.innerHTML = '<span>No image</span>';
+                }
+            });
+
+            // Set up file input change handlers
+            document.querySelectorAll('.image-upload-input').forEach(input => {
+                input.onchange = function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    const direction = this.getAttribute('data-direction');
+                    const preview = document.getElementById(`preview${direction.charAt(0).toUpperCase() + direction.slice(1)}`);
+                    
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        preview.innerHTML = `<img src="${e.target.result}" alt="${direction}">`;
+                    };
+                    reader.readAsDataURL(file);
+                };
+            });
+
+            // Set up confirm button
+            document.getElementById('confirm360Upload').onclick = () => {
+                const currentLocation = getCurrentLocation();
+                if (!currentLocation) return;
+
+                // Process each file input
+                document.querySelectorAll('.image-upload-input').forEach(input => {
+                    const file = input.files[0];
+                    const direction = input.getAttribute('data-direction');
+                    
+                    if (file) {
+                        // Revoke old URL if it exists
+                        if (currentLocation.images360[direction] && 
+                            currentLocation.images360[direction].startsWith('blob:')) {
+                            URL.revokeObjectURL(currentLocation.images360[direction]);
+                        }
+                        
+                        // Create new blob URL
+                        currentLocation.images360[direction] = URL.createObjectURL(file);
+                    }
+                });
+
+                modal.style.display = 'none';
+                saveData();
+                initializeViewer();
+                updateUI();
+                showNotification('360° images updated successfully!');
+            };
+
+            // Cancel button
+            document.getElementById('cancel360Upload').onclick = () => {
+                modal.style.display = 'none';
+                // Reset file inputs
+                document.querySelectorAll('.image-upload-input').forEach(input => {
+                    input.value = '';
+                });
+            };
+        }
+
+        // Update UI elements
+        function updateUI() {
+            const currentLocation = getCurrentLocation();
+            if (!currentLocation) return;
+
+            // Update current location display
+            document.getElementById('currentLocation').textContent = currentLocation.name;
+
+            // Update location list
+            const nodeList = document.getElementById('nodeList');
+            nodeList.innerHTML = '';
+
+            campusData.locations.forEach(location => {
+                const locationItem = document.createElement('div');
+                locationItem.className = `node-item ${currentLocation.id === location.id ? 'active' : ''}`;
+                
+                const locationName = document.createElement('span');
+                locationName.textContent = location.name;
+                
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'node-actions';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'node-action-btn delete-btn';
+                deleteBtn.innerHTML = '🗑️';
+                deleteBtn.title = 'Delete Location';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete "${location.name}"?`)) {
+                        deleteLocation(location.id);
+                    }
+                };
+                
+                actionsDiv.appendChild(deleteBtn);
+                locationItem.appendChild(locationName);
+                locationItem.appendChild(actionsDiv);
+                
+                locationItem.onclick = () => {
+                    campusData.currentLocation = location.id;
+                    initializeViewer();
+                    updateUI();
+                };
+                nodeList.appendChild(locationItem);
+            });
+
+            // Update images status
+            const imagesStatus = document.getElementById('imagesStatus');
+            const has360Images = Object.values(currentLocation.images360).some(img => img !== null);
+            imagesStatus.textContent = has360Images ? '360° ready' : 'Base image only';
+            imagesStatus.style.color = has360Images ? '#4cc9f0' : '#f72585';
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Go back to main page
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        // Toggle header visibility
+        function toggleHeader() {
+            const header = document.getElementById('header');
+            header.classList.toggle('hidden');
+        }
+
+        // Toggle panel visibility
+        function togglePanel() {
+            const panel = document.getElementById('navPanel');
+            panel.classList.toggle('hidden');
+            
+            // Update hamburger icon
+            const hamburger = document.getElementById('hamburger');
+            hamburger.classList.toggle('active');
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load data
+            loadData();
+
+            // UI Control buttons
+            document.getElementById('toggleHeaderBtn').addEventListener('click', toggleHeader);
+            document.getElementById('togglePanelBtn').addEventListener('click', togglePanel);
+            
+            // Speed control
+            const speedSlider = document.getElementById('rotationSpeed');
+            speedSlider.value = campusData.settings.rotationSpeed;
+            speedSlider.addEventListener('input', (e) => {
+                campusData.settings.rotationSpeed = parseFloat(e.target.value);
+            });
+
+            // Track input focus to prevent movement during typing
+            document.addEventListener('focusin', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    viewerState.isInputFocused = true;
+                }
+            });
+
+            document.addEventListener('focusout', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    viewerState.isInputFocused = false;
+                }
+            });
+
+            // Mouse drag for 360° view
+            const viewer = document.getElementById('viewer');
+            viewer.addEventListener('mousedown', (e) => {
+                if (viewerState.isInputFocused) return;
+                viewerState.isDragging = true;
+                viewerState.lastX = e.clientX;
+                viewerState.lastY = e.clientY;
+                viewer.classList.add('dragging');
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!viewerState.isDragging || viewerState.isInputFocused) return;
+
+                const deltaX = e.clientX - viewerState.lastX;
+                const deltaY = e.clientY - viewerState.lastY;
+
+                viewerState.yaw -= deltaX * campusData.settings.rotationSpeed;
+                viewerState.pitch += deltaY * campusData.settings.rotationSpeed;
+
+                // Limit vertical rotation to prevent seeing black background
+                viewerState.pitch = Math.max(-70, Math.min(70, viewerState.pitch));
+
+                viewerState.lastX = e.clientX;
+                viewerState.lastY = e.clientY;
+
+                updateViewerTransform();
+            });
+
+            document.addEventListener('mouseup', () => {
+                viewerState.isDragging = false;
+                viewer.classList.remove('dragging');
+            });
+
+            // Touch events for mobile
+            viewer.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    viewerState.isDragging = true;
+                    viewerState.lastX = e.touches[0].clientX;
+                    viewerState.lastY = e.touches[0].clientY;
+                    viewer.classList.add('dragging');
+                    e.preventDefault();
+                }
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!viewerState.isDragging || e.touches.length !== 1) return;
+
+                const deltaX = e.touches[0].clientX - viewerState.lastX;
+                const deltaY = e.touches[0].clientY - viewerState.lastY;
+
+                viewerState.yaw -= deltaX * campusData.settings.rotationSpeed;
+                viewerState.pitch += deltaY * campusData.settings.rotationSpeed;
+
+                // Limit vertical rotation to prevent seeing black background
+                viewerState.pitch = Math.max(-70, Math.min(70, viewerState.pitch));
+
+                viewerState.lastX = e.touches[0].clientX;
+                viewerState.lastY = e.touches[0].clientY;
+
+                updateViewerTransform();
+                e.preventDefault();
+            });
+
+            document.addEventListener('touchend', () => {
+                viewerState.isDragging = false;
+                viewer.classList.remove('dragging');
+            });
+
+            // Mobile joystick
+            const joystickHandle = document.getElementById('joystickHandle');
+            const joystickBase = document.querySelector('.joystick-base');
+            let joystickActive = false;
+            let joystickStartX = 0, joystickStartY = 0;
+
+            joystickHandle.addEventListener('touchstart', (e) => {
+                joystickActive = true;
+                const rect = joystickBase.getBoundingClientRect();
+                joystickStartX = rect.left + rect.width / 2;
+                joystickStartY = rect.top + rect.height / 2;
+                e.preventDefault();
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - joystickStartX;
+                const deltaY = touch.clientY - joystickStartY;
+
+                // Limit joystick movement to base circle
+                const maxDistance = 35;
+                const distance = Math.min(maxDistance, Math.sqrt(deltaX * deltaX + deltaY * deltaY));
+                const angle = Math.atan2(deltaY, deltaX);
+
+                const moveX = distance * Math.cos(angle);
+                const moveY = distance * Math.sin(angle);
+
+                joystickHandle.style.transform = `translate(-50%, -50%) translate(${moveX}px, ${moveY}px)`;
+
+                // Determine movement direction based on angle
+                const directionThreshold = Math.PI / 4; // 45 degrees
+
+                if (distance > 10) { // Dead zone
+                    if (angle > -directionThreshold && angle < directionThreshold) {
+                        // Right
+                        viewerState.yaw -= campusData.settings.rotationSpeed * 2;
+                    } else if (angle > directionThreshold && angle < Math.PI - directionThreshold) {
+                        // Down
+                        viewerState.pitch += campusData.settings.rotationSpeed * 2;
+                    } else if (angle > Math.PI - directionThreshold || angle < -Math.PI + directionThreshold) {
+                        // Left
+                        viewerState.yaw += campusData.settings.rotationSpeed * 2;
+                    } else {
+                        // Up
+                        viewerState.pitch -= campusData.settings.rotationSpeed * 2;
+                    }
+
+                    // Limit vertical rotation
+                    viewerState.pitch = Math.max(-70, Math.min(70, viewerState.pitch));
+                    updateViewerTransform();
+                }
+
+                e.preventDefault();
+            });
+
+            document.addEventListener('touchend', () => {
+                if (joystickActive) {
+                    joystickActive = false;
+                    joystickHandle.style.transform = 'translate(-50%, -50%)';
+                }
+            });
+
+            // Movement buttons
+            document.getElementById('moveForward').addEventListener('click', () => moveToLocation('north'));
+            document.getElementById('moveBackward').addEventListener('click', () => moveToLocation('south'));
+            document.getElementById('moveLeft').addEventListener('click', () => moveToLocation('west'));
+            document.getElementById('moveRight').addEventListener('click', () => moveToLocation('east'));
+
+            // Keyboard controls (only when not focused on input)
+            document.addEventListener('keydown', (e) => {
+                if (viewerState.isTransitioning || viewerState.isInputFocused) return;
+
+                const keyMap = {
+                    'ArrowUp': 'north',
+                    'ArrowDown': 'south',
+                    'ArrowLeft': 'west',
+                    'ArrowRight': 'east',
+                    'w': 'north',
+                    's': 'south',
+                    'a': 'west',
+                    'd': 'east'
+                };
+
+                const direction = keyMap[e.key];
+                if (direction) {
+                    e.preventDefault();
+                    moveToLocation(direction);
+                }
+            });
+
+            // Fullscreen
+            document.getElementById('fullscreenBtn').addEventListener('click', () => {
+                const viewerContainer = document.querySelector('.viewer-container');
+                if (!document.fullscreenElement) {
+                    if (viewerContainer.requestFullscreen) {
+                        viewerContainer.requestFullscreen();
+                    } else if (viewerContainer.webkitRequestFullscreen) {
+                        viewerContainer.webkitRequestFullscreen();
+                    } else if (viewerContainer.msRequestFullscreen) {
+                        viewerContainer.msRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            });
+
+            // Upload buttons
+            document.getElementById('uploadBaseBtn').addEventListener('click', () => {
+                openUploadModal();
+            });
+
+            document.getElementById('addLocationBtn').addEventListener('click', () => {
+                openUploadModal();
+            });
+
+            // 360 Image upload buttons
+            document.getElementById('uploadHorizontalBtn').addEventListener('click', open360UploadModal);
+            document.getElementById('uploadVerticalBtn').addEventListener('click', open360UploadModal);
+            document.getElementById('manage360ImagesBtn').addEventListener('click', open360UploadModal);
+
+            document.getElementById('saveDataBtn').addEventListener('click', saveData);
+
+            // Show joystick on mobile
+            if ('ontouchstart' in window || navigator.maxTouchPoints) {
+                document.getElementById('joystickContainer').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

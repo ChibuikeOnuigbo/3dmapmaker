@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Campus Navigation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a2a3a, #0d1b2a);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #4cc9f0, #4361ee);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .main-container {
+            display: flex;
+            height: calc(100vh - 80px);
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .viewer-container {
+            flex: 1;
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            background: #000;
+        }
+
+        #viewer {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        .ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 40%;
+            background: linear-gradient(to top, #2d3740, #1a2028);
+            transform-style: preserve-3d;
+            transform: rotateX(75deg) translateZ(-50px);
+            border-top: 2px solid #4a5568;
+        }
+
+        #currentImage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(1);
+            max-width: 90%;
+            max-height: 70%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+            transition: transform 0.5s ease, opacity 0.5s ease;
+            z-index: 10;
+        }
+
+        .transitioning {
+            transform: translate(-50%, -50%) scale(0.9) rotateY(10deg) !important;
+            opacity: 0.7;
+        }
+
+        .controls-3d {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left down right";
+            grid-gap: 10px;
+            z-index: 20;
+        }
+
+        .dir-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .dir-btn:hover {
+            background: rgba(67, 97, 238, 0.8);
+            transform: scale(1.1);
+        }
+
+        .admin-panel {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-height: 100%;
+            overflow-y: auto;
+        }
+
+        .panel-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            color: #4cc9f0;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title::after {
+            content: '▼';
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+
+        .panel-section.collapsed .panel-title::after {
+            transform: rotate(-90deg);
+        }
+
+        .panel-content {
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            overflow: hidden;
+        }
+
+        .panel-section.collapsed .panel-content {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .panel-section:not(.collapsed) .panel-content {
+            max-height: 500px;
+            opacity: 1;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            background: #4361ee;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            background: #3a56d4;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #4cc9f0;
+        }
+
+        .btn-danger {
+            background: #f72585;
+        }
+
+        .map-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 270px;
+            height: 270px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 30;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .map-header {
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+        }
+
+        .map-toggle {
+            cursor: pointer;
+            font-size: 1.2rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .map-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            top: unset;
+            right: unset;
+            display: flex;
+            flex-direction: row;
+            gap: 7px;
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .map-container:hover .map-controls,
+        .map-container.show-controls .map-controls {
+            opacity: 1;
+        }
+
+        .map-mode-btn {
+            background: rgba(76, 201, 240, 0.8);
+            color: #222;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .map-mode-btn:hover {
+            background: #4361ee;
+            color: #fff;
+            width: auto;
+        }
+
+        .map-mode-btn:hover::after {
+            content: attr(data-mode);
+            margin-left: 5px;
+            white-space: nowrap;
+        }
+
+        .map-zoom-btn {
+            background: rgba(76, 201, 240, 0.8);
+            color: #222;
+            border: none;
+            border-radius: 4px;
+            padding: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .map-zoom-btn:hover {
+            background: #4361ee;
+            color: #fff;
+        }
+
+        .map-fullscreen-btn {
+            background: rgba(76, 201, 240, 0.8);
+            color: #222;
+            border: none;
+            border-radius: 4px;
+            padding: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .map-fullscreen-btn:hover {
+            background: #4361ee;
+            color: #fff;
+        }
+
+        #mapCanvas {
+            width: 100%;
+            height: calc(100% - 40px);
+            cursor: grab;
+            background: #2d3748;
+            display: block;
+        }
+
+        .map-container.collapsed {
+            height: 40px;
+        }
+
+        .map-container.collapsed #mapCanvas,
+        .map-container.collapsed .map-controls {
+            display: none;
+        }
+
+        .map-container.collapsed .map-toggle::before {
+            content: '+';
+        }
+
+        .node-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .node-item {
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .node-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .node-item.active {
+            background: rgba(67, 97, 238, 0.3);
+            border-left: 3px solid #4361ee;
+        }
+
+        .upload-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a2a3a;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #4cc9f0;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #4a5568;
+            background: #2d3748;
+            color: white;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .drag-handle {
+            cursor: move;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            text-align: center;
+            user-select: none;
+        }
+
+        .tool-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 25;
+        }
+
+        .tool-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .tool-btn:hover {
+            background: rgba(67, 97, 238, 0.8);
+            transform: scale(1.1);
+        }
+
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem;
+            background: #4361ee;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: 1px solid #4361ee;
+            color: #4361ee;
+        }
+
+        .back-btn:hover {
+            background: rgba(67, 97, 238, 0.1);
+        }
+
+        /* 3D Controls - D-pad style */
+        .controls-3d {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left down right";
+            grid-gap: 10px;
+            z-index: 20;
+        }
+
+        .dir-btn[data-dir="forward"] {
+            grid-area: up;
+        }
+
+        .dir-btn[data-dir="backward"] {
+            grid-area: down;
+        }
+
+        .dir-btn[data-dir="left"] {
+            grid-area: left;
+        }
+
+        .dir-btn[data-dir="right"] {
+            grid-area: right;
+        }
+
+        /* Fullscreen button for viewer */
+        .fullscreen-btn {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            z-index: 40;
+            background: rgba(67, 97, 238, 0.8);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .fullscreen-btn:hover {
+            background: #4361ee;
+        }
+
+        /* Admin panel toggle and resize */
+        .admin-panel {
+            transition: width 0.3s, min-width 0.3s, max-width 0.3s;
+            position: relative;
+            min-width: 60px;
+            max-width: 300px;
+            width: 300px;
+            overflow: visible;
+        }
+
+        .admin-panel.closed {
+            width: 0;
+            min-width: 0;
+            max-width: 0;
+            padding: 0;
+            border: none;
+        }
+
+        .admin-panel .panel-toggle-btn {
+            position: absolute;
+            top: 50%;
+            right: -24px;
+            transform: translateY(-50%);
+            background: #4361ee;
+            color: #fff;
+            border-radius: 50%;
+            border: none;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s;
+        }
+
+        .admin-panel.collapsed .panel-toggle-btn {
+            transform: translateY(-50%) rotate(180deg);
+        }
+
+        .admin-panel .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 8px;
+            height: 100%;
+            cursor: ew-resize;
+            z-index: 99;
+            background: rgba(67, 97, 238, 0.08);
+        }
+
+        .admin-panel.collapsed {
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
+            overflow: hidden;
+            padding: 1rem 0.5rem;
+        }
+
+        .admin-panel.collapsed .panel-section {
+            padding: 0.5rem;
+        }
+
+        .admin-panel.collapsed .panel-title {
+            font-size: 0.9rem;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
+            justify-content: center;
+            margin-bottom: 0;
+        }
+
+        .admin-panel.collapsed .panel-title::after {
+            display: none;
+        }
+
+        .admin-panel.collapsed .panel-content {
+            display: none;
+        }
+
+        /* Map panning overlay */
+        .map-pan-overlay {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 40px);
+            cursor: grab;
+            z-index: 35;
+            display: none;
+        }
+
+        .map-pan-overlay.active {
+            display: block;
+        }
+
+        .map-container.panning .map-pan-overlay {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo">CampusNav 3D</div>
+        <button class="btn back-btn" onclick="goBack()">Back to Main Page</button>
+    </div>
+
+    <div class="main-container">
+        <div class="viewer-container">
+            <div id="viewer">
+                <div class="ground"></div>
+                <img id="currentImage" src="" alt="Current View">
+
+                <!-- Fullscreen Button -->
+                <button class="fullscreen-btn" id="fullscreenBtn">⛶ Fullscreen</button>
+
+                <div class="tool-controls" id="toolControls">
+                    <div class="drag-handle">Tools</div>
+                    <button class="tool-btn" id="zoomIn">+</button>
+                    <button class="tool-btn" id="zoomOut">-</button>
+                    <button class="tool-btn" id="rotateLeft">↶</button>
+                    <button class="tool-btn" id="rotateRight">↷</button>
+                    <button class="tool-btn" id="resetView">⟲</button>
+                </div>
+
+                <div class="map-container" id="mapContainer">
+                    <div class="map-header" id="mapHeader">
+                        <span>2D Map</span>
+                        <span class="map-toggle" id="mapToggle">−</span>
+                    </div>
+                    <div class="map-pan-overlay" id="mapPanOverlay"></div>
+                    <div class="map-controls" id="mapControls">
+                        <button class="map-mode-btn" id="mapModeBtn" data-mode="Picture Mode">🗺️</button>
+                        <button class="map-zoom-btn" id="mapZoomIn">+</button>
+                        <button class="map-zoom-btn" id="mapZoomOut">−</button>
+                        <button class="map-fullscreen-btn" id="mapFullscreenBtn">⛶</button>
+                    </div>
+                    <canvas id="mapCanvas"></canvas>
+                </div>
+
+                <div class="controls-3d">
+                    <button class="dir-btn" data-dir="forward">↑</button>
+                    <button class="dir-btn" data-dir="left">←</button>
+                    <button class="dir-btn" data-dir="backward">↓</button>
+                    <button class="dir-btn" data-dir="right">→</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="admin-panel" id="adminPanel">
+            <button class="panel-toggle-btn" id="adminPanelToggle">&lt;</button>
+            <div class="resize-handle" id="adminPanelResize"></div>
+            <div class="panel-section" data-section="nav">
+                <div class="panel-title">Navigation</div>
+                <div class="panel-content">
+                    <div class="form-group">
+                        <label>Current Node: <span id="currentNodeId">None</span></label>
+                    </div>
+                    <button class="btn" id="uploadBaseBtn">Upload Base Image</button>
+                    <button class="btn btn-secondary" id="saveDataBtn">Save Data</button>
+                </div>
+            </div>
+            <div class="panel-section" data-section="node">
+                <div class="panel-title">Node Management</div>
+                <div class="panel-content">
+                    <div class="node-list" id="nodeList">
+                        <!-- Nodes will be populated here -->
+                    </div>
+                    <button class="btn" id="addNodeBtn">Add New Node</button>
+                </div>
+            </div>
+            <div class="panel-section" data-section="admin">
+                <div class="panel-title">Admin Controls</div>
+                <div class="panel-content">
+                    <button class="btn" id="editLinksBtn">Edit Node Links</button>
+                    <button class="btn btn-secondary" id="saveControlsBtn">Save Control Positions</button>
+                    <button class="btn btn-danger" id="resetDataBtn">Reset Data</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="upload-modal" id="uploadModal">
+        <div class="modal-content">
+            <div class="modal-title" id="modalTitle">Upload Image</div>
+            <div class="form-group">
+                <label for="imageUpload">Select Image</label>
+                <input type="file" id="imageUpload" class="form-control" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="nodeTitle">Node Title</label>
+                <input type="text" id="nodeTitle" class="form-control" placeholder="Enter node title">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelUpload">Cancel</button>
+                <button class="btn" id="confirmUpload">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">Operation completed successfully!</div>
+
+    <script>
+        // Database structure
+        let db = {
+            users: [
+                {
+                    id: "u-admin",
+                    username: "admin",
+                    password_hash: "$2a$10$4PqlPp/P3uWMg83bE2jwFet6gW2N6o3n3hIDcSubL8iOnXs9owLFK",
+                    role: "admin",
+                    displayName: "Admin"
+                },
+                {
+                    id: "u-1759020557607",
+                    username: "Test",
+                    password_hash: "$2a$10$4PqlPp/P3uWMg83bE2jwFet6gW2N6o3n3hIDcSubL8iOnXs9owLFK",
+                    role: "student",
+                    displayName: "Test"
+                }
+            ],
+            nodes: [],
+            map: {
+                image: null,
+                pins: []
+            },
+            settings: {
+                allowSignup: true,
+                controls: {
+                    toolControls: { x: 20, y: 20 },
+                    mapContainer: { x: 20, y: 20, collapsed: false }
+                }
+            },
+            currentState: {
+                currentNode: null,
+                zoom: 1,
+                rotation: 0
+            }
+        };
+
+        // Load data from localStorage or initialize with default
+        function loadData() {
+            const savedData = localStorage.getItem('campusNavData');
+            if (savedData) {
+                db = JSON.parse(savedData);
+            }
+
+            // Initialize nodes if empty
+            if (db.nodes.length === 0) {
+                // Add a default node if none exist
+                createNode('Entrance', 'https://via.placeholder.com/800x600/2d3748/ffffff?text=Welcome+to+Campus');
+                db.currentState.currentNode = db.nodes[0].id;
+            }
+
+            updateUI();
+            renderMap();
+            positionControls();
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('campusNavData', JSON.stringify(db));
+            showNotification('Data saved successfully!');
+        }
+
+        // Tree structure and navigation
+        let nodes = {};
+        let currentNode = null;
+
+        const opposite = { forward: 'backward', backward: 'forward', left: 'right', right: 'left' };
+
+        // Create new node
+        function createNode(title, imageURL = null) {
+            const id = 'node-' + Date.now();
+            const node = {
+                id,
+                images: { forward: null, backward: null, left: null, right: null },
+                links: { forward: null, backward: null, left: null, right: null },
+                meta: { title, imageURL },
+                position: { x: Math.random() * 200 + 50, y: Math.random() * 150 + 50 }
+            };
+
+            if (imageURL) {
+                node.images.forward = imageURL;
+            }
+
+            db.nodes.push(node);
+            return node;
+        }
+
+        // Move function with 3D effects
+        function move(dir) {
+            if (!currentNode) {
+                alert("Please upload base image first.");
+                return;
+            }
+
+            const currentImage = document.getElementById('currentImage');
+            currentImage.classList.add('transitioning');
+
+            setTimeout(() => {
+                if (currentNode.links[dir]) {
+                    // Find the target node
+                    const targetNode = db.nodes.find(node => node.id === currentNode.links[dir]);
+                    if (targetNode) {
+                        currentNode = targetNode;
+                        db.currentState.currentNode = currentNode.id;
+                        showCurrentImage();
+                    }
+                } else {
+                    promptUpload(dir);
+                    currentImage.classList.remove('transitioning');
+                    return;
+                }
+
+                currentImage.classList.remove('transitioning');
+                updateUI();
+            }, 500);
+        }
+
+        // Show current image with 3D effects
+        function showCurrentImage() {
+            if (!currentNode) return;
+
+            const currentImage = document.getElementById('currentImage');
+            if (currentNode.meta.imageURL) {
+                currentImage.src = currentNode.meta.imageURL;
+
+                // Apply 3D transformations based on current state
+                applyViewTransformations();
+            }
+        }
+
+        // Apply zoom and rotation transformations
+        function applyViewTransformations() {
+            const currentImage = document.getElementById('currentImage');
+            const zoom = db.currentState.zoom || 1;
+            const rotation = db.currentState.rotation || 0;
+
+            currentImage.style.transform = `translate(-50%, -50%) scale(${zoom}) rotate(${rotation}deg)`;
+        }
+
+        // Prompt for image upload
+        function promptUpload(dir) {
+            const modal = document.getElementById('uploadModal');
+            const modalTitle = document.getElementById('modalTitle');
+            modalTitle.textContent = `Upload Image for ${dir} direction`;
+            modal.style.display = 'flex';
+
+            // Set up the upload handler
+            const confirmBtn = document.getElementById('confirmUpload');
+            confirmBtn.onclick = () => {
+                const fileInput = document.getElementById('imageUpload');
+                const titleInput = document.getElementById('nodeTitle');
+
+                if (!fileInput.files.length) {
+                    alert('Please select an image file.');
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                const title = titleInput.value || `Node ${dir} from ${currentNode.meta.title}`;
+
+                // Create a blob URL for the image
+                const imgURL = URL.createObjectURL(file);
+
+                // Create new node
+                const newNode = createNode(title, imgURL);
+
+                // Link current node to new node
+                currentNode.links[dir] = newNode.id;
+                newNode.links[opposite[dir]] = currentNode.id;
+
+                // Also set the image for the direction
+                currentNode.images[dir] = imgURL;
+                newNode.images[opposite[dir]] = currentNode.meta.imageURL;
+
+                currentNode = newNode;
+                db.currentState.currentNode = currentNode.id;
+
+                modal.style.display = 'none';
+                fileInput.value = '';
+                titleInput.value = '';
+
+                showCurrentImage();
+                updateUI();
+                saveData();
+            };
+
+            // Cancel button
+            document.getElementById('cancelUpload').onclick = () => {
+                modal.style.display = 'none';
+                fileInput.value = '';
+                titleInput.value = '';
+            };
+        }
+
+        // Update UI elements
+        function updateUI() {
+            // Update current node display
+            document.getElementById('currentNodeId').textContent = currentNode ? currentNode.meta.title : 'None';
+
+            // Update node list
+            const nodeList = document.getElementById('nodeList');
+            nodeList.innerHTML = '';
+
+            db.nodes.forEach(node => {
+                const nodeItem = document.createElement('div');
+                nodeItem.className = `node-item ${currentNode && currentNode.id === node.id ? 'active' : ''}`;
+                nodeItem.textContent = node.meta.title;
+                nodeItem.onclick = () => {
+                    currentNode = node;
+                    db.currentState.currentNode = currentNode.id;
+                    showCurrentImage();
+                    updateUI();
+                };
+                nodeList.appendChild(nodeItem);
+            });
+        }
+
+        // Render 2D map with pins
+        function renderMap() {
+            const canvas = document.getElementById('mapCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            // Clear canvas
+            ctx.fillStyle = '#2d3748';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            ctx.strokeStyle = '#4a5568';
+            ctx.lineWidth = 0.5;
+
+            for (let x = 0; x <= canvas.width; x += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y <= canvas.height; y += 20) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw pins for each node
+            db.nodes.forEach(node => {
+                const x = node.position.x * canvas.width / 300;
+                const y = node.position.y * canvas.height / 250;
+
+                // Draw pin
+                ctx.fillStyle = currentNode && currentNode.id === node.id ? '#f72585' : '#4361ee';
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw pin point
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw node title
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.meta.title, x, y - 15);
+            });
+
+            // Make pins clickable
+            canvas.onclick = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+                const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+                // Check if a pin was clicked
+                db.nodes.forEach(node => {
+                    const pinX = node.position.x * canvas.width / 300;
+                    const pinY = node.position.y * canvas.height / 250;
+
+                    const distance = Math.sqrt((x - pinX) ** 2 + (y - pinY) ** 2);
+
+                    if (distance < 10) {
+                        currentNode = node;
+                        db.currentState.currentNode = currentNode.id;
+                        showCurrentImage();
+                        updateUI();
+                    }
+                });
+            };
+        }
+
+        // Position draggable controls
+        function positionControls() {
+            const toolControls = document.getElementById('toolControls');
+            const mapContainer = document.getElementById('mapContainer');
+
+            if (db.settings.controls.toolControls) {
+                toolControls.style.left = db.settings.controls.toolControls.x + 'px';
+                toolControls.style.top = db.settings.controls.toolControls.y + 'px';
+            }
+
+            if (db.settings.controls.mapContainer) {
+                mapContainer.style.right = db.settings.controls.mapContainer.x + 'px';
+                mapContainer.style.top = db.settings.controls.mapContainer.y + 'px';
+
+                if (db.settings.controls.mapContainer.collapsed) {
+                    mapContainer.classList.add('collapsed');
+                }
+            }
+
+            // Make controls draggable
+            makeDraggable(toolControls, 'toolControls');
+            makeDraggable(mapContainer, 'mapContainer');
+        }
+
+        // Make an element draggable
+        function makeDraggable(element, controlType) {
+            let isDragging = false;
+            let startX = 0, startY = 0;
+            let origX = 0, origY = 0;
+
+            // Only allow dragging by drag-handle or map-header
+            const handle = element.querySelector('.drag-handle') ||
+                          (controlType === 'mapContainer' ? element.querySelector('.map-header') : null);
+
+            const dragMouseDown = (e) => {
+                // Prevent drag if clicking on buttons or interactive elements
+                if (e.target.tagName === 'BUTTON' || e.target.classList.contains('map-toggle')) return;
+
+                e.preventDefault();
+                isDragging = true;
+                // Use getBoundingClientRect for accurate position
+                const rect = element.getBoundingClientRect();
+                const parentRect = element.parentElement.getBoundingClientRect();
+                startX = e.clientX;
+                startY = e.clientY;
+                origX = rect.left - parentRect.left;
+                origY = rect.top - parentRect.top;
+
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+
+                if (controlType === 'mapContainer') {
+                    element.style.cursor = 'grabbing';
+                }
+            };
+
+            const elementDrag = (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+
+                // Calculate new position
+                let newX = origX + (e.clientX - startX);
+                let newY = origY + (e.clientY - startY);
+
+                // Restrict movement within the viewer container
+                const parent = element.parentElement;
+                const parentRect = parent.getBoundingClientRect();
+                const elemRect = element.getBoundingClientRect();
+
+                // Clamp X
+                newX = Math.max(0, Math.min(newX, parentRect.width - elemRect.width));
+                // Clamp Y
+                newY = Math.max(0, Math.min(newY, parentRect.height - elemRect.height));
+
+                element.style.left = newX + "px";
+                element.style.top = newY + "px";
+                element.style.right = "auto"; // Remove right for absolute positioning
+
+                // Save position live (optional)
+                if (controlType === 'toolControls') {
+                    db.settings.controls.toolControls = {
+                        x: newX,
+                        y: newY
+                    };
+                } else if (controlType === 'mapContainer') {
+                    db.settings.controls.mapContainer = {
+                        x: parentRect.width - newX - elemRect.width,
+                        y: newY,
+                        collapsed: element.classList.contains('collapsed')
+                    };
+                }
+            };
+
+            const closeDragElement = () => {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                isDragging = false;
+                if (controlType === 'mapContainer') {
+                    element.style.cursor = '';
+                }
+                saveData();
+            };
+
+            if (handle) {
+                handle.onmousedown = dragMouseDown;
+            } else {
+                element.onmousedown = dragMouseDown;
+            }
+        }
+
+        // Show notification
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Go back to main page
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load data
+            loadData();
+
+            // Set current node
+            if (db.currentState.currentNode) {
+                currentNode = db.nodes.find(node => node.id === db.currentState.currentNode);
+            }
+
+            if (currentNode) {
+                showCurrentImage();
+            }
+
+            // Event listeners for direction buttons
+            document.querySelectorAll('.dir-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    move(btn.dataset.dir);
+                });
+            });
+
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                const keyMap = {
+                    ArrowUp: 'forward',
+                    ArrowDown: 'backward',
+                    ArrowLeft: 'left',
+                    ArrowRight: 'right',
+                    w: 'forward',
+                    s: 'backward',
+                    a: 'left',
+                    d: 'right'
+                };
+                const dir = keyMap[e.key];
+                if (dir) {
+                    e.preventDefault();
+                    move(dir);
+                }
+            });
+
+            // Tool controls
+            document.getElementById('zoomIn').addEventListener('click', () => {
+                db.currentState.zoom = Math.min(db.currentState.zoom + 0.1, 2);
+                applyViewTransformations();
+            });
+
+            document.getElementById('zoomOut').addEventListener('click', () => {
+                db.currentState.zoom = Math.max(db.currentState.zoom - 0.1, 0.5);
+                applyViewTransformations();
+            });
+
+            document.getElementById('rotateLeft').addEventListener('click', () => {
+                db.currentState.rotation -= 5;
+                applyViewTransformations();
+            });
+
+            document.getElementById('rotateRight').addEventListener('click', () => {
+                db.currentState.rotation += 5;
+                applyViewTransformations();
+            });
+
+            document.getElementById('resetView').addEventListener('click', () => {
+                db.currentState.zoom = 1;
+                db.currentState.rotation = 0;
+                applyViewTransformations();
+            });
+
+            // Fullscreen feature
+            document.getElementById('fullscreenBtn').addEventListener('click', () => {
+                const viewer = document.getElementById('viewer');
+                if (!document.fullscreenElement) {
+                    viewer.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+
+            // --- Map functionality ---
+            let mapPan = { x: 0, y: 0, dragging: false, lastX: 0, lastY: 0 };
+            let mapZoom = 1;
+            const mapCanvas = document.getElementById('mapCanvas');
+            const mapPanOverlay = document.getElementById('mapPanOverlay');
+            const mapControls = document.getElementById('mapControls');
+            let mapMode = 'points'; // or 'picture'
+            let drawnMapImg = null; // For picture mode
+
+            // Map container collapse/expand
+            document.getElementById('mapToggle').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mapContainer = document.getElementById('mapContainer');
+                mapContainer.classList.toggle('collapsed');
+                db.settings.controls.mapContainer.collapsed = mapContainer.classList.contains('collapsed');
+                saveData();
+            });
+
+            // Show map controls on hover
+            const mapContainer = document.getElementById('mapContainer');
+            let mapControlsTimeout = null;
+            mapContainer.addEventListener('mouseenter', () => {
+                mapContainer.classList.add('show-controls');
+            });
+            mapContainer.addEventListener('mouseleave', () => {
+                mapContainer.classList.remove('show-controls');
+            });
+
+            // Drawn map image for picture mode
+            drawnMapImg = new Image();
+            drawnMapImg.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Map_of_a_campus_example.svg/600px-Map_of_a_campus_example.svg.png';
+
+            function renderMap() {
+                const canvas = mapCanvas;
+                const ctx = canvas.getContext('2d');
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.save();
+                ctx.translate(mapPan.x, mapPan.y);
+                ctx.scale(mapZoom, mapZoom);
+
+                if (mapMode === 'picture' && drawnMapImg.complete) {
+                    ctx.drawImage(drawnMapImg, 0, 0, canvas.width, canvas.height);
+                } else {
+                    // Points mode (original)
+                    ctx.fillStyle = '#2d3748';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    ctx.strokeStyle = '#4a5568';
+                    ctx.lineWidth = 0.5;
+                    for (let x = 0; x <= canvas.width; x += 20) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, 0);
+                        ctx.lineTo(x, canvas.height);
+                        ctx.stroke();
+                    }
+                    for (let y = 0; y <= canvas.height; y += 20) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, y);
+                        ctx.lineTo(canvas.width, y);
+                        ctx.stroke();
+                    }
+                    db.nodes.forEach(node => {
+                        const x = node.position.x * canvas.width / 300;
+                        const y = node.position.y * canvas.height / 250;
+                        ctx.fillStyle = currentNode && currentNode.id === node.id ? '#f72585' : '#4361ee';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#ffffff';
+                        ctx.beginPath();
+                        ctx.arc(x, y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = '10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(node.meta.title, x, y - 15);
+                    });
+                }
+                ctx.restore();
+            }
+
+            // Map panning (inside the map)
+            mapPanOverlay.addEventListener('mousedown', (e) => {
+                if (mapContainer.classList.contains('collapsed')) return;
+                
+                mapPan.dragging = true;
+                mapPan.lastX = e.clientX;
+                mapPan.lastY = e.clientY;
+                mapContainer.classList.add('panning');
+                mapPanOverlay.style.cursor = 'grabbing';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (mapPan.dragging) {
+                    const deltaX = e.clientX - mapPan.lastX;
+                    const deltaY = e.clientY - mapPan.lastY;
+                    mapPan.x += deltaX;
+                    mapPan.y += deltaY;
+                    mapPan.lastX = e.clientX;
+                    mapPan.lastY = e.clientY;
+                    renderMap();
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (mapPan.dragging) {
+                    mapPan.dragging = false;
+                    mapContainer.classList.remove('panning');
+                    mapPanOverlay.style.cursor = 'grab';
+                }
+            });
+
+            // Map zoom controls
+            document.getElementById('mapZoomIn').addEventListener('click', () => {
+                mapZoom = Math.min(mapZoom + 0.1, 2.5);
+                renderMap();
+            });
+            document.getElementById('mapZoomOut').addEventListener('click', () => {
+                mapZoom = Math.max(mapZoom - 0.1, 0.5);
+                renderMap();
+            });
+
+            // Map fullscreen
+            document.getElementById('mapFullscreenBtn').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    mapContainer.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+
+            // Map mode toggle
+            document.getElementById('mapModeBtn').addEventListener('click', () => {
+                mapMode = mapMode === 'points' ? 'picture' : 'points';
+                const btn = document.getElementById('mapModeBtn');
+                btn.setAttribute('data-mode', mapMode === 'points' ? 'Picture Mode' : 'Points Mode');
+                btn.textContent = mapMode === 'points' ? '🗺️' : '📷';
+                renderMap();
+            });
+
+            // Redraw map when image loads
+            drawnMapImg.onload = renderMap;
+
+            // Map click for points mode only
+            mapCanvas.onclick = (e) => {
+                if (mapMode !== 'points' || mapContainer.classList.contains('collapsed')) return;
+                const rect = mapCanvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left - mapPan.x) / mapZoom;
+                const y = (e.clientY - rect.top - mapPan.y) / mapZoom;
+                db.nodes.forEach(node => {
+                    const pinX = node.position.x * mapCanvas.width / 300;
+                    const pinY = node.position.y * mapCanvas.height / 250;
+                    const distance = Math.sqrt((x - pinX) ** 2 + (y - pinY) ** 2);
+                    if (distance < 10) {
+                        currentNode = node;
+                        db.currentState.currentNode = currentNode.id;
+                        showCurrentImage();
+                        updateUI();
+                    }
+                });
+            };
+
+            // Admin panel functionality
+            const adminPanel = document.getElementById('adminPanel');
+            const adminPanelToggle = document.getElementById('adminPanelToggle');
+            
+            // Toggle entire admin panel
+            adminPanelToggle.addEventListener('click', () => {
+                adminPanel.classList.toggle('collapsed');
+            });
+            
+            // Toggle individual sections
+            document.querySelectorAll('.panel-title').forEach(title => {
+                title.addEventListener('click', (e) => {
+                    if (adminPanel.classList.contains('collapsed')) return;
+                    const section = title.closest('.panel-section');
+                    section.classList.toggle('collapsed');
+                });
+            });
+
+            // Show pan overlay when not collapsed
+            mapContainer.addEventListener('mouseenter', () => {
+                if (!mapContainer.classList.contains('collapsed')) {
+                    mapPanOverlay.classList.add('active');
+                }
+            });
+            
+            mapContainer.addEventListener('mouseleave', () => {
+                mapPanOverlay.classList.remove('active');
+            });
+
+            // Initial render
+            renderMap();
+            
+            // Other button event listeners
+            document.getElementById('uploadBaseBtn').addEventListener('click', () => {
+                promptUpload('forward');
+            });
+            
+            document.getElementById('saveDataBtn').addEventListener('click', () => {
+                saveData();
+            });
+            
+            document.getElementById('addNodeBtn').addEventListener('click', () => {
+                promptUpload('forward');
+            });
+            
+            document.getElementById('resetDataBtn').addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset all data?')) {
+                    localStorage.removeItem('campusNavData');
+                    location.reload();
+                }
+            });
+            
+            document.getElementById('saveControlsBtn').addEventListener('click', () => {
+                saveData();
+            });
+        });
+    </script>
+</body>
+
+</html>

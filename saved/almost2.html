@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>PAU_Edu_Orbit — Campus Navi (360 Viewer)</title>
+
+<!-- Basic styling: clean, responsive, mobile-friendly -->
+<style>
+  :root{
+    --bg:#04121a;
+    --panel:rgba(255,255,255,0.04);
+    --muted:#9fb3bf;
+    --accent:#5fd0ff;
+    --ui-z: 9999;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#021018,#052532);color:#e6f6fb; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;}
+  .app{display:grid;grid-template-columns:360px 1fr;gap:12px;height:100vh;padding:12px;box-sizing:border-box}
+  @media (max-width:980px){ .app{grid-template-columns:1fr;grid-auto-rows:auto;padding:8px} }
+
+  /* Left control panel */
+  .panel{background:var(--panel);border-radius:12px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,0.6);display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - 24px)}
+  .panel h2{margin:0;font-size:16px}
+  .small{font-size:13px;color:var(--muted)}
+  label.file{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px dashed rgba(255,255,255,0.06);cursor:pointer;background:transparent;font-size:14px}
+  input[type=file]{display:none}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn{background:linear-gradient(180deg,#16323b,#0d262b);border:none;color:#dffbec;padding:8px 10px;border-radius:8px;cursor:pointer}
+  .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+  .stat{background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;font-size:13px}
+
+  /* Viewer area (right) */
+  .viewer{position:relative;border-radius:12px;overflow:hidden;box-shadow:0 16px 60px rgba(0,0,0,0.6);background:linear-gradient(180deg,#000,#08161c)}
+  #canvas-container{position:relative;width:100%;height:100%;min-height:520px;background:transparent;touch-action:none}
+
+  /* UI overlays on top of canvas */
+  .ui-top-left{position:absolute;left:12px;top:12px;z-index:var(--ui-z);display:flex;flex-direction:column;gap:8px}
+  .ui-top-right{position:absolute;right:12px;top:12px;z-index:var(--ui-z);display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .ui-bottom-left{position:absolute;left:12px;bottom:12px;z-index:var(--ui-z)}
+  .ui-bottom-right{position:absolute;right:12px;bottom:12px;z-index:var(--ui-z)}
+
+  /* Slider / controls */
+  .control-row{display:flex;gap:8px;align-items:center}
+  .slider{width:160px}
+  .label{font-size:12px;color:var(--muted)}
+
+  /* Joystick area */
+  .joystick-container{position:relative;width:120px;height:120px;border-radius:16px;background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;padding:12px;box-shadow:0 6px 16px rgba(0,0,0,0.4)}
+  .joystick{position:relative;width:68px;height:68px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#012; font-weight:700; user-select:none; touch-action:none; cursor:grab}
+  .joystick:active{cursor:grabbing}
+  .dpad{display:grid;grid-template-columns:44px 44px 44px;grid-template-rows:44px 44px 44px;gap:6px}
+  .dirBtn{width:44px;height:44px;border-radius:8px;border:none;background:rgba(0,0,0,0.45);color:#fff;font-weight:600;cursor:pointer}
+
+  .overlay-panel{background:rgba(0,0,0,0.36);color:#fff;padding:10px;border-radius:10px;font-size:13px}
+  .jsonArea{width:100%;height:120px;background:rgba(0,0,0,0.08);border-radius:8px;padding:10px;font-size:12px;color:#ddd;overflow:auto}
+
+  /* Small helpers */
+  .hidden{display:none !important; visibility:hidden}
+  .badge{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:8px;font-size:12px}
+
+  /* Make sure toggles/buttons are touch-friendly */
+  button, .dirBtn, .joystick { -webkit-tap-highlight-color: rgba(0,0,0,0); }
+
+  /* Loading spinner */
+  .spinner{width:36px;height:36px;border-radius:50%;border:4px solid rgba(255,255,255,0.08);border-top-color:var(--accent);animation:spin 1s linear infinite}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Left panel -->
+  <div class="panel" id="leftPanel">
+    <h2>Campus-Navi — 360 Builder</h2>
+    <div class="small">Upload a panorama (phone pano / equirectangular) or multiple horizontal images as fallback. Use the controls to tune zoom, curvature, and pitch clamp.</div>
+
+    <div class="row">
+      <label class="file">Base panorama<input id="fileBase" type="file" accept="image/*"></label>
+      <label class="file">Sky (optional)<input id="fileSky" type="file" accept="image/*"></label>
+      <label class="file">Ground (optional)<input id="fileGround" type="file" accept="image/*"></label>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <button id="btnClear" class="btn secondary">Clear</button>
+      <button id="btnFullscreen" class="btn">Fullscreen</button>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="label">Zoom (FOV)</div>
+      <input id="zoomSlider" class="slider" type="range" min="30" max="110" step="1" value="75">
+      <div class="small">Use mouse wheel or pinch to change zoom too.</div>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="label">Curvature (radius)</div>
+      <input id="curveSlider" class="slider" type="range" min="200" max="2500" step="10" value="800">
+      <div class="small">Large radius = less curvature (flatter).</div>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="label">Drag sensitivity</div>
+      <input id="sensitivitySlider" class="slider" type="range" min="0.3" max="3.0" step="0.05" value="1.0">
+      <div class="small">Lower = slower camera rotation.</div>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="label">Pitch clamp (degrees)</div>
+      <input id="pitchClampSlider" class="slider" type="range" min="40" max="90" step="1" value="85">
+      <div class="small">Prevents seeing poles and black gaps.</div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="stat"><strong>Mode:</strong> <span id="modeLabel">—</span></div>
+      <div class="stat"><strong>Image size:</strong> <span id="imgSize">—</span></div>
+      <div class="stat"><strong>Avg color:</strong> <span id="avgColor" class="badge">—</span></div>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="small">Raw nodes / data (export & import):</div>
+      <pre id="rawJson" class="jsonArea">No nodes yet.</pre>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btnExport" class="btn secondary">Export JSON</button>
+        <button id="btnImport" class="btn secondary">Import JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viewer / right area -->
+  <div class="viewer" id="viewer">
+    <div id="canvas-container"></div>
+
+    <!-- Top-left small UI -->
+    <div class="ui-top-left">
+      <div id="loader" class="overlay-panel hidden"><div style="display:flex;gap:8px;align-items:center"><div class="spinner"></div><div>Loading texture...</div></div></div>
+    </div>
+
+    <!-- Top-right: toggle / debug -->
+    <div class="ui-top-right">
+      <div class="overlay-panel" id="debugPanel">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="yawText">yaw: 0</div>
+          <div id="pitchText">pitch: 0</div>
+          <div id="fovText">fov: 75</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom-left: joystick & dpad -->
+    <div class="ui-bottom-left" id="controlsLeft">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="joystickWrap" class="joystick-container" style="touch-action:none">
+          <div id="joystick" class="joystick" aria-label="joystick" role="application">●</div>
+        </div>
+
+        <div class="overlay-panel" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px">D-Pad</div>
+          <div class="dpad" style="margin-top:4px">
+            <div></div><button class="dirBtn" data-dir="forward">↑</button><div></div>
+            <button class="dirBtn" data-dir="left">←</button><div></div><button class="dirBtn" data-dir="right">→</button>
+            <div></div><button class="dirBtn" data-dir="backward">↓</button><div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom-right small info -->
+    <div class="ui-bottom-right">
+      <div class="overlay-panel">Tip: drag to look, use slider to zoom, pinch to zoom on mobile.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Use modern Three.js ES module from unpkg (r158+). The module import is inside a type="module" script below. -->
+<script type="module">
+/*
+  PAU_Edu_Orbit — Campus-Navi 360 viewer
+  - Single-file front-end using Three.js module (via CDN).
+  - Uses FileReader.readAsDataURL so images load reliably on mobile.
+  - Automatically chooses cylinder (wide panoramas) or sphere (equirectangular).
+  - Pads edges and sets renderer clear color to image average to ensure no black background visible.
+  - Zoom slider (FOV), curvature slider (radius), pitch clamp & sensitivity settings.
+  - Joystick (draggable but bounded), D-pad, keyboard controls, touch support.
+  - Crossfade/transition skeleton included for future node navigation.
+*/
+
+import * as THREE from 'https://unpkg.com/three@0.158.0/build/three.module.js';
+
+///// ----------------- App state & DOM refs -----------------
+const DOM = {
+  container: document.getElementById('canvas-container'),
+  fileBase: document.getElementById('fileBase'),
+  fileSky: document.getElementById('fileSky'),
+  fileGround: document.getElementById('fileGround'),
+  btnClear: document.getElementById('btnClear'),
+  btnFullscreen: document.getElementById('btnFullscreen'),
+  zoomSlider: document.getElementById('zoomSlider'),
+  curveSlider: document.getElementById('curveSlider'),
+  sensitivitySlider: document.getElementById('sensitivitySlider'),
+  pitchClampSlider: document.getElementById('pitchClampSlider'),
+  modeLabel: document.getElementById('modeLabel'),
+  imgSize: document.getElementById('imgSize'),
+  avgColor: document.getElementById('avgColor'),
+  loader: document.getElementById('loader'),
+  yawText: document.getElementById('yawText'),
+  pitchText: document.getElementById('pitchText'),
+  fovText: document.getElementById('fovText'),
+  rawJson: document.getElementById('rawJson'),
+  btnExport: document.getElementById('btnExport'),
+  btnImport: document.getElementById('btnImport'),
+  joystick: document.getElementById('joystick'),
+  joystickWrap: document.getElementById('joystickWrap'),
+  dirButtons: document.querySelectorAll('.dirBtn'),
+  controlsLeft: document.getElementById('controlsLeft'),
+  leftPanel: document.getElementById('leftPanel')
+};
+
+let scene, camera, renderer, currentMesh = null, skyMesh = null, groundMesh = null;
+let texturePool = {}; // preloaded textures (by url)
+let blobUrlsToRevoke = [];
+
+///// ----------------- Renderer & scene init -----------------
+function initThree(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(parseInt(DOM.zoomSlider.value,10), DOM.container.clientWidth / DOM.container.clientHeight, 0.1, 6000);
+  camera.position.set(0,0,0);
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  renderer.setSize(DOM.container.clientWidth, DOM.container.clientHeight, false);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.setClearColor(new THREE.Color(0x000000), 1);
+  DOM.container.appendChild(renderer.domElement);
+
+  window.addEventListener('resize', onResize);
+  // prevent passive touch scrolling when interacting
+  DOM.container.addEventListener('touchstart', e => { e.preventDefault(); }, { passive:false });
+  DOM.container.addEventListener('touchmove', e => { e.preventDefault(); }, { passive:false });
+}
+
+function onResize(){
+  camera.aspect = DOM.container.clientWidth / DOM.container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(DOM.container.clientWidth, DOM.container.clientHeight, false);
+}
+
+initThree();
+
+///// ----------------- Utility helpers -----------------
+
+// Read File into DataURL (promise)
+function readFileAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = e => reject(e);
+    fr.readAsDataURL(file);
+  });
+}
+
+// Create texture from dataURL via Image element & THREE.Texture
+function createTextureFromDataURL(dataURL){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    img.onload = () => {
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+      tex.encoding = THREE.sRGBEncoding;
+      tex.minFilter = THREE.LinearMipMapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+      tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+      resolve({tex, img});
+    };
+    img.onerror = reject;
+    img.src = dataURL;
+  });
+}
+
+// Canvas-based padding: duplicate edge columns/rows into pad area to reduce seam black artifacts
+function padImageDataURL(img, padPx=32){
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const canvas = document.createElement('canvas');
+  canvas.width = w + padPx*2;
+  canvas.height = h + padPx*2;
+  const ctx = canvas.getContext('2d');
+  // center image
+  ctx.drawImage(img, padPx, padPx, w, h);
+  // left column
+  ctx.drawImage(img, 0, 0, 1, h, 0, padPx, padPx, h);
+  // right column
+  ctx.drawImage(img, w-1, 0, 1, h, w+padPx, padPx, padPx, h);
+  // top row
+  ctx.drawImage(img, 0, 0, w, 1, padPx, 0, w, padPx);
+  // bottom row
+  ctx.drawImage(img, 0, h-1, w, 1, padPx, h+padPx, w, padPx);
+  // corners
+  ctx.drawImage(img, 0,0,1,1,0,0,padPx,padPx);
+  ctx.drawImage(img, w-1,0,1,1,w+padPx,0,padPx,padPx);
+  ctx.drawImage(img, 0,h-1,1,1,0,h+padPx,padPx,padPx);
+  ctx.drawImage(img, w-1,h-1,1,1,w+padPx,h+padPx,padPx,padPx);
+  return canvas.toDataURL('image/jpeg', 0.92);
+}
+
+// Sample average color from small canvas
+function averageColorFromImage(img){
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 8;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0,0, c.width, c.height);
+  const data = ctx.getImageData(0,0,c.width,c.height).data;
+  let r=0,g=0,b=0,count=0;
+  for(let i=0;i<data.length;i+=4){
+    r += data[i]; g += data[i+1]; b += data[i+2]; count++;
+  }
+  r = Math.round(r/count); g = Math.round(g/count); b = Math.round(b/count);
+  return {r,g,b};
+}
+
+// Decide mapping type: equirectangular if height*2 approx equals width or wide -> cylinder for very wide images
+function chooseMapping(img){
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const aspect = w/h;
+  // equirectangular typical aspect ~2:1, but phone pano maybe larger; choose cylinder for extremely wide
+  if(aspect >= 1.6 && aspect <= 3.5){
+    return 'sphere'; // full equirectangular best for these ratios
+  }
+  if(aspect > 3.5) return 'cylinder';
+  // fallback: sphere
+  return 'sphere';
+}
+
+///// ----------------- Create geometry + mesh -----------------
+
+function clearCurrentMeshes(){
+  if(currentMesh){ scene.remove(currentMesh); disposeMesh(currentMesh); currentMesh = null; }
+  if(skyMesh){ scene.remove(skyMesh); disposeMesh(skyMesh); skyMesh = null; }
+  if(groundMesh){ scene.remove(groundMesh); disposeMesh(groundMesh); groundMesh = null; }
+  // revoke old blob URLs optionally
+  blobUrlsToRevoke.forEach(u => {
+    try { URL.revokeObjectURL(u); } catch(e){}
+  });
+  blobUrlsToRevoke = [];
+}
+
+function disposeMesh(mesh){
+  if(!mesh) return;
+  if(mesh.geometry){ mesh.geometry.dispose(); }
+  if(mesh.material){
+    if(Array.isArray(mesh.material)){
+      mesh.material.forEach(m => { if(m.map) m.map.dispose(); m.dispose(); });
+    } else {
+      if(mesh.material.map) mesh.material.map.dispose();
+      mesh.material.dispose();
+    }
+  }
+}
+
+// Create a sphere mesh for equirectangular image
+function createSphereMesh(texture, radius=800){
+  const segW = 128, segH = 64;
+  const geom = new THREE.SphereGeometry(radius, segW, segH);
+  geom.scale(-1,1,1); // inside-out sphere
+  const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+  const mesh = new THREE.Mesh(geom, mat);
+  return mesh;
+}
+
+// Create a tall cylinder mapped with panorama texture
+function createCylinderMesh(texture, radius=800, imgWidth=4000, imgHeight=1000){
+  // compute height so the texture's aspect ratio preserved on cylinder
+  const circumference = 2 * Math.PI * radius;
+  const height = (imgHeight / imgWidth) * circumference;
+  const segW = 128;
+  const geom = new THREE.CylinderGeometry(radius, radius, Math.max(10, height), segW, 1, true);
+  geom.scale(-1,1,1); // inside-out
+  const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
+  const mesh = new THREE.Mesh(geom, mat);
+  return mesh;
+}
+
+// Create a top cap (sphere section) for sky/ground
+function createCapMesh(texture, radius=900, isTop=true){
+  const seg = 64;
+  // sphere sector: for top use phiStart=0, phiLength=Math.PI/2 etc.
+  const phiStart = isTop ? 0 : Math.PI/2;
+  const phiLength = Math.PI/2;
+  // we create a sphere and position/clip with scale and angle
+  const geom = new THREE.SphereGeometry(radius, seg, seg, 0, Math.PI*2, isTop ? 0 : Math.PI/2, Math.PI/2);
+  geom.scale(-1,1,1);
+  const mat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide, transparent:true, opacity:1.0, depthWrite:false });
+  const mesh = new THREE.Mesh(geom, mat);
+  return mesh;
+}
+
+///// ----------------- Load pipeline -----------------
+
+async function loadBaseImageFile(file){
+  if(!file) return;
+  showLoader(true);
+  try {
+    const dataURL = await readFileAsDataURL(file);
+    // we create a temp image to inspect its naturalWidth/Height
+    const tmp = new Image();
+    tmp.src = dataURL;
+    await new Promise((res,rej)=>{ tmp.onload=res; tmp.onerror=rej; });
+
+    // pad image edges to avoid seam interpolation artifacts
+    const paddedDataURL = padImageDataURL(tmp, 32);
+
+    // create texture from padded data
+    const { tex, img } = await createTextureFromDataURL(paddedDataURL);
+    // update UI metrics
+    DOM.imgSize.textContent = (img.naturalWidth || img.width) + ' x ' + (img.naturalHeight || img.height);
+    const avg = averageColorFromImage(img);
+    DOM.avgColor.textContent = `rgb(${avg.r},${avg.g},${avg.b})`;
+    DOM.avgColor.style.background = `rgb(${avg.r},${avg.g},${avg.b})`;
+    // set renderer clear color to average to hide tiny gaps
+    renderer.setClearColor(new THREE.Color(avg.r/255, avg.g/255, avg.b/255), 1);
+
+    // decide mapping
+    const mapping = chooseMapping(img); // 'sphere' or 'cylinder'
+    DOM.modeLabel.textContent = mapping.toUpperCase();
+
+    // generate mesh
+    clearCurrentMeshes();
+    const radius = parseFloat(DOM.curveSlider.value);
+    if(mapping === 'sphere'){
+      currentMesh = createSphereMesh(tex, radius);
+      scene.add(currentMesh);
+    } else {
+      currentMesh = createCylinderMesh(tex, radius, img.naturalWidth, img.naturalHeight);
+      scene.add(currentMesh);
+    }
+
+    // optionally handle sky/ground if already uploaded (they will overlay)
+    // we keep references to texture data to reuse later
+    texturePool.base = { tex, img, dataURL: paddedDataURL, mapping };
+  } catch(err){
+    console.error('Load base image failed', err);
+    alert('Failed to load image. Try converting to JPG if your image is HEIC/unsupported.');
+  } finally {
+    showLoader(false);
+    // center camera nicely: reset yaw/pitch and update UI
+    yaw = 0; pitch = 0; targetYaw = 0; targetPitch = 0;
+    updateDebugText();
+    renderOnce();
+  }
+}
+
+async function loadOverlay(file,type){
+  if(!file) return;
+  showLoader(true);
+  try {
+    const dataURL = await readFileAsDataURL(file);
+    const { tex, img } = await createTextureFromDataURL(dataURL);
+    // assign to sky/ground
+    if(type === 'sky'){
+      if(skyMesh){ scene.remove(skyMesh); disposeMesh(skyMesh); skyMesh=null; }
+      skyMesh = createCapMesh(tex, parseFloat(DOM.curveSlider.value) + 50, true);
+      scene.add(skyMesh);
+    } else {
+      if(groundMesh){ scene.remove(groundMesh); disposeMesh(groundMesh); groundMesh=null; }
+      groundMesh = createCapMesh(tex, parseFloat(DOM.curveSlider.value) + 50, false);
+      scene.add(groundMesh);
+    }
+  } catch(e){ console.error(e); alert('Overlay load failed'); }
+  finally { showLoader(false); renderOnce(); }
+}
+
+///// ----------------- Input bindings -----------------
+
+DOM.fileBase.addEventListener('change', e => {
+  if(e.target.files && e.target.files.length) loadBaseImageFile(e.target.files[0]);
+});
+DOM.fileSky.addEventListener('change', e => {
+  if(e.target.files && e.target.files.length) loadOverlay(e.target.files[0],'sky');
+});
+DOM.fileGround.addEventListener('change', e => {
+  if(e.target.files && e.target.files.length) loadOverlay(e.target.files[0],'ground');
+});
+
+DOM.btnClear.addEventListener('click', () => {
+  clearCurrentMeshes();
+  DOM.imgSize.textContent = '—';
+  DOM.modeLabel.textContent = '—';
+  DOM.avgColor.textContent = '—';
+  renderer.setClearColor(new THREE.Color(0x000000),1);
+  renderOnce();
+});
+
+DOM.btnFullscreen.addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) {
+      await DOM.container.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  } catch(e){
+    console.warn('Fullscreen toggle failed', e);
+  }
+});
+
+// sliders
+DOM.zoomSlider.addEventListener('input', () => {
+  camera.fov = parseFloat(DOM.zoomSlider.value);
+  camera.updateProjectionMatrix();
+  DOM.fovText.textContent = 'fov: ' + Math.round(camera.fov);
+  renderOnce();
+});
+
+DOM.curveSlider.addEventListener('input', () => {
+  // rebuild current mesh geometry with new radius but reuse texture map
+  if(!texturePool.base) return;
+  const base = texturePool.base;
+  const r = parseFloat(DOM.curveSlider.value);
+  if(currentMesh){
+    scene.remove(currentMesh); disposeMesh(currentMesh); currentMesh = null;
+  }
+  if(base.mapping === 'sphere'){
+    currentMesh = createSphereMesh(base.tex, r);
+  } else {
+    currentMesh = createCylinderMesh(base.tex, r, base.img.naturalWidth, base.img.naturalHeight);
+  }
+  scene.add(currentMesh);
+  // rebuild sky/ground if present
+  if(skyMesh){ scene.remove(skyMesh); disposeMesh(skyMesh); skyMesh = createCapMesh(skyMesh.material.map, r+50, true); scene.add(skyMesh); }
+  if(groundMesh){ scene.remove(groundMesh); disposeMesh(groundMesh); groundMesh = createCapMesh(groundMesh.material.map, r+50, false); scene.add(groundMesh); }
+  renderOnce();
+});
+
+DOM.sensitivitySlider.addEventListener('input', () => {
+  sensitivity = parseFloat(DOM.sensitivitySlider.value);
+});
+
+DOM.pitchClampSlider.addEventListener('input', () => {
+  pitchClamp = parseFloat(DOM.pitchClampSlider.value) * (Math.PI/180.0);
+});
+
+// export / import JSON of nodes (here we have simple single node state for demo)
+DOM.btnExport.addEventListener('click', () => {
+  const state = { base: texturePool.base ? { mapping: texturePool.base.mapping, info: { w: texturePool.base.img.naturalWidth, h: texturePool.base.img.naturalHeight } } : null };
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'pau-nodes.json'; a.click();
+  blobUrlsToRevoke.push(a.href);
+});
+DOM.btnImport.addEventListener('click', () => {
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+  inp.onchange = (e) => {
+    const f = e.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const parsed = JSON.parse(r.result);
+        alert('Imported: ' + JSON.stringify(parsed));
+      } catch(err){ alert('Invalid JSON'); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+});
+
+///// ----------------- Camera controls: drag, touch, wheel, keyboard -----------------
+
+let isPointerDown = false;
+let pointerId = null;
+let lastX = 0, lastY = 0;
+let yaw = 0, pitch = 0; // radians
+let targetYaw = 0, targetPitch = 0;
+let sensitivity = parseFloat(DOM.sensitivitySlider.value);
+let pitchClamp = parseFloat(DOM.pitchClampSlider.value) * (Math.PI/180.0);
+let inertia = 0.12; // smoothing factor
+
+// pointer events (mouse + touch)
+function onPointerDown(e){
+  isPointerDown = true;
+  pointerId = e.pointerId ?? 'mouse';
+  lastX = e.clientX ?? (e.touches && e.touches[0].clientX);
+  lastY = e.clientY ?? (e.touches && e.touches[0].clientY);
+  // stop inertia while pressing
+  document.body.classList.add('no-select');
+}
+function onPointerMove(e){
+  if(!isPointerDown) return;
+  const x = e.clientX ?? (e.touches && e.touches[0].clientX);
+  const y = e.clientY ?? (e.touches && e.touches[0].clientY);
+  const dx = x - lastX;
+  const dy = y - lastY;
+  // natural feel: dragging right rotates view right (so we invert)
+  targetYaw -= dx * 0.002 * sensitivity;
+  targetPitch -= dy * 0.002 * sensitivity;
+  // clamp pitch
+  targetPitch = Math.max(-pitchClamp, Math.min(pitchClamp, targetPitch));
+  lastX = x; lastY = y;
+}
+function onPointerUp(e){
+  isPointerDown = false;
+  pointerId = null;
+  document.body.classList.remove('no-select');
+}
+
+// wheel -> zoom
+DOM.container !== undefined && DOM.container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY;
+  camera.fov = Math.max(30, Math.min(110, camera.fov + delta * 0.02));
+  camera.updateProjectionMatrix();
+  DOM.zoomSlider.value = camera.fov;
+  DOM.fovText.textContent = 'fov: ' + Math.round(camera.fov);
+  renderOnce();
+}, { passive:false });
+
+// keyboard controls
+window.addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  if(key === 'w' || e.key === 'arrowup'){ moveDirection('forward'); }
+  if(key === 's' || e.key === 'arrowdown'){ moveDirection('backward'); }
+  if(key === 'a' || e.key === 'arrowleft'){ moveDirection('left'); }
+  if(key === 'd' || e.key === 'arrowright'){ moveDirection('right'); }
+});
+
+// attach pointer events to canvas
+renderer.domElement.style.touchAction = 'none';
+renderer.domElement.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+renderer.domElement.addEventListener('touchstart', (e)=> { onPointerDown(e.touches ? e.touches[0] : e); }, { passive:false });
+renderer.domElement.addEventListener('touchmove', (e)=> { onPointerMove(e.touches ? e.touches[0] : e); }, { passive:false });
+renderer.domElement.addEventListener('touchend', (e)=> { onPointerUp(e.changedTouches ? e.changedTouches[0] : e); }, { passive:false });
+
+///// ----------------- D-pad / joystick -----------------
+
+function moveDirection(dir){
+  // For now, moveDirection will perform a small yaw/pitch nudge or placeholder for node travel.
+  const step = 0.6; // radians for yaw steps when using D-pad
+  if(dir === 'forward') { /* placeholder: potentially go to linked node */ targetPitch = Math.max(-pitchClamp, targetPitch - 0.08); }
+  if(dir === 'backward') { targetPitch = Math.min(pitchClamp, targetPitch + 0.08); }
+  if(dir === 'left') { targetYaw += step * 0.3; }
+  if(dir === 'right') { targetYaw -= step * 0.3; }
+}
+
+// attach D-pad
+DOM.dirButtons.forEach(b => {
+  b.addEventListener('click', () => {
+    moveDirection(b.dataset.dir);
+  });
+});
+
+// Joystick handling: draggable knob inside fixed container, constrained to bounds
+(function setupJoystick(){
+  const knob = DOM.joystick;
+  const wrap = DOM.joystickWrap;
+  let dragging = false;
+  let startX=0,startY=0;
+  let knobX=0, knobY=0;
+  const maxDistance = 34; // radius in px knob allowed to move
+  // helper to set transform
+  function setKnob(x,y){
+    knob.style.transform = `translate(${x}px, ${y}px)`;
+    knobX = x; knobY = y;
+    // map knob delta to yaw/pitch rates
+    const normX = x / maxDistance;
+    const normY = y / maxDistance;
+    // applying rates: negative X rotates right when dragging right
+    targetYaw -= normX * 0.02 * sensitivity * 6;
+    targetPitch -= normY * 0.02 * sensitivity * 6;
+    targetPitch = Math.max(-pitchClamp, Math.min(pitchClamp, targetPitch));
+  }
+
+  function resetKnob(){
+    knob.style.transition = 'transform 180ms ease';
+    setKnob(0,0);
+    setTimeout(()=> knob.style.transition='', 200);
+  }
+
+  knob.addEventListener('pointerdown', (e)=>{
+    e.preventDefault(); knob.setPointerCapture(e.pointerId);
+    dragging = true; startX = e.clientX; startY = e.clientY;
+  });
+  window.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    e.preventDefault();
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    let nx = Math.max(-maxDistance, Math.min(maxDistance, dx));
+    let ny = Math.max(-maxDistance, Math.min(maxDistance, dy));
+    setKnob(nx, ny);
+  });
+  window.addEventListener('pointerup', (e)=>{
+    if(!dragging) return;
+    dragging = false;
+    try{ knob.releasePointerCapture(e.pointerId); }catch(e){}
+    resetKnob();
+  });
+
+  // Make joystickWrap draggable (so user can reposition but keep inside viewport)
+  let dragWrap = false, wx=0, wy=0, startWX=0, startWY=0;
+  wrap.addEventListener('pointerdown', (ev)=>{
+    if(ev.target === knob) return; // ignore knob drags for moving wrap
+    dragWrap = true; startWX = ev.clientX; startWY = ev.clientY;
+    const r = wrap.getBoundingClientRect();
+    wx = r.left; wy = r.top;
+    wrap.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  window.addEventListener('pointermove', (ev)=>{
+    if(!dragWrap) return;
+    ev.preventDefault();
+    const dx = ev.clientX - startWX, dy = ev.clientY - startWY;
+    let newLeft = wx + dx, newTop = wy + dy;
+    // clamp inside viewer container
+    const containerRect = DOM.container.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const minLeft = containerRect.left + 6;
+    const minTop = containerRect.top + 6;
+    const maxLeft = containerRect.right - wrapRect.width - 6;
+    const maxTop = containerRect.bottom - wrapRect.height - 6;
+    newLeft = Math.max(minLeft, Math.min(maxLeft, newLeft));
+    newTop = Math.max(minTop, Math.min(maxTop, newTop));
+    wrap.style.position = 'absolute';
+    wrap.style.left = (newLeft - containerRect.left) + 'px';
+    wrap.style.top = (newTop - containerRect.top) + 'px';
+  });
+  window.addEventListener('pointerup', (ev)=>{
+    if(!dragWrap) return;
+    dragWrap = false;
+    try{ wrap.releasePointerCapture(ev.pointerId); }catch(e){}
+  });
+})();
+
+///// ----------------- Animation loop / rendering -----------------
+
+function renderOnce(){
+  renderer.render(scene, camera);
+}
+
+// Simple animation loop with lerp smoothing for yaw/pitch
+function animate(){
+  requestAnimationFrame(animate);
+  // smooth lerp
+  yaw += (targetYaw - yaw) * inertia;
+  pitch += (targetPitch - pitch) * inertia;
+  // camera orientation: look in direction computed from yaw/pitch
+  const look = new THREE.Vector3();
+  look.x = Math.cos(pitch) * Math.sin(yaw);
+  look.y = Math.sin(pitch);
+  look.z = Math.cos(pitch) * Math.cos(yaw);
+  camera.lookAt(look);
+
+  // update debug
+  updateDebugText();
+
+  renderer.render(scene, camera);
+}
+function updateDebugText(){
+  DOM.yawText.textContent = 'yaw: ' + (yaw.toFixed(2));
+  DOM.pitchText.textContent = 'pitch: ' + ( (pitch * 180/Math.PI).toFixed(1) + '°' );
+  DOM.fovText.textContent = 'fov: ' + Math.round(camera.fov);
+}
+
+animate(); // start loop
+
+///// ----------------- Helper UI / loader -----------------
+
+function showLoader(show){
+  if(show) DOM.loader.classList.remove('hidden'); else DOM.loader.classList.add('hidden');
+}
+
+///// ----------------- Crossfade transition skeleton (for node navigation) -----------------
+// For hackathon: this is a simple structure that fades current->next. You can expand to preload neighbors & map directions.
+async function transitionToTexture(dataURL, mappingHint = 'sphere'){
+  showLoader(true);
+  const { tex, img } = await createTextureFromDataURL(dataURL);
+  const r = parseFloat(DOM.curveSlider.value);
+  const nextMesh = (mappingHint==='cylinder') ? createCylinderMesh(tex, r, img.naturalWidth, img.naturalHeight) : createSphereMesh(tex, r);
+  nextMesh.material.transparent = true;
+  nextMesh.material.opacity = 0;
+  scene.add(nextMesh);
+  // animate fade
+  const duration = 380;
+  const start = performance.now();
+  return new Promise(res=>{
+    function step(t){
+      const p = Math.min(1, (t - start)/duration);
+      if(currentMesh) currentMesh.material.opacity = 1 - p;
+      nextMesh.material.opacity = p;
+      if(p < 1) requestAnimationFrame(step);
+      else {
+        if(currentMesh) { scene.remove(currentMesh); disposeMesh(currentMesh); }
+        currentMesh = nextMesh;
+        showLoader(false);
+        res();
+      }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+///// ----------------- Initial guidance text & safety -----------------
+console.log('PAU_Edu_Orbit viewer initialized. Tips:\n- Upload equirectangular 360 images or long horizontal phone panoramas.\n- Use zoom slider to adjust FOV. If image looks over-zoomed, try lowering FOV (bigger view) or increasing curve radius.\n- If uploads on phone fail, try Chrome or convert HEIC to JPG via phone app.\n');
+
+</script>
+</body>
+</html>
