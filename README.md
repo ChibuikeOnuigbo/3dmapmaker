@@ -98,6 +98,7 @@ js/editors/                 simple + advanced editors
 js/io/                      .pmap archive (ZIP), IndexedDB storage, FS Access API
 js/worlds/                  four demo worlds (3 procedural + Willow Parish photo demo)
 assets/willow/              Willow Parish AI-photographed panoramas (day/rain/night × 7 nodes)
+js/viewer/sharpen.js          Sharpen: real unsharp mask clarity pass (menu switch)
 tools/                      Python/OpenCV continuity validator + scene synth
 tools/tests/                pytest suite (OpenCV validation)
 tests/                      Node core tests + static integration smoke
@@ -109,7 +110,7 @@ legacy/                     the original CampusNav 360 code (preserved, unmodifi
 ## Tests
 
 ```bash
-node tests/core.test.mjs          # 29 tests: scale, graph, movement, 500 m zone,
+node tests/core.test.mjs          # 32 tests: scale, graph, movement, 500 m zone,
                                   # reverse-travel identity, autocomplete, archive
 node tests/static-smoke.mjs       # wiring: imports, DOM ids, icons, terminology
 node tools-render/boot-harness.mjs # 58 checks: boots the REAL app (fake DOM),

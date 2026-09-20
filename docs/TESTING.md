@@ -4,7 +4,7 @@ Every acceptance criterion of the brief maps to an executable test or a
 recorded end-to-end run in this document. Status: **all green** as of
 2026-09-20.
 
-## 1. Node core suite — `tests/core.test.mjs` (29 tests)
+## 1. Node core suite — `tests/core.test.mjs` (32 tests)
 
 ```
 node tests/core.test.mjs     → 29/29 PASS

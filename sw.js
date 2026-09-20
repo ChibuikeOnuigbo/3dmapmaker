@@ -6,7 +6,7 @@
  * data lives in IndexedDB and is NEVER touched by this worker — and an app
  * update never deletes user projects.
  */
-const APP_CACHE = 'panorama-maps-shell-v2';
+const APP_CACHE = 'panorama-maps-shell-v3';
 const SHELL = [
   './',
   './index.html',
@@ -20,6 +20,7 @@ const SHELL = [
   './js/viewer/pano-renderer.js',
   './js/viewer/viewer.js',
   './js/viewer/completion.js',
+  './js/viewer/sharpen.js',
   './js/gen/provider.js',
   './js/gen/context.js',
   './js/gen/cache.js',

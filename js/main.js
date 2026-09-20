@@ -12,6 +12,7 @@ import { MovementController, KEY_DIRS } from './core/movement.js';
 import { PanoRenderer } from './viewer/pano-renderer.js';
 import { PanoramaViewer } from './viewer/viewer.js';
 import { detectMissingRegions, completePanorama } from './viewer/completion.js';
+import { sharpenCanvas } from './viewer/sharpen.js';
 import { ProceduralWorldProvider } from './gen/provider.js';
 import { GenerationContextBuilder } from './gen/context.js';
 import { PanoramaCache, prefetchPlan } from './gen/cache.js';
@@ -49,7 +50,11 @@ class App {
     this._saveHandle = null;
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
-    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, ...(this.prefs.view || {}) };
+    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, ...(this.prefs.view || {}) };
+    // phones: start with a clean canvas; widgets come back from the FAB/menu
+    if (!this.prefs.view && window.matchMedia?.('(max-width: 700px)').matches) {
+      this.viewPrefs.map = false; this.viewPrefs.locCard = false;
+    }
 
     this.perf = this._detectPerf();
     const p = PERF_PROFILES[this.perf];
@@ -338,8 +343,8 @@ class App {
     } finally { URL.revokeObjectURL(url); }
   }
 
-  /** Apply AutoComplete presentation choice + pitch limits for the CURRENT node. */
-  _present(entry) {
+  /** Apply AutoComplete presentation choice + pitch limits + Sharpen for the CURRENT node. */
+  async _present(entry) {
     const report = entry.meta.autoComplete;
     let display = entry.canvas;
     if (this.acEnabled && report && !report.complete) {
@@ -352,6 +357,12 @@ class App {
       }
     } else {
       this.viewer.setPitchLimits({ min: -80, max: 80, tight: !report?.complete });
+    }
+    const sh = this.viewPrefs.sharpen;
+    if (sh?.on && (sh.amt ?? 0) > 0.02 && display?.width) {
+      if (entry._sharp?.amt === sh.amt && entry._sharp.src === display) return entry._sharp.canvas;
+      const canvas = await sharpenCanvas(display, sh.amt ?? 0.55).catch(() => null);
+      if (canvas) { entry._sharp = { canvas, amt: sh.amt, src: display }; display = canvas; }
     }
     return display;
   }
@@ -390,7 +401,7 @@ class App {
     const entry = await this._ensurePanorama(nodeId, { fromId, relativeDir });
     if (this.movement.currentNodeId !== nodeId && !initial) return; // superseded by a newer arrival
 
-    const display = this._present(entry);
+    const display = await this._present(entry);
     const heading = node.headingDeg ?? 0;
     if (initial) {
       this.viewer.setImageNow(display, heading);
@@ -441,8 +452,9 @@ class App {
       else document.documentElement.requestFullscreen?.();
     });
     on('#homeBtn', 'click', () => { this.landing?.show(); this.closePanels(); });
-    on('#editBtn', 'click', () => this.togglePanel('simple'));
-    on('#advEditBtn', 'click', () => this.togglePanel('adv'));
+    on('#backBtn', 'click', () => { this.landing?.show(); this.closePanels(); });
+    on('#studioBtn', 'click', () => this._studioClicked());
+    this._syncStudioBtn();
     on('#compass', 'click', () => { this.viewer.view.yawDeg = 0; });
 
     // overflow menu (…)
@@ -479,30 +491,8 @@ class App {
     on('#mapHide', 'click', () => { this.viewPrefs.map = false; this._applyViewPrefs(); prefsSvc.save({ view: this.viewPrefs }); });
     on('#lcHide', 'click', () => { this.viewPrefs.locCard = false; this._applyViewPrefs(); prefsSvc.save({ view: this.viewPrefs }); });
 
-    // AutoComplete quick toggle — a REAL switch (Spec §45)
-    const acBtn = $('#acToggle');
-    const syncAc = () => {
-      acBtn.classList.toggle('toggled', this.acEnabled);
-      acBtn.setAttribute('aria-pressed', String(this.acEnabled));
-      acBtn.querySelector('span').textContent = `AutoComplete ${this.acEnabled ? 'on' : 'off'}`;
-    };
-    syncAc();
-    acBtn.addEventListener('click', async () => {
-      this.acEnabled = !this.acEnabled;
-      prefsSvc.save({ acEnabled: this.acEnabled });
-      syncAc();
-      const id = this.movement?.currentNodeId;
-      if (id) {   // re-present current panorama immediately with the new mode
-        const entry = await this._ensurePanorama(id, {});
-        const display = this._present(entry);
-        this.viewer.setImageNow(display, this.graph.getNode(id).headingDeg ?? 0);
-      }
-      this.toast(`AutoComplete Panorama ${this.acEnabled ? 'ON — missing regions repaired, view range limited' : 'OFF — original pixels shown'}`, 'ok', 2600);
-    });
-
-    on('#routeBtn', 'click', () => this.routeToNearestLandmark());
-    on('#exportBtn', 'click', () => this.saveProject(true));
-    on('#openBtn', 'click', () => this.openProject());
+    // Sharpen applies to the panorama SOURCE once per node/amount and is
+    // cached alongside the entry (see _present) — the viewer loop stays free.
 
     // world menu
     const wm = $('#worldMenu');
@@ -533,55 +523,126 @@ class App {
     if (sel === '#worldBtn') { pop.style.left = `${Math.max(8, r.left ?? 8)}px`; pop.style.right = 'auto'; }
   }
 
-  /* ---------- overflow menu ---------- */
+  /* ---------- studio (simple / advanced) ---------- */
+  get studio() { return this.prefs.studio === 'advanced' ? 'advanced' : 'simple'; }
+  setStudio(kind, { open = true } = {}) {
+    this.prefs.studio = kind;
+    prefsSvc.save({ studio: kind });
+    this._syncStudioBtn();
+    if (open) this.togglePanel(kind === 'advanced' ? 'adv' : 'simple');
+  }
+  _studioClicked() {
+    const cur = this.studio;
+    const openId = cur === 'advanced' ? this.advancedEditor.isOpen : this.simpleEditor.isOpen;
+    const otherOpen = cur === 'advanced' ? this.simpleEditor.isOpen : this.advancedEditor.isOpen;
+    if (otherOpen) { this.setStudio(cur === 'advanced' ? 'simple' : 'advanced', { open: true }); return; }
+    if (!openId) { this.togglePanel(cur === 'advanced' ? 'adv' : 'simple'); return; }
+    this.closePanels();
+  }
+  _syncStudioBtn() {
+    const b = $('#studioBtn');
+    if (!b) return;
+    const adv = this.studio === 'advanced';
+    b.querySelector('use')?.setAttribute('href', adv ? '#i-sliders' : '#i-edit');
+    const t = b.querySelector('.tb-txt'); if (t) t.textContent = adv ? 'Advanced' : 'Simple';
+    b.title = `Studio: ${adv ? 'Advanced' : 'Simple'} · tap to open or switch`;
+    b.classList.toggle('active', this.simpleEditor?.isOpen || this.advancedEditor?.isOpen);
+  }
+
+  /* ---------- AutoComplete ---------- */
+  async toggleAutoComplete() {
+    this.acEnabled = !this.acEnabled;
+    prefsSvc.save({ acEnabled: this.acEnabled });
+    const id = this.movement?.currentNodeId;
+    if (id) {
+      const entry = await this._ensurePanorama(id, {});
+      const display = await this._present(entry);
+      this.viewer.setImageNow(display, this.graph.getNode(id).headingDeg ?? 0);
+    }
+    this.toast(`AutoComplete ${this.acEnabled ? 'on, missing regions repaired and view range limited' : 'off, original pixels shown'}`, 'ok', 2400);
+  }
+
+  /* ---------- unified panels and options menu ---------- */
   _buildMainMenu() {
     const mm = $('#mainMenu');
     const vp = this.viewPrefs;
-    const item = (icon, label, fn, on = null) =>
-      `<button class="mi ${on === null ? '' : on ? 'on' : ''}" role="menuitem">
-        ${on !== null ? `<span class="chk"><svg><use href="#i-check"/></svg></span>` : `<svg class="ic"><use href="${icon}"/></svg>`}
-        <span class="grow">${label}</span>
+    const dbg = $('#debugOverlay');
+    const sh = vp.sharpen || { on: false, amt: 0.55 };
+    const sw = (key, label, icon, hint = '') =>
+      `<button class="mi sw ${vp[key] ? 'on' : ''}" data-sw="${key}" role="menuitemcheckbox" aria-checked="${!!vp[key]}">
+        <svg class="ic"><use href="${icon}"/></svg>
+        <span class="grow">${label}${hint ? `<small>${hint}</small>` : ''}</span>
+        <span class="track"><span class="knob"></span></span>
       </button>`;
+    const act = (icon, label, hint = '') =>
+      `<button class="mi" role="menuitem"><svg class="ic"><use href="${icon}"/></svg><span class="grow">${label}${hint ? `<small>${hint}</small>` : ''}</span></button>`;
     mm.innerHTML = `
-      <div class="lab">Tools</div>
-      ${item('#i-route', 'Route to nearest landmark', null)}
-      ${item('#i-magic', `AutoComplete Panorama — ${this.acEnabled ? 'on' : 'off'}`, null)}
-      <div class="sep"></div><div class="lab">Show</div>
-      ${item(null, 'Movement pad', null, vp.movePad)}
-      ${item(null, 'Mini map', null, vp.map)}
-      ${item(null, 'Location card', null, vp.locCard)}
-      ${item(null, 'Compass', null, vp.compass)}
-      <div class="sep"></div><div class="lab">More</div>
-      ${item('#i-bug', 'Developer overlay', null)}
-      ${item('#i-home', 'Home — demos & create', null)}
-      ${item('#i-globe', 'About this world', null)}`;
-    const [miRoute, miAC, miPad, miMap, miCard, miCompass, miBug, miHome, miAbout] = mm.querySelectorAll('.mi');
-    miRoute.addEventListener('click', () => { mm.classList.remove('open'); this.routeToNearestLandmark(); });
-    miAC.addEventListener('click', () => { mm.classList.remove('open'); $('#acToggle').click(); });
-    const toggle = (key) => () => {
-      this.viewPrefs[key] = !this.viewPrefs[key];
+      <div class="lab">Image</div>
+      <button class="mi sw ${sh.on ? 'on' : ''}" data-sharpen role="menuitemcheckbox" aria-checked="${!!sh.on}">
+        <svg class="ic"><use href="#i-sharpen"/></svg>
+        <span class="grow">Sharpen<small>more clarity and crisp edges</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <div class="row-of-field" data-sharpen-row ${sh.on ? '' : 'hidden'}>
+        <input id="shRange" type="range" min="10" max="100" value="${Math.round((sh.amt ?? 0.55) * 100)}" aria-label="Sharpen strength">
+        <span class="pct">${Math.round((sh.amt ?? 0.55) * 100)}%</span>
+      </div>
+      <button class="mi sw ${this.acEnabled ? 'on' : ''}" data-ac role="menuitemcheckbox" aria-checked="${!!this.acEnabled}">
+        <svg class="ic"><use href="#i-magic"/></svg>
+        <span class="grow">AutoComplete<small>repair incomplete panorama edges</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <div class="sep"></div><div class="lab">Panels</div>
+      ${sw('locCard', 'Location card', '#i-pin')}
+      ${sw('movePad', 'Movement pad', '#i-up', 'also W A S D keys')}
+      ${sw('map', 'Map', '#i-map')}
+      ${sw('compass', 'Compass', '#i-globe')}
+      <button class="mi sw ${!dbg.hidden ? 'on' : ''}" data-dbg role="menuitemcheckbox" aria-checked="${!dbg.hidden}">
+        <svg class="ic"><use href="#i-bug"/></svg>
+        <span class="grow">Developer overlay<small>coordinates, nodes, scores</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <div class="sep"></div><div class="lab">World</div>
+      ${act('#i-save', 'Save project', 'portable .pmap file')}
+      ${act('#i-open', 'Open project')}
+      ${act('#i-route', 'Route to landmark')}
+      ${act('#i-home', 'Start screen', 'demos and create')}`;
+    const rebuild = () => { const was = mm.classList.contains('open'); this._buildMainMenu(); if (was) mm.classList.add('open'); };
+    const items = mm.querySelectorAll('.mi');
+    const save = items[items.length - 5], open = items[items.length - 4], route = items[items.length - 3], home = items[items.length - 2];
+    mm.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.sw;
+      this.viewPrefs[k] = !this.viewPrefs[k];
       prefsSvc.save({ view: this.viewPrefs });
       this._applyViewPrefs();
-      const wasOpen = mm.classList.contains('open');
-      this._buildMainMenu();
-      if (wasOpen) mm.classList.add('open');
-    };
-    miPad.addEventListener('click', toggle('movePad'));
-    miMap.addEventListener('click', toggle('map'));
-    miCard.addEventListener('click', toggle('locCard'));
-    miCompass.addEventListener('click', toggle('compass'));
-    miBug.addEventListener('click', () => {
-      mm.classList.remove('open');
-      const el = $('#debugOverlay');
-      el.hidden = !el.hidden;
-      this.mapRenderer.setDebug(!el.hidden);
+      rebuild();
+    }));
+    mm.querySelector('[data-dbg]').addEventListener('click', () => {
+      dbg.hidden = !dbg.hidden;
+      this.mapRenderer.setDebug(!dbg.hidden);
+      rebuild();
     });
-    miHome.addEventListener('click', () => { mm.classList.remove('open'); this.landing?.show(); });
-    miAbout.addEventListener('click', () => {
-      mm.classList.remove('open');
-      const g = this.graph;
-      if (g) this.toast(`${g.name} — ${g.nodes.size} locations · ${g.edges.size} connections · ${g.environment.description || ''}`, null, 5200);
+    mm.querySelector('[data-ac]').addEventListener('click', async () => { await this.toggleAutoComplete(); rebuild(); });
+    mm.querySelector('[data-sharpen]').addEventListener('click', () => {
+      this.viewPrefs.sharpen = { ...sh, on: !sh.on };
+      prefsSvc.save({ view: this.viewPrefs });
+      this.reloadCurrentPanorama().catch(() => {});   // source re rendered with/without clarity pass
+      this.toast(`Sharpen ${this.viewPrefs.sharpen.on ? 'on, clearer panorama' : 'off'}`, 'ok', 1600);
+      rebuild();
     });
+    const range = mm.querySelector('#shRange');
+    range?.addEventListener('input', () => {
+      const amt = +range.value / 100;
+      this.viewPrefs.sharpen = { on: true, amt };
+      prefsSvc.save({ view: this.viewPrefs });
+      mm.querySelector('.pct').textContent = `${range.value}%`;
+      clearTimeout(this._shT);
+      this._shT = setTimeout(() => this.reloadCurrentPanorama().catch(() => {}), 240);
+    });
+    save.addEventListener('click', () => { mm.classList.remove('open'); this.saveProject(true); });
+    open.addEventListener('click', () => { mm.classList.remove('open'); this.openProject(); });
+    route.addEventListener('click', () => { mm.classList.remove('open'); this.routeToNearestLandmark(); });
+    home.addEventListener('click', () => { mm.classList.remove('open'); this.closePanels(); this.landing?.show(); });
   }
 
   /* ---------- view preferences (optional UI) ---------- */
@@ -589,6 +650,8 @@ class App {
     $('#movePad').style.display = this.viewPrefs.movePad ? '' : 'none';
     $('#mapWidget').classList.toggle('hidden', !this.viewPrefs.map);
     $('#locCard').classList.toggle('hidden', !this.viewPrefs.locCard);
+    $('#mapWidget').classList.toggle('force', !!this.viewPrefs.map);
+    $('#locCard').classList.toggle('force', !!this.viewPrefs.locCard);
     $('#compass').style.display = this.viewPrefs.compass ? '' : 'none';
     if (!this.viewPrefs.map) $('#mapWidget').classList.remove('full');
     this._updateFab();
@@ -611,15 +674,13 @@ class App {
     this.closePanels();
     if (simple) this.simpleEditor.open();
     if (adv) this.advancedEditor.open();
-    $('#editBtn').classList.toggle('active', this.simpleEditor.isOpen);
-    $('#advEditBtn').classList.toggle('active', this.advancedEditor.isOpen);
+    this._syncStudioBtn();
   }
 
   closePanels() {
     this.simpleEditor.close();
     this.advancedEditor.close();
-    $('#editBtn').classList.remove('active');
-    $('#advEditBtn').classList.remove('active');
+    this._syncStudioBtn();
   }
 
   async _renderWorldMenu() {
@@ -698,7 +759,7 @@ class App {
     if (!path) return this.toast(`No path to ${near.landmark.name}`);
     this.mapRenderer.setRoute(path.nodes);
     this.mapRenderer.panToNode(cur.id);
-    this.toast(`Route to ${near.landmark.name}: ${path.distanceM.toFixed(0)} m — follow the blue line (W to walk)`, 'ok', 4200);
+    this.toast(`Route to ${near.landmark.name}: ${path.distanceM.toFixed(0)} m, follow the blue line (W to walk)`, 'ok', 4200);
   }
 
   selectNode(id) {
@@ -729,7 +790,7 @@ class App {
       this.cache.lru.delete(n.id); this.cache.meta.delete(n.id);
       this.notifyMapChanged();
       if (this.movement.currentNodeId === n.id) await this.reloadCurrentPanorama(true);
-      this.toast(deduped ? 'Image already in project — reused existing asset' : 'Panorama assigned to location', 'ok');
+      this.toast(deduped ? 'Image already in project, reused existing asset' : 'Panorama assigned to location', 'ok');
     } catch (err) { this.toast(err.message, 'err', 5000); }
   }
 
@@ -800,7 +861,7 @@ class App {
       const name = (this.graph.name || 'panorama-world').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') + '.pmap';
       const res = await fsAccess.saveBlob(blob, name, this._saveHandle);
       if (res.handle) this._saveHandle = res.handle;
-      if (res.ok) this.toast(`Saved ${name} — verified portable project`, 'ok');
+      if (res.ok) this.toast(`Saved ${name}, verified portable project`, 'ok');
       else if (!res.aborted) this.toast('Save failed', 'err');
     } catch (err) {
       console.error(err);
@@ -828,7 +889,7 @@ class App {
       const missing = [];
       for (const n of world.nodes || []) if (n.pano?.kind === 'asset' && n.pano.assetId && !manifest.assets?.some(a => a.id === n.pano.assetId)) { n.pano.missing = true; missing.push(n.id); }
       await this.loadWorldJson(world, { project: stagedProject, name: manifest.name });
-      this.toast(`Opened “${manifest.name}”${missing.length ? ` — ${missing.length} panorama asset(s) missing (replaceable in the editor)` : ''}`, missing.length ? 'err' : 'ok', 5000);
+      this.toast(`Opened “${manifest.name}”${missing.length ? `, ${missing.length} panorama asset(s) missing, replaceable in the editor` : ''}`, missing.length ? 'err' : 'ok', 5000);
     } catch (err) {
       console.error(err);
       this.toast('Could not open project: ' + err.message, 'err', 6000);

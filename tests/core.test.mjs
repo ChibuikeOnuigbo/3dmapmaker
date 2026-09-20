@@ -321,6 +321,67 @@ test('world graph round-trips through JSON', () => {
   assert.ok(back.healthCheck().length === 0, JSON.stringify(back.healthCheck()));
 });
 
+/* ------------- camera-relative movement equivalences (spec behavior) —————
+   "forward with the camera rotated 90°" must reach the same destination as
+   "the matching strafe direction on the current heading", wherever the
+   graph allows both. This is what makes A/D equal to turn+W. */
+test('movement: rotate 90° then forward === strafe (plaza grid, all 8 directions)', () => {
+  const { graph } = buildChapelLane();
+  const grid = [...graph.nodes.keys()].filter((k) => k.startsWith('plaza_'));
+  const mid = grid.find((k) => { const [r, c] = k.slice(6).split('_').map(Number); return r === 3 && c === 3; });
+  const mc = new MovementController(graph, fakeBus());
+  for (const yaw of [0, 90, 180, 270]) {
+    for (const [strafe, turn] of [['left', -90], ['right', 90]]) {
+      const a = planMove(graph, mid, strafe, yaw);           // strafe on current heading
+      const b = planMove(graph, mid, 'forward', (yaw + turn + 360) % 360);  // turn then forward
+      assert.equal(a.ok, b.ok, `yaw ${yaw} ${strafe}: one allowed, one not`);
+      if (a.ok) assert.equal(a.targetId, b.targetId, `yaw ${yaw} ${strafe}: must land on the same node`);
+    }
+  }
+  assert.ok(mid, 'plaza center found');
+});
+
+/* ---------------- willow parish straight line math: 500 / spacing -------- */
+test('willow parish: straight street at 100 m spacing, real meter edges', async () => {
+  const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
+  const w = buildWillowParish();
+  const ids = [...w.graph.nodes.keys()].sort();
+  assert.equal(ids.length, 7);
+  let prev = null, total = 0;
+  for (const id of ids) {
+    if (prev) {
+      const e = w.graph.edgesOf(prev).find((e) => w.graph.otherEnd(e, prev) === id);
+      assert.ok(e, `${prev} → ${id} connected`);
+      assert.ok(Math.abs(e.distM - 100) < 0.01, `edge ${prev}→${id} is really 100 m (got ${e.distM})`);
+      total += e.distM;
+    }
+    prev = id;
+  }
+  assert.equal(total, 600, 'street spans 600 m of real distance');
+});
+
+/* ---------------- sharpen: real clarity pass, not a toggle only ---------- */
+test('sharpen: unsharp mask boosts edges, keeps brightness and alpha', async () => {
+  const { sharpenBuffer } = await import('../js/viewer/sharpen.js');
+  const w = 24, h = 12;
+  const src = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const v = (i % w) < w / 2 ? 100 : 160;   // soft vertical edge
+    src.set([v, v, v, 255], i * 4);
+  }
+  const out = await sharpenBuffer(src, w, h, { amount: 0.8, radius: 2 });
+  assert.ok(out !== src && out.length === src.length);
+  const cx = Math.floor(w / 2), row = 6;
+  const leftEdge = out[(row * w + cx - 1) * 4];     // dark side just left of edge
+  const rightEdge = out[(row * w + cx) * 4];        // bright side just at edge
+  assert.ok(leftEdge < 100, `dark side of the edge gets darker (crisper), got ${leftEdge}`);
+  assert.ok(rightEdge > 160, `bright side of the edge gets brighter, got ${rightEdge}`);
+  assert.ok(out.every((v, i) => (i + 1) % 4 !== 0 || v === 255), 'alpha preserved');
+  const meanSrc = src.reduce((a, b, i) => (i % 4 === 0 ? a + b : a), 0) / (w * h);
+  const meanOut = out.reduce((a, b, i) => (i % 4 === 0 ? a + b : a), 0) / (w * h);
+  assert.ok(Math.abs(meanOut - meanSrc) < 2.5, `mean luminance stable (${meanSrc} → ${meanOut})`);
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — core test suite');

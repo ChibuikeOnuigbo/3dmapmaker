@@ -177,6 +177,7 @@ export class PanoramaViewer {
       zoom: this.view.zoom,
     });
     this._renderRain(now, dt);
+    this.onFrameRendered?.();   // post-processing hook (sharpen pass schedules here)
   }
 
   _renderRain(now, dt) {

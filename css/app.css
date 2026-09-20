@@ -473,3 +473,92 @@ svg { display: block; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ================= 2026 09 UI refreshments ================= */
+
+/* root cause fix: an author display rule must never defeat the hidden
+   attribute — invisible panels made every close button look broken */
+[hidden] { display: none !important; }
+
+/* ---- menu switches (panels toggles) ---- */
+.pop .mi { align-items: center; }
+.pop .mi small { display: block; font-size: 11px; color: var(--ink-3); font-weight: 500; margin-top: 1px; }
+.pop .mi .track {
+  flex: none; width: 34px; height: 20px; border-radius: 999px;
+  background: rgba(16, 24, 40, 0.16); position: relative; transition: background 0.16s;
+}
+.pop .mi .knob {
+  position: absolute; top: 2.5px; left: 3px; width: 15px; height: 15px; border-radius: 50%;
+  background: #fff; box-shadow: var(--sh-1); transition: left 0.16s;
+}
+.pop .mi.on .track { background: var(--accent); }
+.pop .mi.on .knob { left: 16px; }
+.pop .row-of-field { display: flex; align-items: center; gap: 10px; padding: 4px 10px 10px 10px; }
+.pop .row-of-field input[type="range"] { flex: 1; accent-color: var(--accent); }
+.pop .row-of-field .pct { font-size: 11.5px; color: var(--ink-2); min-width: 34px; text-align: right; }
+
+/* ---- landing: minimal hero + previews ---- */
+.land-wrap.slim { max-width: 760px; display: flex; flex-direction: column; min-height: max-content; }
+.land-wrap.slim .land-hero { flex-direction: column; align-items: flex-start; gap: var(--s3); margin-bottom: var(--s5); }
+.land-wrap.slim .land-hero h1 { font-size: clamp(26px, 4.6vw, 40px); }
+.land-wrap.slim .land-hero p { font-size: 15px; max-width: 46ch; }
+.land-cta { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+.land-btn.lg { padding: 14px 22px; font-size: 14.5px; border-radius: var(--r-md); }
+.land-btn.lg.round {
+  padding: 0 16px; height: 52px; width: 52px; border-radius: 16px; justify-content: center;
+  position: relative;
+}
+.land-btn.lg.round .lg-txt { position: absolute; bottom: -19px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #8a93a8; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+.land-btn.lg.round svg { width: 22px; height: 22px; }
+.land-cta .active { background: rgba(255, 255, 255, 0.14); }
+.land-grid { margin-top: var(--s6); grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.land-card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-spin { position: absolute; inset: 0; display: grid; place-items: center; }
+.thumb-spin .spinner { width: 26px; height: 26px; border-width: 3px; }
+.land-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s4); margin-top: var(--s8); flex-wrap: wrap; }
+.land-foot .land-ck { margin-top: 0; }
+.land-foot .land-skip { margin-top: 0; }
+
+/* studio choice pop */
+.land-pop-backdrop {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(8, 12, 22, 0.55); backdrop-filter: blur(4px); z-index: 4; padding: 18px;
+}
+.land-pop {
+  background: var(--surface); color: var(--ink); border-radius: var(--r-lg);
+  box-shadow: var(--sh-3); padding: var(--s5); width: min(430px, 100%);
+  animation: popin 0.18s ease-out;
+}
+@keyframes popin { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.land-pop h3 { margin: 0 0 4px; font-size: 17px; }
+.land-pop p { margin: 0 0 var(--s4); color: var(--ink-2); font-size: 13px; }
+.land-pop-row { display: grid; gap: var(--s2); }
+.land-pop-row .land-btn {
+  background: #fff; color: var(--ink); border-color: var(--line); justify-content: flex-start;
+  font-size: 14px; padding: 12px 14px;
+}
+.land-pop-row .land-btn:hover { background: #f3f6fc; }
+.land-pop-row .land-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.land-pop > .land-skip { color: var(--ink-3); margin-top: var(--s3); text-decoration: none; display: inline-block; }
+.land-pop > .land-skip:hover { color: var(--ink); }
+
+/* ---- phones: everything must fit and work ---- */
+@media (max-width: 700px) {
+  #topbar { gap: 6px; padding-left: var(--s1); padding-right: var(--s1); }
+  #brandGroup .brand .tb-txt { display: inline; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tb-btn { width: 42px; }
+  #worldName { display: none; }
+  #modeGroup .tb-btn { width: 40px; }
+  #modeGroup .tb-txt { display: none; }
+  #zoombar, .sep-vert { display: none; }
+  #movePad { gap: 4px; }
+  .mbtn { width: 46px; height: 46px; }
+  #mapWidget.force { top: var(--s2); height: 40vh; }
+  #locCard.force { display: block; }
+  .pop { position: fixed; left: 6px !important; right: 6px !important; max-width: none; }
+  .land-wrap { padding: 28px 18px 40px; min-height: 100dvh; overflow-y: auto; }
+  .land-cta { gap: var(--s2); }
+  .land-btn.lg { flex: 1 1 auto; justify-content: center; padding: 13px 14px; }
+  .land-btn.lg.round { flex: 0 0 auto; }
+  .land-grid { grid-template-columns: 1fr; }
+}
