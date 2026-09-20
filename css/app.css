@@ -544,15 +544,23 @@ svg { display: block; }
 
 /* ---- phones: everything must fit and work ---- */
 @media (max-width: 700px) {
+  :root { --icon: 20px; }
   #topbar { gap: 6px; padding-left: var(--s1); padding-right: var(--s1); }
+  .tb-btn { height: 44px; min-width: 44px; }
+  .mini { width: 34px; height: 34px; }
+  .mini svg { width: 17px; height: 17px; }
+  .iconbtn { width: 38px; height: 38px; }
+  .iconbtn svg { width: 18px; height: 18px; }
+  .toolbar .tool { min-height: 44px; }
+  .chipbtn { min-height: 38px; }
   #brandGroup .brand .tb-txt { display: inline; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tb-btn { width: 42px; }
   #worldName { display: none; }
   #modeGroup .tb-btn { width: 40px; }
   #modeGroup .tb-txt { display: none; }
   #zoombar, .sep-vert { display: none; }
-  #movePad { gap: 4px; }
-  .mbtn { width: 46px; height: 46px; }
+  #movePad { gap: 6px; }
+  .mbtn { width: 52px; height: 52px; }
+  .mbtn svg { width: 22px; height: 22px; }
   #mapWidget.force { top: var(--s2); height: 40vh; }
   #locCard.force { display: block; }
   .pop { position: fixed; left: 6px !important; right: 6px !important; max-width: none; }
@@ -605,3 +613,28 @@ svg { display: block; }
 
 /* macOS hidden overlay scrollbars still get a foreground bar here because
    our thumb carries its own color (the whole point of the custom bar) */
+
+
+/* ================= overflow safety for narrow screens ================= */
+/* panel content must never be clipped away when the panel is narrow:
+   every form control and row can shrink, wrap or ellipsis */
+.panel .p-body input,
+.panel .p-body select,
+.panel .p-body textarea { min-width: 0; max-width: 100%; }
+.panel .p-body .frow { flex-wrap: wrap; }
+.panel .p-body .frow > .field, .panel .p-body .frow > .btn { flex: 1 1 130px; }
+.panel .p-body .kv dd { min-width: 0; overflow-wrap: anywhere; }
+.panel .p-body .btnrow { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.panel .p-head h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar .tool span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.toolbar .tool { min-width: 0; }
+
+/* popups never exceed the viewport even before JS clamps them */
+.pop { max-width: calc(100vw - 12px); max-height: calc(100vh - 90px); max-height: calc(100dvh - 90px); }
+
+/* very narrow phones: tighten inner panel padding */
+@media (max-width: 380px) {
+  .panel .p-body { padding: var(--s3); }
+  .panel .p-head { padding: var(--s3); }
+  #debugOverlay { font-size: 10.5px !important; }
+}

@@ -512,15 +512,46 @@ class App {
     si.addEventListener('keydown', (e) => { if (e.key === 'Escape') { si.value = ''; this._renderSearch(''); si.blur(); } });
 
     window.addEventListener('beforeunload', (e) => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+    // resizing between phone/tablet/desktop layouts must re-anchor any popup
+    // that is open right now (old screens: desktop offsets slid off-screen)
+    window.addEventListener('resize', () => {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#worldMenu', '#worldBtn']]) {
+        const pop = $(popSel);
+        if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
+      }
+    });
   }
 
   _placePop(pop, sel) {
     const btn = $(sel);
     const r = btn.getBoundingClientRect?.() ?? { left: 0, right: 0, bottom: 60, top: 60 };
-    pop.style.top = `${(r.bottom ?? 60) + 6}px`;
-    pop.style.left = 'auto';
-    pop.style.right = `${Math.max(8, (document.documentElement.clientWidth || innerWidth || 1280) - (r.right ?? 60))}px`;
-    if (sel === '#worldBtn') { pop.style.left = `${Math.max(8, r.left ?? 8)}px`; pop.style.right = 'auto'; }
+    const vw = document.documentElement.clientWidth || innerWidth || 1280;
+    const vh = document.documentElement.clientHeight || innerHeight || 800;
+    // reset first: inline styles from a previous (larger) placement must not
+    // leak into a smaller layout after resize
+    pop.style.left = ''; pop.style.right = ''; pop.style.top = ''; pop.style.bottom = '';
+    if (vw <= 700) {
+      // mobile: toolbar is a dock at the bottom; CSS pins the pop full width,
+      // we only decide up/down here (mostly up, since the dock is at the bottom)
+      const opensUp = r.top > vh / 2;
+      if (opensUp) { pop.style.bottom = `${Math.max(8, vh - r.top + 6)}px`; pop.style.top = 'auto'; }
+      else { pop.style.top = `${Math.min(vh - 120, r.bottom + 6)}px`; pop.style.bottom = 'auto'; }
+      pop.style.left = '6px'; pop.style.right = '6px';
+      return;
+    }
+    // desktop: anchor under the button, right edge aligned with it, clamped
+    // so the popup can never slide outside the viewport
+    const popW = Math.min(320, vw - 16);
+    pop.style.top = `${Math.min(vh - 120, Math.max(56, r.bottom + 6))}px`;
+    pop.style.bottom = 'auto';
+    if (sel === '#worldBtn') {
+      pop.style.left = `${Math.min(Math.max(8, r.left), Math.max(8, vw - popW - 8))}px`;
+      pop.style.right = 'auto';
+    } else {
+      pop.style.left = 'auto';
+      pop.style.right = `${Math.min(Math.max(8, vw - r.right), Math.max(8, vw - popW - 8))}px`;
+    }
   }
 
   /* ---------- studio (simple / advanced) ---------- */
