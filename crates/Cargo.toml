@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["terrain-core"]
+
+[profile.release]
+# The native core is called per-vertex and per-sample, so optimise for it.
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.wasm-release]
+inherits = "release"
+# cdylib size matters: this is downloaded on first load.
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true

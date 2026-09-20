@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "useDefineForClassFields": true,
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@3dmm/gis": ["packages/gis/src/index.ts"],
+      "@3dmm/project": ["packages/project/src/index.ts"],
+      "@3dmm/layers": ["packages/layers/src/index.ts"],
+      "@3dmm/terrain": ["packages/terrain/src/index.ts"],
+      "@3dmm/camera": ["packages/camera/src/index.ts"],
+      "@3dmm/input": ["packages/input/src/index.ts"],
+      "@3dmm/panorama": ["packages/panorama/src/index.ts"],
+      "@3dmm/scene-core": ["packages/scene-core/src/index.ts"],
+      "@3dmm/world": ["packages/world/src/index.ts"],
+      "@3dmm/assets": ["packages/assets/src/index.ts"],
+      "@3dmm/physics": ["packages/physics/src/index.ts"],
+      "@3dmm/performance": ["packages/performance/src/index.ts"],
+      "@3dmm/tutorial": ["packages/tutorial/src/index.ts"],
+      "@3dmm/ui": ["packages/ui/src/index.tsx"]
+    }
+  }
+}

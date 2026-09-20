@@ -1,0 +1,20 @@
+[package]
+name = "terrain-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT OR Apache-2.0"
+description = "Native terrain core for 3DMapMaker Next — deterministic noise, heightfields and sampling. Compiles to a host library and a wasm32-unknown-unknown cdylib."
+repository = "https://github.com/ChibuikeOnuigbo/3dmapmaker"
+
+# Zero dependencies. crates.io is not reachable from the environment this was
+# developed in, and more importantly nothing here needs anything external: the
+# maths is small, self-contained and must match the TypeScript byte for byte.
+# A dependency would also pull in wasm-bindgen, whose generated ABI is harder to
+# audit than the hand-written exports in `wasm.rs`.
+[dependencies]
+
+[lib]
+name = "terrain_core"
+# rlib for the host binary and `cargo test`; cdylib for the wasm module.
+crate-type = ["rlib", "cdylib"]
