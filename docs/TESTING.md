@@ -111,7 +111,7 @@ realistically from a distance cue at 20 m; trees/houses/sun keep positions;
 `plaza_2_5` correctly shows its intentional missing top band, which the
 in-browser AutoComplete repairs.
 
-## 5. Full-app boot harness — `tools-render/boot-harness.mjs` (46 checks)
+## 5. Full-app boot harness — `tools-render/boot-harness.mjs` (58 checks)
 
 Boots the **real `js/main.js`** in Node behind a minimal fake DOM + the
 pure-JS Canvas2D shim (`canvas2d.mjs`), then exercises the exact browser
@@ -124,9 +124,16 @@ runtime path per world:
   presses W — arrival must equal the *aimed* node (Spec §37)
 - reverse walk returns the **original node IDs** (Spec §61)
 - Great Vale: 1,125 nodes, generation on demand (the >1,000-node case)
+- **Willow Parish (photo demo, DEMO 4):** fetch + ImageBitmap shimmed, verifies the
+  `node@mode` variant cache keys — day entry tagged `mode=day`, rain repaint tagged
+  `mode=rain`, **display-mode switch must NOT touch `graph.environment.weather`**
+  (one rain switch = weather + visuals together), day variant survives the flip in
+  cache, forward/reverse hops on 100 m gaps return the same node IDs with the
+  rain-cached imagery (never re-generated), and the frames are the served photos
+  (pixel prober rejects any procedural fallback)
 
 ```
-node tools-render/boot-harness.mjs   → 46/46 PASS
+node tools-render/boot-harness.mjs   → 58/58 PASS
 ```
 
 ### Bugs found by this harness and fixed (2026-09-20)

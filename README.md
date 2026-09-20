@@ -28,8 +28,11 @@ python3 -m http.server 8080
 
 Then:
 
-1. Pick a demo world (top-left **world button**): *Chapel Lane* (small),
-   *Millbrook* (medium), *Great Vale* (1,000+ nodes, large).
+1. On the **start screen**, pick a demo world: *Chapel Lane* (small),
+   *Millbrook* (medium), *Great Vale* (1,000+ nodes, large) or
+   **Willow Parish** — real AI-photographed street frames in three
+   pre-rendered looks (**day / rain / night** switchable from the toolbar's
+   mode segment). Later you switch worlds from the brand menu, top-left.
 2. **Drag** the panorama to look around. **Mouse wheel** zooms (field of view).
 3. **W A S D** (or the on-screen pad / arrow keys) to walk between locations —
    movement is camera-relative and resolves through the navigation graph.
@@ -93,7 +96,8 @@ js/gen/                     provider, context builder, LRU cache, utils
 js/map/                     2D canvas map renderer
 js/editors/                 simple + advanced editors
 js/io/                      .pmap archive (ZIP), IndexedDB storage, FS Access API
-js/worlds/                  three demo worlds
+js/worlds/                  four demo worlds (3 procedural + Willow Parish photo demo)
+assets/willow/              Willow Parish AI-photographed panoramas (day/rain/night × 7 nodes)
 tools/                      Python/OpenCV continuity validator + scene synth
 tools/tests/                pytest suite (OpenCV validation)
 tests/                      Node core tests + static integration smoke
@@ -108,8 +112,9 @@ legacy/                     the original CampusNav 360 code (preserved, unmodifi
 node tests/core.test.mjs          # 29 tests: scale, graph, movement, 500 m zone,
                                   # reverse-travel identity, autocomplete, archive
 node tests/static-smoke.mjs       # wiring: imports, DOM ids, icons, terminology
-node tools-render/boot-harness.mjs # 46 checks: boots the REAL app (fake DOM),
-                                  # walks all 3 demo worlds incl. the 1,125-node one
+node tools-render/boot-harness.mjs # 58 checks: boots the REAL app (fake DOM),
+                                  # walks all 4 demo worlds incl. the 1,125-node one,
+                                  # verifies Willow Parish mode spectra + cache identity
 .venv/bin/python -m pytest tools/tests -q   # 15 tests: OpenCV continuity gate
 ```
 
