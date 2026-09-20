@@ -110,7 +110,7 @@ legacy/                     the original CampusNav 360 code (preserved, unmodifi
 ## Tests
 
 ```bash
-node tests/core.test.mjs          # 32 tests: scale, graph, movement, 500 m zone,
+node tests/core.test.mjs          # 33 tests: scale, graph, movement, 500 m zone,
                                   # reverse-travel identity, autocomplete, archive
 node tests/static-smoke.mjs       # wiring: imports, DOM ids, icons, terminology
 node tools-render/boot-harness.mjs # 58 checks: boots the REAL app (fake DOM),

@@ -988,11 +988,36 @@ class App {
 
   toast(msg, kind = null, ms = 3000) {
     const host = $('#toasts');
+    if (!host) return;
+    this._toasts ??= new Set();
+    // spam protection: the exact same message already showing? refresh it
+    // instead of stacking copies (key held/blocked spam)
+    for (const t of this._toasts) {
+      if (t._msg === msg && t._kind === kind) {
+        clearTimeout(t._t1); clearTimeout(t._t2);
+        t._arm(ms);
+        return;
+      }
+    }
+    // hard cap: keep at most 2 pending so a new one always fits (max 3 total)
+    while (this._toasts.size >= 3) {
+      const oldest = this._toasts.values().next().value;
+      oldest._close();
+    }
     const el = document.createElement('div');
     el.className = 'toast' + (kind ? ' ' + kind : '');
     el.textContent = msg;
+    el._msg = msg; el._kind = kind;
+    el._close = () => {
+      if (!el.isConnected) { this._toasts.delete(el); return; }
+      clearTimeout(el._t1); clearTimeout(el._t2);
+      el.style.opacity = '0'; el.style.transition = 'opacity .35s';
+      setTimeout(() => { el.remove(); this._toasts.delete(el); }, 380);
+    };
+    el._arm = (t0) => { el._t1 = setTimeout(() => el._close(), t0); };
+    this._toasts.add(el);
     host.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .4s'; setTimeout(() => el.remove(), 420); }, ms);
+    el._arm(ms);
   }
 
   /* ================= keyboard ================= */

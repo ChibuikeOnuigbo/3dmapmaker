@@ -294,13 +294,16 @@ export class WorldGraph {
    * Resolve a desired travel bearing against this node's edges (Spec §13, §38):
    * returns the open edge whose bearing is closest within `coneDeg`, else null.
    */
-  resolveEdge(fromId, desiredBearingDeg, { coneDeg = 35 } = {}) {
+  resolveEdge(fromId, desiredBearingDeg, { coneDeg = 45 } = {}) {
     let best = null, bestDiff = Infinity;
     for (const e of this.edgesOf(fromId)) {
       if (e.blocked) continue;
       const diff = Math.abs(angleDelta(desiredBearingDeg, this.edgeBearing(e, fromId)));
       if (diff > coneDeg) continue;
-      // deterministic tie-break: closest bearing wins; on a true bearing tie,
+      // each WASD direction owns a 90° sector (±45° around its ideal heading)
+    // so every bearing maps to exactly one direction — no dead angle where a
+    // key press dies with "no path" between cones
+    // deterministic tie-break: closest bearing wins; on a true bearing tie,
       // the SHORTER hop wins (the natural next step down the street)
       const better = !best || diff < bestDiff - 1e-9
         || (Math.abs(diff - bestDiff) <= 1e-9 && e.distPx < best.distPx);

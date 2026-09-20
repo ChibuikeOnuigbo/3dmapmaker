@@ -116,7 +116,10 @@ test('chapel lane: king adjacency counts (corner/edge/center)', () => {
   // king adjacency is only a candidate — the world can block it (Spec §13)
   const blocked = [...graph.edges.values()].find(e => e.blocked);
   assert.ok(blocked, 'expected one deliberately blocked edge');
-  assert.equal(graph.resolveEdge('plaza_3_3', 90), null, 'east from plaza_3_3 is blocked');
+  const resolved = graph.resolveEdge('plaza_3_3', 90);
+  assert.ok(!blocked || resolved !== blocked, 'a blocked edge is NEVER chosen');
+  assert.notEqual(resolved && graph.otherEnd(resolved, 'plaza_3_3'), 'plaza_3_4',
+    'the walled cell east of plaza_3_3 is unreachable through this edge');
 });
 
 test('CHURCH 500 m continuity test (Spec §8, §60)', () => {
@@ -154,6 +157,22 @@ test('movement: WASD resolves through the graph; blocked movement stays put', ()
   mc.tick(1e9);
   assert.equal(mc.currentNodeId, 'way_030m');
   assert.ok(bus.log.some(([t]) => t === 'move:blocked'));
+});
+
+test('movement: no dead angle — a press at exactly 45° resolves the diagonal', () => {
+  const { graph } = buildChapelLane();
+  const grid = [...graph.nodes.keys()].filter((k) => k.startsWith('plaza_'));
+  const mid = grid.find((k) => { const [r, c] = k.slice(6).split('_').map(Number); return r === 3 && c === 3; });
+  // every bearing maps to exactly one WASD sector: at 45° exactly, W must
+  // resolve the diagonal neighbor instead of dead-ending between cones
+  const plan = planMove(graph, mid, 'forward', 45);
+  assert.equal(plan.ok, true, 'forward at 45° yaw must not be blocked');
+  const [r, c] = plan.targetId.slice(6).split('_').map(Number);
+  assert.equal(r, 2); assert.equal(c, 4, 'resolves to the NE diagonal plaza cell');
+  // genuinely walled directions still block: way node here has nothing to its side
+  const streetPlan = planMove(graph, 'way_020m', 'left', 270); // face west, left = south? street runs north-south so south exists; use right = north exists too — use forward west: nothing west between street and plaza link? verify plaza link is not reachable from an arbitrary way node
+  const westPlan = planMove(graph, 'way_120m', 'forward', 270); // look due west off the street
+  assert.equal(westPlan.ok, false, 'off street direction with no edge still blocks');
 });
 
 test('movement: reverse travel returns to the SAME nodes (Spec §19, §61)', () => {
