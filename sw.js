@@ -6,7 +6,7 @@
  * data lives in IndexedDB and is NEVER touched by this worker — and an app
  * update never deletes user projects.
  */
-const APP_CACHE = 'panorama-maps-shell-v3';
+const APP_CACHE = 'panorama-maps-shell-v4';
 const SHELL = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const SHELL = [
   './js/viewer/viewer.js',
   './js/viewer/completion.js',
   './js/viewer/sharpen.js',
+  './js/viewer/smooth.js',
   './js/gen/provider.js',
   './js/gen/context.js',
   './js/gen/cache.js',
@@ -50,11 +51,24 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
-  // cache-first for same-origin shell files; network-first for anything else same-origin
   if (url.origin === location.origin) {
     const isShell = SHELL.some((p) => url.pathname.endsWith(p.replace('./', '/')) || (p === './' && (url.pathname === '/' || url.pathname.endsWith('/index.html'))));
     if (isShell) {
-      e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
+      // NETWORK-FIRST with cache fill: fresh code always wins; the cache is the
+      // offline fallback. A cache-first strategy made bug fixes invisible to
+      // returning users (they kept running week-old JS) — the cost is one
+      // conditional request per shell file on load.
+      e.respondWith(
+        fetch(e.request)
+          .then((fresh) => {
+            if (fresh && fresh.ok) {
+              const copy = fresh.clone();
+              caches.open(APP_CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+            }
+            return fresh;
+          })
+          .catch(() => caches.match(e.request))
+      );
       return;
     }
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));

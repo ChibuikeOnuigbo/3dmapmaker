@@ -54,6 +54,7 @@
     <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></symbol>
     <symbol id="i-sharpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/><path d="M19 2.5 20.5 5l2.5 1.5L20.5 8 19 10.5 17.5 8 15 6.5 17.5 5Z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+    <symbol id="i-speed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-5"/><circle cx="12" cy="14" r="1.6" fill="currentColor"/></symbol>
     <symbol id="i-panels" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3.8 5.4 5.4l-1.52 7.58a2 2 0 0 0 1.5 2.14L7.4 15.7M8.6 3.8h7.2m-7.2 0-1.3 7m8.5-7 3 1.6 1.52 7.58a2 2 0 0 1-1.5 2.14l-2.02.58M15.8 3.8l1.3 7m-10 0v8.4a2 2 0 0 0 1.1 1.8l4 1.4a2 2 0 0 0 1.6 0l4-1.4a2 2 0 0 0 1.1-1.8V11m-10 0 5 1.6 5.1-1.6"/></symbol>
   </defs>
 </svg>
@@ -139,6 +140,12 @@
 </section>
 
 <button id="mapFab" title="Show map" aria-label="Show map"><svg><use href="#i-map"/></svg></button>
+
+<div class="widget" id="speedCtl" aria-label="Walk speed">
+  <svg class="ic" aria-hidden="true"><use href="#i-speed"/></svg>
+  <input id="speedRange" type="range" min="0" max="100" step="1" aria-label="Walk speed" title="Walk speed">
+  <span id="speedTxt" aria-live="off">1.4 m/s</span>
+</div>
 <div id="debugOverlay" hidden aria-label="Developer overlay"></div>
 <div id="toasts" aria-live="polite"></div>
 

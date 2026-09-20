@@ -13,6 +13,7 @@ import { PanoRenderer } from './viewer/pano-renderer.js';
 import { PanoramaViewer } from './viewer/viewer.js';
 import { detectMissingRegions, completePanorama } from './viewer/completion.js';
 import { sharpenCanvas } from './viewer/sharpen.js';
+import { smoothCanvas } from './viewer/smooth.js';
 import { ProceduralWorldProvider } from './gen/provider.js';
 import { GenerationContextBuilder } from './gen/context.js';
 import { PanoramaCache, prefetchPlan } from './gen/cache.js';
@@ -50,7 +51,7 @@ class App {
     this._saveHandle = null;
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
-    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, ...(this.prefs.view || {}) };
+    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 35, ...(this.prefs.view || {}) };
     // phones: start with a clean canvas; widgets come back from the FAB/menu
     if (!this.prefs.view && window.matchMedia?.('(max-width: 700px)').matches) {
       this.viewPrefs.map = false; this.viewPrefs.locCard = false;
@@ -168,6 +169,7 @@ class App {
       this.panoramaWarmHint(blurb);
     }
     this._syncModeGroup();
+    this._applySpeed();
     prefsSvc.save({ lastProjectId: projectId });
     this.project.updatedAt = new Date().toISOString();
     await this.storage.saveProjectMeta({ ...this.project, world: graph.toJSON() }).catch(() => {});
@@ -358,6 +360,12 @@ class App {
     } else {
       this.viewer.setPitchLimits({ min: -80, max: 80, tight: !report?.complete });
     }
+    const sm = this.viewPrefs.smooth;
+    if (sm?.on && (sm.amt ?? 0) > 0.02 && display?.width) {
+      if (entry._smooth?.amt === sm.amt && entry._smooth.src === display) display = entry._smooth.canvas;
+      const canvas = await smoothCanvas(display, sm.amt ?? 0.55).catch(() => null);
+      if (canvas) { entry._smooth = { canvas, amt: sm.amt, src: display }; display = canvas; }
+    }
     const sh = this.viewPrefs.sharpen;
     if (sh?.on && (sh.amt ?? 0) > 0.02 && display?.width) {
       if (entry._sharp?.amt === sh.amt && entry._sharp.src === display) return entry._sharp.canvas;
@@ -479,6 +487,27 @@ class App {
       b.addEventListener('click', () => this.tryMove(b.dataset.dir));
     });
 
+    // double click (or double tap) on the panorama: turn toward the
+    // clicked point and walk that way — same graph pipeline as W
+    $('#panoCanvas').addEventListener('dblclick', (ev) => {
+      const r = $('#panoCanvas').getBoundingClientRect();
+      const dx = ((ev.clientX - r.left) / Math.max(1, r.width)) - 0.5;
+      this.viewer.view.yawDeg = ((this.viewer.view.yawDeg + dx * this.viewer.view.fovDeg) % 360 + 360) % 360;
+      this.tryMove('forward');
+    });
+
+    // walk speed slider (bottom left, persisted, live)
+    const sp = $('#speedRange');
+    if (sp && !sp.dataset.bound) {
+      sp.dataset.bound = '1';
+      sp.addEventListener('input', () => {
+        this.viewPrefs.speed = +sp.value;
+        this._applySpeed();
+        prefsSvc.save({ view: this.viewPrefs });
+      });
+    }
+    if (sp) sp.value = String(this.viewPrefs.speed ?? 35);
+
     // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
     on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.3));
@@ -599,6 +628,7 @@ class App {
     const vp = this.viewPrefs;
     const dbg = $('#debugOverlay');
     const sh = vp.sharpen || { on: false, amt: 0.55 };
+    const sm = vp.smooth || { on: false, amt: 0.5 };
     const sw = (key, label, icon, hint = '') =>
       `<button class="mi sw ${vp[key] ? 'on' : ''}" data-sw="${key}" role="menuitemcheckbox" aria-checked="${!!vp[key]}">
         <svg class="ic"><use href="${icon}"/></svg>
@@ -617,6 +647,15 @@ class App {
       <div class="row-of-field" data-sharpen-row ${sh.on ? '' : 'hidden'}>
         <input id="shRange" type="range" min="10" max="100" value="${Math.round((sh.amt ?? 0.55) * 100)}" aria-label="Sharpen strength">
         <span class="pct">${Math.round((sh.amt ?? 0.55) * 100)}%</span>
+      </div>
+      <button class="mi sw ${sm.on ? 'on' : ''}" data-smooth role="menuitemcheckbox" aria-checked="${!!sm.on}">
+        <svg class="ic"><use href="#i-wind"/></svg>
+        <span class="grow">Smoothen<small>clean jagged edges and line joins</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <div class="row-of-field" data-smooth-row ${sm.on ? '' : 'hidden'}>
+        <input id="smRange" type="range" min="10" max="100" value="${Math.round((sm.amt ?? 0.5) * 100)}" aria-label="Smoothen strength">
+        <span class="pct">${Math.round((sm.amt ?? 0.5) * 100)}%</span>
       </div>
       <button class="mi sw ${this.acEnabled ? 'on' : ''}" data-ac role="menuitemcheckbox" aria-checked="${!!this.acEnabled}">
         <svg class="ic"><use href="#i-magic"/></svg>
@@ -666,14 +705,39 @@ class App {
       const amt = +range.value / 100;
       this.viewPrefs.sharpen = { on: true, amt };
       prefsSvc.save({ view: this.viewPrefs });
-      mm.querySelector('.pct').textContent = `${range.value}%`;
+      mm.querySelector('[data-sharpen-row] .pct').textContent = `${range.value}%`;
       clearTimeout(this._shT);
       this._shT = setTimeout(() => this.reloadCurrentPanorama().catch(() => {}), 240);
+    });
+    mm.querySelector('[data-smooth]').addEventListener('click', () => {
+      this.viewPrefs.smooth = { ...sm, on: !sm.on };
+      prefsSvc.save({ view: this.viewPrefs });
+      this.reloadCurrentPanorama().catch(() => {});
+      this.toast(`Smoothen ${this.viewPrefs.smooth.on ? 'on, edges cleaned' : 'off'}`, 'ok', 1600);
+      rebuild();
+    });
+    const srange = mm.querySelector('#smRange');
+    srange?.addEventListener('input', () => {
+      const amt = +srange.value / 100;
+      this.viewPrefs.smooth = { on: true, amt };
+      prefsSvc.save({ view: this.viewPrefs });
+      mm.querySelector('[data-smooth-row] .pct').textContent = `${srange.value}%`;
+      clearTimeout(this._smT);
+      this._smT = setTimeout(() => this.reloadCurrentPanorama().catch(() => {}), 240);
     });
     save.addEventListener('click', () => { mm.classList.remove('open'); this.saveProject(true); });
     open.addEventListener('click', () => { mm.classList.remove('open'); this.openProject(); });
     route.addEventListener('click', () => { mm.classList.remove('open'); this.routeToNearestLandmark(); });
     home.addEventListener('click', () => { mm.classList.remove('open'); this.closePanels(); this.landing?.show(); });
+  }
+
+  /** Map slider 0..100 → 0.6..8 m/s (exponential — fine control at low end). */
+  _applySpeed() {
+    const v = Math.max(0, Math.min(100, +this.viewPrefs.speed || 35));
+    const mps = +(0.6 * Math.pow(13.333, v / 100)).toFixed(2);
+    if (this.graph) this.graph.settings.walkSpeedMps = mps;
+    const lbl = $('#speedTxt');
+    if (lbl) lbl.textContent = `${mps >= 10 ? mps.toFixed(0) : mps.toFixed(1)} m/s`;
   }
 
   /* ---------- view preferences (optional UI) ---------- */

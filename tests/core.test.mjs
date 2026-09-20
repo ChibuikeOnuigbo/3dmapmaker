@@ -401,6 +401,28 @@ test('sharpen: unsharp mask boosts edges, keeps brightness and alpha', async () 
   assert.ok(Math.abs(meanOut - meanSrc) < 2.5, `mean luminance stable (${meanSrc} → ${meanOut})`);
 });
 
+/* ---------------- smoothen: denoises lines without blurring edges -------- */
+test('smoothen: kills pepper noise, keeps hard edges intact', async () => {
+  const { smoothBuffer } = await import('../js/viewer/smooth.js');
+  const w = 16, h = 12;
+  const src = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) src.set([10, 10, 10, 255], i * 4);
+  const mid = (6 * w + 8) * 4;
+  src[mid] = src[mid + 1] = src[mid + 2] = 220;               // one bright pepper pixel
+  const col = 6;                                              // vertical straight edge
+  for (let y = 0; y < h; y++) for (let x = col; x < w; x++) src.set([100, 100, 100, 255], (y * w + x) * 4);
+  const out = await smoothBuffer(src, w, h, { strength: 0.9 });
+  // pepper pixel is suppressed into the local 100-level line
+  const pep = out[mid];
+  assert.ok(pep < 180, `pepper pixel pulled toward its line (${pep}), not left at 220`);
+  // the strong edge is preserved (a pixel just left of the edge stays dark)
+  const edgeL = out[(6 * w + col - 2) * 4];
+  assert.ok(edgeL < 32, `edge guard: dark side stays dark (${edgeL})`);
+  const edgeR = out[(6 * w + col + 1) * 4];
+  assert.ok(edgeR > 88, `edge guard: bright side stays bright (${edgeR})`);
+  assert.ok(out.every((v, i) => (i + 1) % 4 !== 0 || v === 255), 'alpha preserved');
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — core test suite');

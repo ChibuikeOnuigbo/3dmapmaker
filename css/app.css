@@ -638,3 +638,22 @@ svg { display: block; }
   .panel .p-head { padding: var(--s3); }
   #debugOverlay { font-size: 10.5px !important; }
 }
+
+
+/* ================= walk speed control ================= */
+#panoCanvas { touch-action: manipulation; }   /* double tap = move (no 300ms tap delay) */
+#speedCtl {
+  display: flex; align-items: center; gap: 8px;
+  left: var(--s3); bottom: var(--s3);
+  padding: 7px 12px; border-radius: var(--r-lg);
+  background: var(--surface-alpha, rgba(252,253,255,0.92)); backdrop-filter: blur(10px);
+  border: 1px solid var(--line); box-shadow: var(--sh-1);
+  z-index: var(--z-widget);
+}
+#speedCtl .ic { width: 17px; height: 17px; color: var(--ink-2); flex: none; }
+#speedCtl input[type="range"] { width: 110px; accent-color: var(--accent); }
+#speedTxt { font-size: 11.5px; color: var(--ink-2); font-weight: 650; min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  #speedCtl { bottom: calc(76px + env(safe-area-inset-bottom)); left: var(--s2); }
+  #speedCtl input[type="range"] { width: 88px; }
+}
