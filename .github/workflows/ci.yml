@@ -93,8 +93,25 @@ jobs:
 
       # playwright.config.ts starts the dev server itself (webServer block) and
       # waits for http://localhost:5173, so no separate server step is needed.
+      #
+      # The output is teed to a file and the tail is echoed into the step
+      # summary. Log downloads go through a blob store that is not always
+      # reachable, whereas the summary comes back through the check-run API.
       - name: Run e2e
-        run: npx playwright test
+        id: e2e
+        run: |
+          set -o pipefail
+          npx playwright test 2>&1 | tee e2e.log
+
+      - name: Summarise e2e failures
+        if: always()
+        run: |
+          {
+            echo '## Playwright output (tail)'
+            echo '```'
+            tail -n 120 e2e.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload report
         if: always()
@@ -140,7 +157,20 @@ jobs:
       # build-rust.mjs probes PATH / CARGO_HOME / ~/.cargo/bin for a runnable
       # cargo, so the toolchain installed above is found without extra config.
       - name: Build host + wasm targets
-        run: npm run rust:build
+        id: build
+        run: |
+          set -o pipefail
+          npm run rust:build 2>&1 | tee rust-build.log
+
+      - name: Summarise build output
+        if: always()
+        run: |
+          {
+            echo '## cargo output (tail)'
+            echo '```'
+            tail -n 150 rust-build.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cargo tests
         run: npm run rust:test
