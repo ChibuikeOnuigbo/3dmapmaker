@@ -6,3 +6,7 @@ build/
 .env.local
 .DS_Store
 Thumbs.db
+
+# test artifacts
+playwright-report/
+test-results/

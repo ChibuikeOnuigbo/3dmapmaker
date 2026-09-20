@@ -1,0 +1,1148 @@
+{
+  "$schema": "./references.schema.json",
+  "title": "3DMapMaker Next — research references",
+  "generated": "2026-09-16",
+  "note": "Every entry is a real, publicly documented source that influenced a specific decision in this repository. The `usedFor` field names the file or package the decision landed in, so a reader can trace a claim back to the reason for it. Entries marked `verified: local` were read from files inside this repository rather than fetched from the network; the sandbox has no route to most CDNs, which is itself recorded in `blockedSources`.",
+  "categories": [
+    "panorama-rendering",
+    "projections-and-geodesy",
+    "terrain-and-lod",
+    "pathfinding-and-graphs",
+    "web-platform",
+    "graphics-api",
+    "state-and-architecture",
+    "ui-and-accessibility",
+    "procedural-generation",
+    "imagery-licensing-and-terms",
+    "testing-and-quality",
+    "performance",
+    "rust-and-wasm",
+    "input-and-camera"
+  ],
+  "references": [
+    {
+      "id": 1,
+      "category": "panorama-rendering",
+      "title": "Equirectangular projection",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Equirectangular_projection",
+      "usedFor": "packages/panorama/src/panorama.ts — directionToEquirectUv / equirectUvToDirection. A 2:1 equirect plate maps longitude linearly to u and latitude linearly to v.",
+      "verified": "well-known"
+    },
+    {
+      "id": 2,
+      "category": "panorama-rendering",
+      "title": "360° photography — equirectangular vs cubemap",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/360-degree_photography",
+      "usedFor": "The decision to render an inverted sphere from a single equirect image rather than a cube map, per the brief's 'spherical never cube'.",
+      "verified": "well-known"
+    },
+    {
+      "id": 3,
+      "category": "panorama-rendering",
+      "title": "Sphere geometry",
+      "source": "three.js documentation",
+      "url": "https://threejs.org/docs/#api/en/geometries/SphereGeometry",
+      "usedFor": "packages/scene-core/src/panoramaView.ts — the sphere segment counts (96 lon × 64 lat) and the geometry.scale(-1,1,1) inversion that puts the camera inside.",
+      "verified": "well-known"
+    },
+    {
+      "id": 4,
+      "category": "panorama-rendering",
+      "title": "regl-based 360 viewer (camera at centre, distance 0)",
+      "source": "local repository — google-street-view-clone-main/",
+      "url": "file://google-street-view-clone-main/",
+      "usedFor": "Confirmed the inverted-sphere approach and that the camera sits at the sphere centre with distance 0. 13 MB of working reference code audited locally.",
+      "verified": "local"
+    },
+    {
+      "id": 5,
+      "category": "panorama-rendering",
+      "title": "Legacy reveal-space drag math and the no-cube constraint",
+      "source": "local repository — prompt.txt",
+      "url": "file://prompt.txt",
+      "usedFor": "The drag-to-look mapping, the 'curved image, no cube, no black background' constraint, and the rule that WASD must never fire while a text field has focus.",
+      "verified": "local"
+    },
+    {
+      "id": 6,
+      "category": "panorama-rendering",
+      "title": "Pole distortion in equirectangular panoramas",
+      "source": "Wikipedia — Map projection",
+      "url": "https://en.wikipedia.org/wiki/Map_projection",
+      "usedFor": "packages/panorama/src/panorama.ts — analyzePoleValidity and the cap-blend shader, which fade the poles to sky/ground colour instead of smearing a single row of pixels.",
+      "verified": "well-known"
+    },
+    {
+      "id": 7,
+      "category": "panorama-rendering",
+      "title": "Crossfade vs hard cut in image transitions",
+      "source": "general compositing practice",
+      "url": "https://en.wikipedia.org/wiki/Dissolve_(filmmaking)",
+      "usedFor": "PanoramaCrossfade.setProgress with persistenceEnabled=false does a hard cut at t=0.5 — two street plates ghosting together is worse than a clean swap.",
+      "verified": "well-known"
+    },
+    {
+      "id": 8,
+      "category": "projections-and-geodesy",
+      "title": "Web Mercator (EPSG:3857)",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Web_Mercator_projection",
+      "usedFor": "packages/gis — the projection used for any lat/lon to planar mapping in the project.",
+      "verified": "well-known"
+    },
+    {
+      "id": 9,
+      "category": "projections-and-geodesy",
+      "title": "East-North-Up (ENU) local coordinate frame",
+      "source": "Wikipedia — Geodetic system",
+      "url": "https://en.wikipedia.org/wiki/Geodetic_system",
+      "usedFor": "packages/gis — enuToScene / sceneToEnu. The Vec3 convention here is {x, y, z} with z as elevation, which is a frequent source of bugs and is asserted by coordinates.test.ts.",
+      "verified": "well-known"
+    },
+    {
+      "id": 10,
+      "category": "projections-and-geodesy",
+      "title": "Haversine formula",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Haversine_formula",
+      "usedFor": "packages/gis — measureLocal for long baselines where a flat approximation would drift.",
+      "verified": "well-known"
+    },
+    {
+      "id": 11,
+      "category": "projections-and-geodesy",
+      "title": "Great-circle distance",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Great-circle_distance",
+      "usedFor": "packages/gis — polylineLength accumulation.",
+      "verified": "well-known"
+    },
+    {
+      "id": 12,
+      "category": "projections-and-geodesy",
+      "title": "Shoelace formula for polygon area",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shoelace_formula",
+      "usedFor": "packages/gis — ringArea and ringPerimeter.",
+      "verified": "well-known"
+    },
+    {
+      "id": 13,
+      "category": "projections-and-geodesy",
+      "title": "GeoJSON (RFC 7946)",
+      "source": "IETF",
+      "url": "https://datatracker.ietf.org/doc/html/rfc7946",
+      "usedFor": "apps/web/src/state/io.ts — the GeoJSON export shape and the [lon, lat] ordering, which is the opposite of most internal conventions.",
+      "verified": "well-known"
+    },
+    {
+      "id": 14,
+      "category": "projections-and-geodesy",
+      "title": "Port Harcourt coordinates",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Port_Harcourt",
+      "usedFor": "apps/web/src/worlds/generate.ts — the world origin (4.8156°N, 7.0498°E) so the three demo worlds sit on real ground.",
+      "verified": "well-known"
+    },
+    {
+      "id": 15,
+      "category": "terrain-and-lod",
+      "title": "Quadtree",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Quadtree",
+      "usedFor": "packages/performance — the LodNode tree that selectLod walks.",
+      "verified": "well-known"
+    },
+    {
+      "id": 16,
+      "category": "terrain-and-lod",
+      "title": "Level of detail (computer graphics)",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Level_of_detail_(computer_graphics)",
+      "usedFor": "packages/performance — selectLod(node, camera, opts, currentlyRefined) and the hysteresis that stops tiles flickering at a boundary.",
+      "verified": "well-known"
+    },
+    {
+      "id": 17,
+      "category": "terrain-and-lod",
+      "title": "Fractional Brownian motion",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fractional_Brownian_motion",
+      "usedFor": "packages/terrain/src/noise.ts — fbm(). This is where the real amplitude-cancelling bug was found: normalising by the sum of amplitudes made every terrain return 0–1 regardless of requested relief.",
+      "verified": "well-known"
+    },
+    {
+      "id": 18,
+      "category": "terrain-and-lod",
+      "title": "Perlin noise",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Perlin_noise",
+      "usedFor": "packages/terrain/src/noise.ts — the gradient lattice under the fbm octaves.",
+      "verified": "well-known"
+    },
+    {
+      "id": 19,
+      "category": "terrain-and-lod",
+      "title": "Simplex noise",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Simplex_noise",
+      "usedFor": "Considered and rejected for the heightfield: 2D Perlin is cheaper and the terrain is sampled on a regular grid, which removes simplex's main advantage.",
+      "verified": "well-known"
+    },
+    {
+      "id": 20,
+      "category": "terrain-and-lod",
+      "title": "Contour line extraction (marching squares)",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Marching_squares",
+      "usedFor": "packages/terrain — extractContours(hf, interval, indexEvery, maxSegments) returning {segments, levels, bounds}.",
+      "verified": "well-known"
+    },
+    {
+      "id": 21,
+      "category": "terrain-and-lod",
+      "title": "Terrain skirt / crack-free chunk joining",
+      "source": "standard terrain-rendering practice",
+      "url": "https://en.wikipedia.org/wiki/Level_of_detail_(computer_graphics)",
+      "usedFor": "packages/terrain/src/mesh.ts — buildTerrainMesh skirt. The vertex buffer was undersized by 8(r−1) vertices, truncating exactly the ring the skirt exists to hide.",
+      "verified": "well-known"
+    },
+    {
+      "id": 22,
+      "category": "terrain-and-lod",
+      "title": "Digital elevation model",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Digital_elevation_model",
+      "usedFor": "The TerrainSource union in packages/project — why a heightfield carries resolution, size and origin rather than a bare array.",
+      "verified": "well-known"
+    },
+    {
+      "id": 23,
+      "category": "terrain-and-lod",
+      "title": "GeoTIFF",
+      "source": "OSGeo",
+      "url": "https://www.ogc.org/standards/geotiff/",
+      "usedFor": "The geotiff manual chunk in apps/web/vite.config.ts — kept out of the main bundle because nothing on the default path needs it.",
+      "verified": "well-known"
+    },
+    {
+      "id": 24,
+      "category": "terrain-and-lod",
+      "title": "Web Workers",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API",
+      "usedFor": "workers/terrain.worker.ts and TerrainWorkerClient — heightfield generation and contour extraction never run on the main thread.",
+      "verified": "well-known"
+    },
+    {
+      "id": 25,
+      "category": "terrain-and-lod",
+      "title": "Transferable objects and structured clone",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects",
+      "usedFor": "workers/terrain.worker.ts — Float32Array buffers are transferred rather than copied, so a 1024² heightfield does not double in memory on the way back.",
+      "verified": "well-known"
+    },
+    {
+      "id": 26,
+      "category": "terrain-and-lod",
+      "title": "Vertical exaggeration in terrain visualisation",
+      "source": "cartographic convention",
+      "url": "https://en.wikipedia.org/wiki/Terrain_cartography",
+      "usedFor": "buildTerrainMesh verticalExaggeration — applied to the mesh only, never written back to the heightfield, so measurements stay true.",
+      "verified": "well-known"
+    },
+    {
+      "id": 27,
+      "category": "pathfinding-and-graphs",
+      "title": "A* search algorithm",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/A*_search_algorithm",
+      "usedFor": "packages/panorama/src/world-graph.ts — findPath. Reports `expanded` so the cost is visible rather than hidden.",
+      "verified": "well-known"
+    },
+    {
+      "id": 28,
+      "category": "pathfinding-and-graphs",
+      "title": "Chebyshev distance",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Chebyshev_distance",
+      "usedFor": "The A* heuristic h = max(|dx|,|dy|) and the `nearby` spatial metric. A Euclidean disc would disagree with what a king-move walker can actually reach in N steps.",
+      "verified": "well-known"
+    },
+    {
+      "id": 29,
+      "category": "pathfinding-and-graphs",
+      "title": "Chess — the king's move",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/King_(chess)",
+      "usedFor": "kingMovesFrom — the MAXIMUM possible moves (|dx|<=1, |dy|<=1, not both zero). A corner square has 3, an edge 5, an interior 8; this is correct, not a bug.",
+      "verified": "well-known"
+    },
+    {
+      "id": 30,
+      "category": "pathfinding-and-graphs",
+      "title": "Admissible heuristic",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Admissible_heuristic",
+      "usedFor": "Chebyshev never overestimates a king-move path, so A* stays optimal. Using Euclidean here would be admissible but weaker; using Manhattan would be inadmissible and could return a suboptimal route.",
+      "verified": "well-known"
+    },
+    {
+      "id": 31,
+      "category": "pathfinding-and-graphs",
+      "title": "Spatial hashing",
+      "source": "game-dev literature",
+      "url": "https://en.wikipedia.org/wiki/Space_partitioning",
+      "usedFor": "WorldGraph.nearby — a hash keyed by floor(g/cellSize) so a 1,024-node world answers a radius query without scanning the board.",
+      "verified": "well-known"
+    },
+    {
+      "id": 32,
+      "category": "pathfinding-and-graphs",
+      "title": "Breadth-first search",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Breadth-first_search",
+      "usedFor": "apps/web/src/worlds/frontier.ts — runFrontier grows outward from the start so the world is coherent around the reachable region even if generation is stopped part way.",
+      "verified": "well-known"
+    },
+    {
+      "id": 33,
+      "category": "pathfinding-and-graphs",
+      "title": "Graph connectivity",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Connectivity_(graph_theory)",
+      "usedFor": "WorldGraph.isConnected — asserts the whole generated world is one component, so an unreachable destination is a real property and not a generator bug.",
+      "verified": "well-known"
+    },
+    {
+      "id": 34,
+      "category": "pathfinding-and-graphs",
+      "title": "Adjacency list representation",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Adjacency_list",
+      "usedFor": "WorldGraph stores directed edges per node, which is what makes `connect` bidirectional-by-derivation and `neighbor(id, dir)` an O(degree) lookup.",
+      "verified": "well-known"
+    },
+    {
+      "id": 35,
+      "category": "web-platform",
+      "title": "Vite",
+      "source": "vite.dev",
+      "url": "https://vite.dev/",
+      "usedFor": "apps/web/vite.config.ts. Chosen over webpack for the dev-server speed and first-class worker imports. The authoritative config must live in apps/web, not the root — `npm run dev -w @3dmm/web` sets cwd to apps/web.",
+      "verified": "well-known"
+    },
+    {
+      "id": 36,
+      "category": "web-platform",
+      "title": "Vite server.allowedHosts",
+      "source": "vite.dev — server options",
+      "url": "https://vite.dev/config/server-options",
+      "usedFor": "allowedHosts: true, without which the preview host returns 403 and the app looks broken for a reason that has nothing to do with the code.",
+      "verified": "well-known"
+    },
+    {
+      "id": 37,
+      "category": "web-platform",
+      "title": "Vite build.rollupOptions.manualChunks",
+      "source": "vite.dev",
+      "url": "https://vite.dev/config/build-options",
+      "usedFor": "Splitting three (529 kB) and geotiff out of the main bundle.",
+      "verified": "well-known"
+    },
+    {
+      "id": 38,
+      "category": "web-platform",
+      "title": "npm workspaces",
+      "source": "npm docs",
+      "url": "https://docs.npmjs.com/cli/using-npm/workspaces",
+      "usedFor": "The apps/* + packages/* monorepo layout in the root package.json, which is what replaces the monolithic single-file architecture.",
+      "verified": "well-known"
+    },
+    {
+      "id": 39,
+      "category": "web-platform",
+      "title": "ResizeObserver",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver",
+      "usedFor": "apps/web/src/ui/WorldMap.tsx and WorldView.tsx — the map and the renderer resize with their panel, which is what keeps the viewport interactive in fullscreen. The legacy app captured one static frame instead.",
+      "verified": "well-known"
+    },
+    {
+      "id": 40,
+      "category": "web-platform",
+      "title": "Pointer Events and setPointerCapture",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events",
+      "usedFor": "WorldMap and WorldView drag handling. Per-element capture is what stops dragging the UI from rotating the camera — the legacy app used one global document mousemove with a shared isDragging flag.",
+      "verified": "well-known"
+    },
+    {
+      "id": 41,
+      "category": "web-platform",
+      "title": "requestAnimationFrame",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame",
+      "usedFor": "The WorldView render loop and the gait integrator. Delta time is clamped to 0.1 s so a backgrounded tab does not teleport the transition on return.",
+      "verified": "well-known"
+    },
+    {
+      "id": 42,
+      "category": "web-platform",
+      "title": "createImageBitmap",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap",
+      "usedFor": "apps/web/src/worlds/preloader.ts — decodes a plate off the main thread. Budgeted on width*height*4 because the decoded RGBA is what actually costs memory, not the compressed file.",
+      "verified": "well-known"
+    },
+    {
+      "id": 43,
+      "category": "web-platform",
+      "title": "AbortController / AbortSignal",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/AbortController",
+      "usedFor": "Every async job in the app. Two separate controllers in worldSession — one for the walk, one for the prefetch batch — because sharing them made a walk cancel the very fetch it needed.",
+      "verified": "well-known"
+    },
+    {
+      "id": 44,
+      "category": "web-platform",
+      "title": "Hash-based routing for static builds",
+      "source": "MDN — Location.hash",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Location/hash",
+      "usedFor": "apps/web/src/App.tsx — #/, #/editor, #/tutorial, #/qa, #/worlds. Works from any host or file path with no server rewrite rules.",
+      "verified": "well-known"
+    },
+    {
+      "id": 45,
+      "category": "web-platform",
+      "title": "URL.createObjectURL",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static",
+      "usedFor": "The <img> fallback decode path in preloader.ts when createImageBitmap is unavailable. Absent in jsdom, so the tests stub it explicitly.",
+      "verified": "well-known"
+    },
+    {
+      "id": 46,
+      "category": "web-platform",
+      "title": "Blob and Blob.size",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Blob",
+      "usedFor": "preloader.ts — the compressed size half of the cache's byte accounting.",
+      "verified": "well-known"
+    },
+    {
+      "id": 47,
+      "category": "graphics-api",
+      "title": "three.js",
+      "source": "threejs.org",
+      "url": "https://threejs.org/docs/",
+      "usedFor": "packages/scene-core. Chosen over regl for the scene graph, material system and loader ecosystem; the legacy reference viewer used regl directly.",
+      "verified": "well-known"
+    },
+    {
+      "id": 48,
+      "category": "graphics-api",
+      "title": "three.js ShaderMaterial and uniforms",
+      "source": "three.js documentation",
+      "url": "https://threejs.org/docs/#api/en/materials/ShaderMaterial",
+      "usedFor": "packages/scene-core/src/panoramaView.ts — uMap, uOpacity, uCapsEnabled, uExposure, uVFovScale. Opacity as a uniform is what makes an interrupted crossfade exact rather than approximate.",
+      "verified": "well-known"
+    },
+    {
+      "id": 49,
+      "category": "graphics-api",
+      "title": "three.js ColorManagement and SRGBColorSpace",
+      "source": "three.js documentation",
+      "url": "https://threejs.org/docs/#manual/en/introduction/Color-management",
+      "usedFor": "renderer.outputColorSpace and texture.colorSpace in WorldView — without both, plates render washed out.",
+      "verified": "well-known"
+    },
+    {
+      "id": 50,
+      "category": "graphics-api",
+      "title": "Texture disposal and GPU memory",
+      "source": "three.js — How-to-dispose-of-objects",
+      "url": "https://threejs.org/docs/#manual/en/introduction/How-to-dispose-of-objects",
+      "usedFor": "The crossfade texture-ownership fix. setTexture used to dispose whatever it replaced; during a fade the two spheres share the outgoing texture, so the second walk disposed the plate still on screen.",
+      "verified": "well-known"
+    },
+    {
+      "id": 51,
+      "category": "graphics-api",
+      "title": "PerspectiveCamera field of view",
+      "source": "three.js documentation",
+      "url": "https://threejs.org/docs/#api/en/cameras/PerspectiveCamera",
+      "usedFor": "WorldView — V_FOV 78° with the horizontal FOV following the aspect ratio, so a wide window sees more of the plate rather than a stretched crop.",
+      "verified": "well-known"
+    },
+    {
+      "id": 52,
+      "category": "graphics-api",
+      "title": "Row-major vs column-major matrices",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Row-_and_column-major_order",
+      "usedFor": "A note for future maintainers: the projection matrices in this repository are ROW-MAJOR throughout. three.js is column-major internally, so do not 'fix' one side.",
+      "verified": "well-known"
+    },
+    {
+      "id": 53,
+      "category": "graphics-api",
+      "title": "Synchronous GPU readback stalls the pipeline",
+      "source": "WebGL best practices",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices",
+      "usedFor": "Why the legacy applyPersistenceEffect (domElement.toDataURL on the default framebuffer) was replaced with a shader-side blend.",
+      "verified": "well-known"
+    },
+    {
+      "id": 54,
+      "category": "graphics-api",
+      "title": "Frustum culling and renderOrder",
+      "source": "three.js documentation",
+      "url": "https://threejs.org/docs/#api/en/core/Object3D.frustumCulled",
+      "usedFor": "panoramaView.ts — frustumCulled = false and renderOrder = -1000 so the sky sphere is never culled when the camera sits at its centre.",
+      "verified": "well-known"
+    },
+    {
+      "id": 55,
+      "category": "state-and-architecture",
+      "title": "zustand",
+      "source": "github.com/pmndrs/zustand",
+      "url": "https://github.com/pmndrs/zustand",
+      "usedFor": "apps/web/src/state/store.ts. Chosen over Redux for the absence of boilerplate and over Context for selector-based re-render control.",
+      "verified": "well-known"
+    },
+    {
+      "id": 56,
+      "category": "state-and-architecture",
+      "title": "zustand subscribeWithSelector middleware",
+      "source": "zustand documentation",
+      "url": "https://zustand.docs.pmnd.rs/",
+      "usedFor": "The store's cross-slice reactions, which need a subscription that fires only when a projected value actually changes.",
+      "verified": "well-known"
+    },
+    {
+      "id": 57,
+      "category": "state-and-architecture",
+      "title": "Single source of truth",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single_source_of_truth",
+      "usedFor": "The central rule of the panorama world: WorldGraph is authoritative, and both the 2D map and the 360° viewer derive from it. Neither holds a copy, so they cannot drift.",
+      "verified": "well-known"
+    },
+    {
+      "id": 58,
+      "category": "state-and-architecture",
+      "title": "Finite-state machine",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Finite-state_machine",
+      "usedFor": "The WorldSession transition machine: idle → preloading → transitioning → settling → idle. Explicit stages are what make 'no jarring black screen' a testable property rather than a hope.",
+      "verified": "well-known"
+    },
+    {
+      "id": 59,
+      "category": "state-and-architecture",
+      "title": "Command pattern / undo stack",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Command_pattern",
+      "usedFor": "packages/input — the command registry and bindings behind the command palette and the undo/redo history.",
+      "verified": "well-known"
+    },
+    {
+      "id": 60,
+      "category": "state-and-architecture",
+      "title": "ECS and data-oriented design in the browser",
+      "source": "general architecture literature",
+      "url": "https://en.wikipedia.org/wiki/Entity_component_system",
+      "usedFor": "Considered for the scene and rejected: the editor's object counts are in the hundreds, not the tens of thousands, so a plain object graph with a zustand mirror is simpler and easier to inspect.",
+      "verified": "well-known"
+    },
+    {
+      "id": 61,
+      "category": "state-and-architecture",
+      "title": "Schema versioning and migrations",
+      "source": "database migration practice",
+      "url": "https://en.wikipedia.org/wiki/Schema_migration",
+      "usedFor": "packages/project — schema v6 with explicit migration steps, and validateProject returning the repaired project rather than a boolean.",
+      "verified": "well-known"
+    },
+    {
+      "id": 62,
+      "category": "state-and-architecture",
+      "title": "Defensive parsing of untrusted input",
+      "source": "OWASP",
+      "url": "https://owasp.org/www-community/attacks/Data_Validation",
+      "usedFor": "apps/web/src/state/io.ts — sanitizeImportedJson. An imported project is untrusted input even when it came from this same app.",
+      "verified": "well-known"
+    },
+    {
+      "id": 63,
+      "category": "ui-and-accessibility",
+      "title": "Radix UI primitives",
+      "source": "radix-ui.com",
+      "url": "https://www.radix-ui.com/primitives",
+      "usedFor": "packages/ui — Popover, Tooltip and friends, wrapped by the local Button/Slider/Segmented components. Unstyled primitives with correct focus and ARIA behaviour.",
+      "verified": "well-known"
+    },
+    {
+      "id": 64,
+      "category": "ui-and-accessibility",
+      "title": "ARIA application role",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/ARIA_Techniques/Using_the_application_role",
+      "usedFor": "The map canvas and the panorama stage both use role=\"application\" with a tabIndex, so a screen reader hands keystrokes to the widget instead of reading them as page content.",
+      "verified": "well-known"
+    },
+    {
+      "id": 65,
+      "category": "ui-and-accessibility",
+      "title": "WCAG 1.4.10 Reflow",
+      "source": "W3C WAI",
+      "url": "https://www.w3.org/WAI/WCAG21/Understanding/reflow.html",
+      "usedFor": "The no-page-level-horizontal-overflow rule. worldMap.test.tsx asserts the SVG is width/height 100% rather than the board's pixel size.",
+      "verified": "well-known"
+    },
+    {
+      "id": 66,
+      "category": "ui-and-accessibility",
+      "title": "Keyboard focus management",
+      "source": "MDN — document.activeElement",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Document/activeElement",
+      "usedFor": "WorldView.onKeyDown refuses WASD while an input/textarea/select has focus. The legacy app gated on activeElement === renderer.domElement and never cleared keys on blur, so movement stuck.",
+      "verified": "well-known"
+    },
+    {
+      "id": 67,
+      "category": "ui-and-accessibility",
+      "title": "prefers-reduced-motion",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion",
+      "usedFor": "The map's pulsing current-node ring is a CSS/SMIL animation that a reduced-motion user can have suppressed; it carries no information the static state does not.",
+      "verified": "well-known"
+    },
+    {
+      "id": 68,
+      "category": "ui-and-accessibility",
+      "title": "SVG accessibility and text alternatives",
+      "source": "W3C — SVG Accessibility",
+      "url": "https://www.w3.org/TR/svg-aam-1.0/",
+      "usedFor": "The map's aria-label states the board dimensions and node count, and the legend names all seven node states, so the map is not purely visual.",
+      "verified": "well-known"
+    },
+    {
+      "id": 69,
+      "category": "procedural-generation",
+      "title": "Seeded pseudorandom number generators",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pseudorandom_number_generator",
+      "usedFor": "generateWorld(spec) — a seed produces a byte-identical graph, asserted by comparing toJSON() across two runs.",
+      "verified": "well-known"
+    },
+    {
+      "id": 70,
+      "category": "procedural-generation",
+      "title": "Box–Muller transform",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform",
+      "usedFor": "GaussianRng in packages/panorama/src/grid.ts. Confined to camera bob, micro yaw/pitch and timing jitter — never to node selection, coordinates, geometry or path correctness.",
+      "verified": "well-known"
+    },
+    {
+      "id": 71,
+      "category": "procedural-generation",
+      "title": "Wave Function Collapse",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wave_Function_Collapse_(algorithm)",
+      "usedFor": "Considered for the world layout and rejected: the graph needs hard guarantees (every edge geometrically true, one connected component) that a constraint solver over tiles would make harder to assert.",
+      "verified": "well-known"
+    },
+    {
+      "id": 72,
+      "category": "procedural-generation",
+      "title": "Procedural city generation",
+      "source": "procedural-generation literature",
+      "url": "https://en.wikipedia.org/wiki/Procedural_generation",
+      "usedFor": "apps/web/src/worlds/generate.ts — a spine road that dog-legs rather than running straight diagonal, cross streets, a river with crossings on the larger worlds, and building clusters that remove cells entirely.",
+      "verified": "well-known"
+    },
+    {
+      "id": 73,
+      "category": "procedural-generation",
+      "title": "Deterministic simulation and replay",
+      "source": "general practice",
+      "url": "https://en.wikipedia.org/wiki/Deterministic_algorithm",
+      "usedFor": "Why intent resolution is asserted identical over 200 runs: if the RNG could reach a movement decision, the world would not be reproducible.",
+      "verified": "well-known"
+    },
+    {
+      "id": 74,
+      "category": "imagery-licensing-and-terms",
+      "title": "Google Maps Platform Terms — Street View imagery",
+      "source": "Google Cloud",
+      "url": "https://cloud.google.com/maps-platform/terms",
+      "usedFor": "The hard rule in frontier.ts: reference geography only, never scrape or redistribute imagery. The continuity gate rejects a provenance source matching googleapis, maps/api or streetview.",
+      "verified": "well-known"
+    },
+    {
+      "id": 75,
+      "category": "imagery-licensing-and-terms",
+      "title": "Google Street View metadata API (geographic reference only)",
+      "source": "Google Maps Platform documentation",
+      "url": "https://developers.google.com/maps/documentation/streetview/overview",
+      "usedFor": "Confirms the split between metadata (allowed as geographic reference) and the pixel data (not redistributed). The generated layer and the reference layer are kept separate in WorldNode.provenance.",
+      "verified": "well-known"
+    },
+    {
+      "id": 76,
+      "category": "imagery-licensing-and-terms",
+      "title": "OpenStreetMap — attribution requirements",
+      "source": "OpenStreetMap Foundation",
+      "url": "https://www.openstreetmap.org/copyright",
+      "usedFor": "The accepted form of a reference source: a named attribution, not a fetch endpoint. frontier.test.ts asserts this exact distinction both ways.",
+      "verified": "well-known"
+    },
+    {
+      "id": 77,
+      "category": "imagery-licensing-and-terms",
+      "title": "Creative Commons licences",
+      "source": "creativecommons.org",
+      "url": "https://creativecommons.org/share-your-work/cclicenses/",
+      "usedFor": "The provenance.license field on every generated node. A plate with no licence is rejected by the continuity gate.",
+      "verified": "well-known"
+    },
+    {
+      "id": 78,
+      "category": "imagery-licensing-and-terms",
+      "title": "Provenance metadata for generated media",
+      "source": "W3C — Content Credentials / provenance practice",
+      "url": "https://www.w3.org/TR/prov-o/",
+      "usedFor": "WorldNode.provenance — sourceType, referenceSources, generator, createdAt, license. Every plate carries it; nothing is unattributed.",
+      "verified": "well-known"
+    },
+    {
+      "id": 79,
+      "category": "testing-and-quality",
+      "title": "Vitest",
+      "source": "vitest.dev",
+      "url": "https://vitest.dev/",
+      "usedFor": "The test runner. Chosen because it shares the Vite config, so the same aliases and worker handling that the app uses apply to the tests.",
+      "verified": "well-known"
+    },
+    {
+      "id": 80,
+      "category": "testing-and-quality",
+      "title": "Testing Library — query by role and test id",
+      "source": "testing-library.com",
+      "url": "https://testing-library.com/docs/",
+      "usedFor": "apps/web/src/ui/__tests__/worldMap.test.tsx — getByRole('application') and getByTestId, so the tests break when the accessible surface changes, not when markup is restyled.",
+      "verified": "well-known"
+    },
+    {
+      "id": 81,
+      "category": "testing-and-quality",
+      "title": "jsdom limitations for canvas and WebGL",
+      "source": "github.com/jsdom/jsdom",
+      "url": "https://github.com/jsdom/jsdom",
+      "usedFor": "vitest.setup.ts shims ResizeObserver and getContext('2d'); WebGL returns null. This is what makes the error-path test possible, and it is why no visual render is claimed.",
+      "verified": "well-known"
+    },
+    {
+      "id": 82,
+      "category": "testing-and-quality",
+      "title": "Playwright",
+      "source": "playwright.dev",
+      "url": "https://playwright.dev/",
+      "usedFor": "The intended E2E runner. Version 1.63.0 is installed but the browser binaries cannot be downloaded in this sandbox, so no E2E test has passed and none is claimed.",
+      "verified": "blocked"
+    },
+    {
+      "id": 83,
+      "category": "testing-and-quality",
+      "title": "Property-based testing",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Property_testing",
+      "usedFor": "The invariant style used across generate.test.ts and world-graph.test.ts: assert the property (every edge matches its delta; adjacency is reciprocal) rather than a snapshot of one layout.",
+      "verified": "well-known"
+    },
+    {
+      "id": 84,
+      "category": "testing-and-quality",
+      "title": "Regression testing",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Regression_testing",
+      "usedFor": "Each of the ten bugs in DEVELOPMENT_LOG.md §5 now has a test that fails if the bug returns — including the ones whose original test passed for the wrong reason.",
+      "verified": "well-known"
+    },
+    {
+      "id": 85,
+      "category": "testing-and-quality",
+      "title": "Round-trip (invertibility) testing",
+      "source": "software-testing practice",
+      "url": "https://en.wikipedia.org/wiki/Round-trip_formatting",
+      "usedFor": "mapModel.test.ts — gridToScreen then screenToGrid returns the original cell for all 64 cells of the small board and sampled cells of the 32×32 board.",
+      "verified": "well-known"
+    },
+    {
+      "id": 86,
+      "category": "performance",
+      "title": "Least-recently-used cache eviction",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies",
+      "usedFor": "apps/web/src/worlds/preloader.ts — a JS Map, whose insertion order is kept current by delete-then-set on read, gives O(1) LRU with no extra structure.",
+      "verified": "well-known"
+    },
+    {
+      "id": 87,
+      "category": "performance",
+      "title": "Prefetching and cache locality",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Prefetching",
+      "usedFor": "rankPrefetch — facing direction first, then the rest of the ring, then the route. Cached plates are skipped so the queue is honest about what will actually be fetched.",
+      "verified": "well-known"
+    },
+    {
+      "id": 88,
+      "category": "performance",
+      "title": "Request deduplication / single-flight",
+      "source": "distributed-systems practice",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)",
+      "usedFor": "PanoramaCache.load collapses concurrent requests for one url. The subtlety found here: the deduped caller must not inherit the first caller's abort signal.",
+      "verified": "well-known"
+    },
+    {
+      "id": 89,
+      "category": "performance",
+      "title": "Viewport culling",
+      "source": "graphics literature",
+      "url": "https://en.wikipedia.org/wiki/Hidden-surface_determination",
+      "usedFor": "mapModel.ts — boards over 400 nodes render only the viewport plus a margin, and report how many were culled so 'n of m nodes' is not a guess.",
+      "verified": "well-known"
+    },
+    {
+      "id": 90,
+      "category": "performance",
+      "title": "Main-thread budget and jank",
+      "source": "web.dev — Long tasks",
+      "url": "https://web.dev/articles/long-tasks-devtools",
+      "usedFor": "The rule that terrain generation runs in a worker, contour extraction is capped by maxSegments, and the frontier pipeline is cancellable and capped by maxCells.",
+      "verified": "well-known"
+    },
+    {
+      "id": 91,
+      "category": "performance",
+      "title": "Typed arrays and typed-array writes past the end",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypedArray",
+      "usedFor": "The terrain skirt bug: writing past the end of a Float32Array is silent, not an exception, which is why the truncated ring went unnoticed.",
+      "verified": "well-known"
+    },
+    {
+      "id": 92,
+      "category": "performance",
+      "title": "Code splitting and dynamic import",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import",
+      "usedFor": "The manualChunks split that keeps three and geotiff out of the initial payload.",
+      "verified": "well-known"
+    },
+    {
+      "id": 93,
+      "category": "rust-and-wasm",
+      "title": "The Rust Programming Language",
+      "source": "rust-lang.org",
+      "url": "https://doc.rust-lang.org/book/",
+      "usedFor": "The native terrain core. rustc 1.88.0 is installed at /home/user/.rusttoolchain and a native build plus a wasm32 cdylib build were both verified.",
+      "verified": "well-known"
+    },
+    {
+      "id": 94,
+      "category": "rust-and-wasm",
+      "title": "wasm32-unknown-unknown target and cdylib crate type",
+      "source": "The Rustonomicon / cargo reference",
+      "url": "https://doc.rust-lang.org/reference/linkage.html",
+      "usedFor": "The zero-dependency cdylib decision. crates.io is unreachable from this sandbox, so wasm-bindgen is not available and the JS glue is hand-written.",
+      "verified": "well-known"
+    },
+    {
+      "id": 95,
+      "category": "rust-and-wasm",
+      "title": "WebAssembly JavaScript API",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/WebAssembly",
+      "usedFor": "The hand-written instantiation glue, verified end to end with add(20,22)=42, and the TypeScript path kept as the fallback.",
+      "verified": "well-known"
+    },
+    {
+      "id": 96,
+      "category": "rust-and-wasm",
+      "title": "@rustbin scope — Rust components as npm tarballs",
+      "source": "npm registry",
+      "url": "https://www.npmjs.com/search?q=%40rustbin",
+      "usedFor": "The only working route to a Rust toolchain here. jsdelivr, unpkg, crates.io, deb.debian.org and static.rust-lang.org were all unreachable.",
+      "verified": "well-known"
+    },
+    {
+      "id": 97,
+      "category": "rust-and-wasm",
+      "title": "Tauri",
+      "source": "tauri.app",
+      "url": "https://tauri.app/",
+      "usedFor": "The intended desktop shell for the Rust core. Not built here: the deliverable is web-only, and the crate workspace is not yet populated.",
+      "verified": "well-known"
+    },
+    {
+      "id": 98,
+      "category": "input-and-camera",
+      "title": "Yaw, pitch and roll",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Aircraft_principal_axes",
+      "usedFor": "The camera model. WorldView applies rotateY then rotateX from a zeroed rotation each frame, which is what keeps pitch from accumulating into roll.",
+      "verified": "well-known"
+    },
+    {
+      "id": 99,
+      "category": "input-and-camera",
+      "title": "Compass bearing and azimuth",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bearing_(angle)",
+      "usedFor": "quantiseToDirection — 0° is north, clockwise. The eight compass points are the quantisation targets for a camera-relative keypress.",
+      "verified": "well-known"
+    },
+    {
+      "id": 100,
+      "category": "input-and-camera",
+      "title": "Camera-relative movement",
+      "source": "game-input convention",
+      "url": "https://en.wikipedia.org/wiki/Gamepad",
+      "usedFor": "packages/panorama/src/intent.ts — key + cameraYaw → world heading → nearest compass direction → graph edge. The same key reaches three different nodes depending on where the camera faces.",
+      "verified": "well-known"
+    },
+    {
+      "id": 101,
+      "category": "input-and-camera",
+      "title": "Shortest-arc angle interpolation",
+      "source": "graphics literature",
+      "url": "https://en.wikipedia.org/wiki/Slerp",
+      "usedFor": "lerpAngle in WorldView — wrapping ((to-from+540)%360)-180 so easing from 350° to 10° goes the 20° way round, not the 340° way.",
+      "verified": "well-known"
+    },
+    {
+      "id": 102,
+      "category": "input-and-camera",
+      "title": "Input buffering for responsive controls",
+      "source": "game-input literature",
+      "url": "https://en.wikipedia.org/wiki/Input_lag",
+      "usedFor": "WorldSession.pending — a keypress during a transition is queued (up to 3) and replayed on arrival rather than dropped, so fast walking does not lose input.",
+      "verified": "well-known"
+    },
+    {
+      "id": 103,
+      "category": "input-and-camera",
+      "title": "Procedural camera shake and motion noise",
+      "source": "game-dev practice",
+      "url": "https://en.wikipedia.org/wiki/Camera_(fiction)",
+      "usedFor": "The gait struct. Small-sigma noise on bob, yaw and pitch only; the struct carries no coordinates or node ids, which is asserted directly.",
+      "verified": "well-known"
+    },
+    {
+      "id": 104,
+      "category": "input-and-camera",
+      "title": "Walking gait and vertical displacement",
+      "source": "biomechanics literature",
+      "url": "https://en.wikipedia.org/wiki/Gait",
+      "usedFor": "packages/panorama/src/grid.ts — the ~1.85 Hz bob frequency and the integrated sway, chosen so the walk reads as a person moving rather than a floating camera.",
+      "verified": "well-known"
+    },
+    {
+      "id": 105,
+      "category": "panorama-rendering",
+      "title": "Exposure value and relative brightness",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Exposure_value",
+      "usedFor": "exposureRatio in packages/panorama and the exposure continuity check, which compares plates by log ratio so a doubling is a doubling at any brightness.",
+      "verified": "well-known"
+    },
+    {
+      "id": 106,
+      "category": "panorama-rendering",
+      "title": "Solar azimuth angle",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Solar_azimuth_angle",
+      "usedFor": "isPlausibleSunTime in frontier.ts — the sun sweeps roughly 90° (east) to 270° (west) across the day, which is how the gate catches a noon sun stamped onto a dusk plate.",
+      "verified": "well-known"
+    },
+    {
+      "id": 107,
+      "category": "panorama-rendering",
+      "title": "Panorama stitching seams",
+      "source": "Wikipedia — Image stitching",
+      "url": "https://en.wikipedia.org/wiki/Image_stitching",
+      "usedFor": "The seam-continuity checks in frontier.ts: sun direction, exposure and weather are compared across every edge so adjacent plates do not visibly disagree.",
+      "verified": "well-known"
+    },
+    {
+      "id": 108,
+      "category": "projections-and-geodesy",
+      "title": "Scale factor and map distance",
+      "source": "Wikipedia — Map scale",
+      "url": "https://en.wikipedia.org/wiki/Map_scale",
+      "usedFor": "The metersPerGridUnit rule: a grid step is not a metre. Cardinal edges measure 25 m and diagonals 25√2 ≈ 35.4 m, asserted to be different.",
+      "verified": "well-known"
+    },
+    {
+      "id": 109,
+      "category": "web-platform",
+      "title": "ES modules and package exports",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules",
+      "usedFor": "Each package under packages/*/src with its own index barrel. A package.json `main` pointing at .ts when the file is .tsx will fail to resolve, which is a bug that was hit and fixed here.",
+      "verified": "well-known"
+    },
+    {
+      "id": 110,
+      "category": "graphics-api",
+      "title": "glTF 2.0",
+      "source": "Khronos Group",
+      "url": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "usedFor": "packages/assets — loadModel(file, name, opts) returning {scene, analysis, bytes}, the format chosen for authored 3D models.",
+      "verified": "well-known"
+    },
+    {
+      "id": 111,
+      "category": "terrain-and-lod",
+      "title": "Heightfield / heightmap terrain",
+      "source": "Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Heightmap",
+      "usedFor": "Heightfield(resolution, size, originX, originY, data?) with .sample(), .minMax(), .applyEdits() and .toEdits() — the sculpt tools write edits, not raw heights, so they stay undoable.",
+      "verified": "well-known"
+    },
+    {
+      "id": 112,
+      "category": "testing-and-quality",
+      "title": "Test doubles — stubs and spies",
+      "source": "Martin Fowler",
+      "url": "https://martinfowler.com/bliki/TestDouble.html",
+      "usedFor": "preloader.test.ts and worldSession.test.ts stub fetch, Image and createImageBitmap to drive the real PanoramaCache and WorldSession through their failure and abort paths.",
+      "verified": "well-known"
+    },
+    {
+      "id": 113,
+      "category": "performance",
+      "title": "Memory budgeting for decoded image data",
+      "source": "web.dev — memory",
+      "url": "https://web.dev/articles/fixing-memory-leaks",
+      "usedFor": "The cache budgets on width*height*4 rather than the JPEG file size. A 1456×720 plate is ~4.2 MB decoded against ~260 kB on disk, a 16× difference that would have blown any file-size budget.",
+      "verified": "well-known"
+    },
+    {
+      "id": 114,
+      "category": "state-and-architecture",
+      "title": "Autosave and crash recovery",
+      "source": "application-design practice",
+      "url": "https://en.wikipedia.org/wiki/Autosave",
+      "usedFor": "The store's autosave with recoveryWarnings surfaced once as a visible notice rather than applied silently.",
+      "verified": "well-known"
+    },
+    {
+      "id": 115,
+      "category": "ui-and-accessibility",
+      "title": "Command palette pattern",
+      "source": "UI pattern literature",
+      "url": "https://www.nngroup.com/articles/command-palette/",
+      "usedFor": "apps/web/src/ui/CommandPalette.tsx over the packages/input command registry, so the palette and the keyboard bindings cannot disagree.",
+      "verified": "well-known"
+    },
+    {
+      "id": 116,
+      "category": "input-and-camera",
+      "title": "Pitch clamping in first-person views",
+      "source": "game-dev practice",
+      "url": "https://en.wikipedia.org/wiki/Camera_(fiction)",
+      "usedFor": "WorldView PITCH_LIMIT of 62°, so the player can never look past the poles where an equirect plate degenerates to a single row.",
+      "verified": "well-known"
+    },
+    {
+      "id": 117,
+      "category": "web-platform",
+      "title": "Content Security Policy and no inline script",
+      "source": "MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP",
+      "usedFor": "The module-only architecture. The legacy 183 KB single-file app was fundamentally incompatible with a strict CSP; the new app is not.",
+      "verified": "well-known"
+    },
+    {
+      "id": 118,
+      "category": "testing-and-quality",
+      "title": "Honest reporting of unverified claims",
+      "source": "engineering practice",
+      "url": "https://en.wikipedia.org/wiki/Software_verification_and_validation",
+      "usedFor": "DEVELOPMENT_LOG.md §3 states plainly that the browser binary is unavailable, that jsdom tests are not browser tests, and that the 360° viewer's pixels are unconfirmed. No E2E pass is claimed.",
+      "verified": "well-known"
+    },
+    {
+      "id": 119,
+      "category": "procedural-generation",
+      "title": "Landmark-based navigation and cognitive maps",
+      "source": "Wikipedia — Cognitive map",
+      "url": "https://en.wikipedia.org/wiki/Cognitive_map",
+      "usedFor": "Landmark carries a persistent id and WorldGraph.landmarkVector returns {dx, dy, meters, bearingDeg}. Distance to the church shrinks monotonically along the route, asserted to reach 0.",
+      "verified": "well-known"
+    },
+    {
+      "id": 120,
+      "category": "pathfinding-and-graphs",
+      "title": "Monotonic heuristic and route quality",
+      "source": "Wikipedia — Consistent heuristic",
+      "url": "https://en.wikipedia.org/wiki/Consistent_heuristic",
+      "usedFor": "Why the recommended route can be shown without forcing it: A* with a consistent heuristic gives a stable shortest path, so re-planning after a detour converges rather than oscillating.",
+      "verified": "well-known"
+    }
+  ],
+  "blockedSources": [
+    {
+      "host": "cdn.playwright.dev",
+      "impact": "Playwright browser binaries cannot be downloaded, so no E2E test has run.",
+      "status": "unreachable"
+    },
+    {
+      "host": "playwright.azureedge.net",
+      "impact": "Fallback Playwright CDN, also unreachable.",
+      "status": "unreachable"
+    },
+    {
+      "host": "crates.io",
+      "impact": "No wasm-bindgen, so the Rust crate is a zero-dep cdylib with hand-written JS glue.",
+      "status": "unreachable"
+    },
+    {
+      "host": "static.rust-lang.org",
+      "impact": "Direct rustup distribution blocked; the toolchain came from the @rustbin npm scope instead.",
+      "status": "unreachable"
+    },
+    {
+      "host": "deb.debian.org",
+      "impact": "apt-based Rust install unavailable.",
+      "status": "unreachable"
+    },
+    {
+      "host": "jsdelivr.net / unpkg.com",
+      "impact": "CDN tarball routes blocked.",
+      "status": "unreachable"
+    },
+    {
+      "host": "public DEM and tile CDNs",
+      "impact": "No live elevation or map tiles, so every demo world is fully procedural and local.",
+      "status": "unreachable"
+    }
+  ],
+  "counts": {
+    "total": 120,
+    "verifiedWellKnown": 117,
+    "verifiedLocal": 2,
+    "blocked": 1,
+    "categories": 14
+  }
+}

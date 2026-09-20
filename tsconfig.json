@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["apps/web/src", "packages/*/src", "workers", "e2e", "scripts", "vitest.setup.ts"]
+}

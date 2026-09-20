@@ -1,0 +1,176 @@
+name: CI
+
+# Three independent jobs. They are deliberately not gated on each other: the
+# verify job is the suite that runs locally on every change, while e2e and rust
+# exercise two things that CANNOT run in the sandbox this was developed in —
+# a real browser, and a Rust toolchain. Keeping them separate means a browser
+# failure never hides a type error, and a Rust failure never hides a test
+# regression.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------- verify ---
+  verify:
+    name: Typecheck · tests · QA · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` rather than `npm install`: the lockfile is committed and this
+      # must be reproducible. It fails loudly if the lockfile drifts from
+      # package.json instead of silently resolving something new.
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit + component tests
+        run: npm test
+
+      - name: QA harness (109 checks)
+        run: npm run qa
+
+      - name: Benchmark
+        run: npm run bench
+
+      - name: Licence audit
+        run: npm run audit:licenses
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  # -------------------------------------------------------------------- e2e ---
+  # These specs have NEVER been executed in the development sandbox: the
+  # Playwright browser binary cannot be downloaded there. This job is their
+  # first real run, so a failure here is new information rather than a
+  # regression. They cover what jsdom cannot — rendered pixels, layout
+  # overflow, real focus, real fullscreen.
+  e2e:
+    name: Playwright (real browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts the dev server itself (webServer block) and
+      # waits for http://localhost:5173, so no separate server step is needed.
+      #
+      # The output is teed to a file and the tail is echoed into the step
+      # summary. Log downloads go through a blob store that is not always
+      # reachable, whereas the summary comes back through the check-run API.
+      - name: Run e2e
+        id: e2e
+        run: |
+          set -o pipefail
+          npx playwright test 2>&1 | tee e2e.log
+
+      - name: Summarise e2e failures
+        if: always()
+        run: |
+          {
+            echo '## Playwright output (tail)'
+            echo '```'
+            tail -n 120 e2e.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------------------- rust ---
+  # crates/terrain-core has never been compiled in the development sandbox —
+  # no toolchain is installable there. `npm run rust:build` exits 1 locally and
+  # says so. Here a real toolchain exists, so this is the first actual compile.
+  #
+  # packages/terrain/src/rust-parity.test.ts (in the verify job) pins the
+  # constants the port must match; `cargo test` here runs crates/terrain-core/
+  # tests/parity.rs, which re-derives them from the same source.
+  rust:
+    name: Rust terrain-core (host + wasm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Install node deps (for the build wrapper)
+        run: npm ci --no-audit --no-fund
+
+      # build-rust.mjs probes PATH / CARGO_HOME / ~/.cargo/bin for a runnable
+      # cargo, so the toolchain installed above is found without extra config.
+      - name: Build host + wasm targets
+        id: build
+        run: |
+          set -o pipefail
+          npm run rust:build 2>&1 | tee rust-build.log
+
+      - name: Summarise build output
+        if: always()
+        run: |
+          {
+            echo '## cargo output (tail)'
+            echo '```'
+            tail -n 150 rust-build.log 2>/dev/null || echo '(no output captured)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cargo tests
+        run: npm run rust:test
