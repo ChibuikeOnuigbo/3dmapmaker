@@ -21,62 +21,69 @@ export class AdvancedEditor {
   close() { this._open = false; this.panel.hidden = true; }
 
   _renderShell() {
+    const sec = (id, title, open, body) =>
+      `<div class="sec ${open ? 'open' : ''}" data-sec="${id}">
+        <button class="sec-h" type="button"><span class="grow">${title}</span><svg class="chev"><use href="#i-chev"/></svg></button>
+        <div class="sec-b">${body}</div>
+      </div>`;
     this.panel.innerHTML = `
       <div class="p-head"><h3>Advanced editor</h3>
-        <button class="iconbtn" data-act="close" aria-label="Close advanced editor"><svg><use href="#i-close"/></svg></button>
+        <button class="iconbtn mini" data-act="close" aria-label="Close advanced editor"><svg><use href="#i-close"/></svg></button>
       </div>
       <div class="p-body">
-        <div class="stitle">Location (node)</div>
-        <div id="aeNode"><div class="hint">Select a location on the map or walk to it.</div></div>
+        ${sec('node', 'Location (node)', true, `<div id="aeNode"><div class="hint">Select a location on the map or walk to it.</div></div>`)}
 
-        <div class="stitle">Connections</div>
-        <div id="aeEdges"></div>
+        ${sec('edges', 'Connections', true, `<div id="aeEdges"></div>`)}
 
-        <div class="stitle">Validation</div>
-        <div id="aeValidation"><div class="hint">Run a continuity check on this location or a world health check.</div></div>
-        <div class="btnrow">
-          <button class="btn ghost" data-act="validateNode"><svg><use href="#i-check"/></svg>Check location</button>
-          <button class="btn ghost" data-act="validateWorld"><svg><use href="#i-bug"/></svg>World health</button>
-        </div>
+        ${sec('val', 'Validation & AutoComplete', false, `
+          <div id="aeValidation"><div class="hint">Run a continuity check on this location or a world health check.</div></div>
+          <div class="btnrow">
+            <button class="btn ghost" data-act="validateNode"><svg><use href="#i-check"/></svg>Check location</button>
+            <button class="btn ghost" data-act="validateWorld"><svg><use href="#i-bug"/></svg>World health</button>
+          </div>`)}
 
-        <div class="stitle">Immersion mode <span class="sub" style="text-transform:none">(visual only — never moves the map)</span></div>
-        <div class="switch"><div><div class="lab">Camera sway</div><div class="sub">Subtle idle motion</div></div>
-          <label class="tswitch"><input type="checkbox" id="imSway"><span class="track"></span></label></div>
-        <div class="field"><label>Sway intensity <span id="imSwayVal" class="suffix">0.4</span></label>
-          <input type="range" id="imSwayAmt" min="0" max="1" step="0.05" value="0.4"></div>
-        <div class="switch"><div><div class="lab">Breeze</div><div class="sub">Slow drift</div></div>
-          <label class="tswitch"><input type="checkbox" id="imBreeze"><span class="track"></span></label></div>
-        <div class="switch"><div><div class="lab">Rain</div><div class="sub">Screen-space drizzle</div></div>
-          <label class="tswitch"><input type="checkbox" id="imRain"><span class="track"></span></label></div>
-        <div class="field"><label>Transition duration <span id="imTransVal" class="suffix">420 ms</span></label>
-          <input type="range" id="imTrans" min="120" max="1600" step="20" value="420"></div>
+        ${sec('env', 'Environment & lighting', false, `
+          <div class="frow">
+            <div class="field"><label>Time of day</label>
+              <select id="wsTod"><option value="day">Day</option><option value="golden">Golden hour</option><option value="dusk">Dusk</option><option value="overcast">Overcast</option></select></div>
+            <div class="field"><label>Weather</label>
+              <select id="wsWeather"><option value="clear">Clear</option><option value="overcast">Overcast</option><option value="rain">Rain</option></select></div>
+          </div>
+          <div class="frow">
+            <div class="field"><label>Sun azimuth°</label><input type="number" id="wsSunAz" min="0" max="360" step="1"></div>
+            <div class="field"><label>Sun elevation°</label><input type="number" id="wsSunEl" min="0" max="90" step="1"></div>
+          </div>
+          <div class="hint">Changes apply live and regenerate panoramas. <strong>Rain weather also turns the on-screen drizzle on</strong> — one switch, no double toggles.</div>`)}
 
-        <div class="stitle">World &amp; scale</div>
-        <div class="field"><label>World name</label><input type="text" id="wsName"></div>
-        <div class="frow">
-          <div class="field"><label>Pixels per meter</label><input type="number" id="wsPpm" min="0.1" step="0.1"></div>
-          <div class="field"><label>Step (px / move)</label><input type="number" id="wsStep" min="1" step="1"></div>
-        </div>
-        <div class="field"><span class="suffix" id="wsStepInfo"></span></div>
-        <div class="frow">
-          <div class="field"><label>Time of day</label>
-            <select id="wsTod"><option value="day">Day</option><option value="golden">Golden hour</option><option value="dusk">Dusk</option><option value="overcast">Overcast</option></select></div>
-          <div class="field"><label>Weather</label>
-            <select id="wsWeather"><option value="clear">Clear</option><option value="overcast">Overcast</option><option value="rain">Rain</option></select></div>
-        </div>
-        <div class="frow">
-          <div class="field"><label>Sun azimuth°</label><input type="number" id="wsSunAz" min="0" max="360" step="1"></div>
-          <div class="field"><label>Sun elevation°</label><input type="number" id="wsSunEl" min="0" max="90" step="1"></div>
-        </div>
-        <button class="btn ghost block" data-act="applyWorld"><svg><use href="#i-check"/></svg>Apply world settings</button>
+        ${sec('imm', 'Immersion (visual only)', false, `
+          <div class="switch"><div><div class="lab">Camera sway</div><div class="sub">Subtle idle motion</div></div>
+            <label class="tswitch"><input type="checkbox" id="imSway"><span class="track"></span></label></div>
+          <div class="field"><label>Sway intensity <span id="imSwayVal" class="suffix">0.4</span></label>
+            <input type="range" id="imSwayAmt" min="0" max="1" step="0.05" value="0.4"></div>
+          <div class="switch"><div><div class="lab">Breeze</div><div class="sub">Slow drift</div></div>
+            <label class="tswitch"><input type="checkbox" id="imBreeze"><span class="track"></span></label></div>
+          <div class="field"><label>Transition duration <span id="imTransVal" class="suffix">420 ms</span></label>
+            <input type="range" id="imTrans" min="120" max="1600" step="20" value="420"></div>
+          <div class="hint">Effects never move the map. Rain is not a separate switch — it follows the Weather setting above.</div>`)}
 
-        <div class="stitle">Data</div>
-        <div class="btnrow">
-          <button class="btn ghost" data-act="exportJson"><svg><use href="#i-save"/></svg>World JSON</button>
-          <button class="btn ghost" data-act="importJson"><svg><use href="#i-open"/></svg>Import JSON</button>
-        </div>
+        ${sec('scale', 'World & scale', false, `
+          <div class="field"><label>World name</label><input type="text" id="wsName"></div>
+          <div class="frow">
+            <div class="field"><label>Pixels per meter</label><input type="number" id="wsPpm" min="0.1" step="0.1"></div>
+            <div class="field"><label>Step (px / move)</label><input type="number" id="wsStep" min="1" step="1"></div>
+          </div>
+          <div class="field"><span class="suffix" id="wsStepInfo"></span></div>
+          <button class="btn ghost block" data-act="applyWorld"><svg><use href="#i-check"/></svg>Apply name & scale</button>`)}
+
+        ${sec('data', 'Data', false, `
+          <div class="btnrow">
+            <button class="btn ghost" data-act="exportJson"><svg><use href="#i-save"/></svg>World JSON</button>
+            <button class="btn ghost" data-act="importJson"><svg><use href="#i-open"/></svg>Import JSON</button>
+          </div>`)}
       </div>`;
     this.panel.addEventListener('click', (e) => {
+      const secH = e.target.closest('.sec-h');
+      if (secH) { secH.parentElement.classList.toggle('open'); return; }
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (!act) return;
       if (act === 'close') this.app.closePanels();
@@ -96,11 +103,25 @@ export class AdvancedEditor {
     $('#imSway').addEventListener('change', (e) => { im.sway = e.target.checked; this.app.persistPrefs(); });
     $('#imSwayAmt').addEventListener('input', (e) => { im.swayIntensity = +e.target.value; $('#imSwayVal').textContent = e.target.value; });
     $('#imBreeze').addEventListener('change', (e) => { im.breeze = e.target.checked; });
-    $('#imRain').addEventListener('change', (e) => { im.rain = e.target.checked; });
     $('#imTrans').addEventListener('input', (e) => {
       im.transitionMs = +e.target.value;
       this.app.graph.settings.transitionMs = im.transitionMs;
       $('#imTransVal').textContent = `${e.target.value} ms`;
+    });
+    // environment is LIVE (one coherent switch — Spec §17 & continuity rules)
+    $('#wsTod').addEventListener('change', () => this._applyEnv());
+    $('#wsWeather').addEventListener('change', () => this._applyEnv());
+    $('#wsSunAz').addEventListener('change', () => this._applyEnv());
+    $('#wsSunEl').addEventListener('change', () => this._applyEnv());
+  }
+
+  _applyEnv() {
+    const $ = (id) => this.panel.querySelector(id);
+    this.app.setEnvironment({
+      timeOfDay: $('#wsTod').value,
+      weather: $('#wsWeather').value,
+      sunAzimuthDeg: parseFloat($('#wsSunAz').value) || this.app.graph.environment.sunAzimuthDeg,
+      sunElevationDeg: parseFloat($('#wsSunEl').value) || this.app.graph.environment.sunElevationDeg,
     });
   }
 
@@ -253,15 +274,8 @@ export class AdvancedEditor {
     if (Number.isFinite(ppm) && ppm > 0) g.scale.pixelsPerMeter = ppm;
     const step = parseInt($('#wsStep').value, 10);
     if (Number.isFinite(step) && step > 0) g.scale.movement.stepPixels = step;
-    g.environment.timeOfDay = $('#wsTod').value;
-    g.environment.weather = $('#wsWeather').value;
-    const az = parseFloat($('#wsSunAz').value), el = parseFloat($('#wsSunEl').value);
-    if (Number.isFinite(az)) g.environment.sunAzimuthDeg = az;
-    if (Number.isFinite(el)) g.environment.sunElevationDeg = el;
-    this.app.cache.clearDecoded();                  // environment changed → regenerate views
     this.app.notifyMapChanged(true, true);
-    this.app.closePanels();
-    this.app.toast('World settings applied — panoramas regenerate', 'ok');
+    this.app.toast('Name & scale applied', 'ok');
   }
 
   _exportJson() {

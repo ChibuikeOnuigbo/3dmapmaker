@@ -19,6 +19,7 @@ import { rgbHist, histIntersect, expectedMinSimilarity } from './gen/util.js';
 import { MapRenderer } from './map/map-renderer.js';
 import { SimpleEditor } from './editors/simple-editor.js';
 import { AdvancedEditor } from './editors/advanced-editor.js';
+import { Landing } from './ui/landing.js';
 import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsSvc } from './io/storage.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -47,6 +48,8 @@ class App {
     this.selectedNodeId = null;
     this._saveHandle = null;
     this._searchIndex = [];
+    this.displayMode = 'day';             // scene mode for worlds with variants
+    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, ...(this.prefs.view || {}) };
 
     this.perf = this._detectPerf();
     const p = PERF_PROFILES[this.perf];
@@ -80,8 +83,16 @@ class App {
     this.mapRenderer.resize();
     this._startDebugOverlay();
     this._registerServiceWorker();
+    this._applyViewPrefs();
+
+    // start screen — pick a demo, a create-mode, or open a project
+    this.landing = new Landing(this);
+    if (!this.prefs.hideLanding) this.landing.show();
+
     $('#panoLoading').classList.remove('show');
   }
+
+  savePrefs(patch = {}) { prefsSvc.save(patch); }
 
   editorResize() { this.mapRenderer.resize(); }
 
@@ -151,6 +162,7 @@ class App {
       await this._enterNode(start, { initial: true });
       this.panoramaWarmHint(blurb);
     }
+    this._syncModeGroup();
     prefsSvc.save({ lastProjectId: projectId });
     this.project.updatedAt = new Date().toISOString();
     await this.storage.saveProjectMeta({ ...this.project, world: graph.toJSON() }).catch(() => {});
@@ -172,9 +184,12 @@ class App {
       camera: { yawDeg: this.viewer.view.yawDeg, pitchDeg: this.viewer.view.pitchDeg, fovDeg: this.viewer.view.fovDeg, height: node.camera?.height ?? 1.7 },
     });
 
-    const entry = await this.cache.get(nodeId, async (priorMeta) => {
+    const cacheKey = node.pano?.kind === 'urlset' ? `${nodeId}@${this.displayMode}` : nodeId;
+    const entry = await this.cache.get(cacheKey, async (priorMeta) => {
       let produced;
-      if (node.pano?.kind === 'asset' && node.pano.assetId) {
+      if (node.pano?.kind === 'urlset') {
+        produced = await this._renderUrlPanorama(node, priorMeta);
+      } else if (node.pano?.kind === 'asset' && node.pano.assetId) {
         produced = await this._renderAssetPanorama(node, priorMeta);
       } else {
         produced = await this.provider.generate(node, context, {
@@ -233,6 +248,77 @@ class App {
     return out;
   }
 
+  /** Photographic world asset: bundled panorama URL per display mode. */
+  async _renderUrlPanorama(node, priorMeta) {
+    const variants = node.pano?.variants || {};
+    const url = variants[this.displayMode] ?? Object.values(variants)[0];
+    if (!url) return { canvas: placeholderCanvas('No panorama variant', 'This location has no image for the current mode'), meta: { nodeId: node.id, provider: 'none', missing: true } };
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const bmp = await createImageBitmap(blob);
+      const canvas = document.createElement('canvas');
+      canvas.width = bmp.width; canvas.height = bmp.height;
+      canvas.getContext('2d').drawImage(bmp, 0, 0, bmp.width, bmp.height);
+      bmp.close?.();
+      return {
+        canvas,
+        meta: {
+          nodeId: node.id, provider: 'photo-ai', mode: this.displayMode, url,
+          seed: hashStrLocal(url), promptVersion: 1,
+          generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1,
+        },
+      };
+    } catch (err) {
+      return { canvas: placeholderCanvas('Photo panorama unavailable', url), meta: { nodeId: node.id, provider: 'photo-ai', missing: true, error: String(err) } };
+    }
+  }
+
+  /* ---------- display modes (day / rain / night, when the world ships them) ---------- */
+  _syncModeGroup() {
+    const group = $('#modeGroup');
+    let modes = null;
+    if (this.graph) {
+      for (const n of this.graph.nodes.values()) {
+        if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); break; }
+      }
+    }
+    if (!modes) { group.hidden = true; return; }
+    if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
+    group.hidden = false;
+    group.querySelectorAll('.mode-btn').forEach((b) => {
+      b.style.display = modes.includes(b.dataset.mode) ? '' : 'none';
+      b.classList.toggle('active', b.dataset.mode === this.displayMode);
+    });
+  }
+
+  setDisplayMode(mode) {
+    if (mode === this.displayMode) return;
+    this.displayMode = mode;
+    const id = this.movement?.currentNodeId;
+    if (!id) return;
+    // mode keys are part of the cache key (`node@mode`), so every variant stays
+    // cached independently — flipping modes is free, nothing to drop, and the
+    // node identity invariant (same node = same imagery) still holds per mode.
+    this._enterNode(id, { teleport: true });
+    this._syncModeGroup();
+    this.toast(`Display mode: ${mode}`, 'ok', 1600);
+  }
+
+  /** Live environment apply: weather/time-of-day regenerate panoramas AND
+      drive the on-screen effects (rain weather ⇒ drizzle on). Spec §17 —
+      one switch, not two conflicting toggles. */
+  setEnvironment(patch) {
+    Object.assign(this.graph.environment, patch);
+    const env = this.graph.environment;
+    this.viewer.immersion.rain = env.weather === 'rain';
+    this.cache.clearDecoded();
+    const id = this.movement?.currentNodeId;
+    if (id) this._enterNode(id, { teleport: true });
+    this.notifyMapChanged();
+  }
+
   async _renderAssetPanorama(node, priorMeta) {
     const rec = await this.storage.getAsset(this.project.id, `${node.pano.assetId}:display`)
       ?? await this.storage.getAsset(this.project.id, node.pano.assetId);
@@ -246,7 +332,7 @@ class App {
       const bmp = await createImageBitmap(rec.blob);
       const canvas = document.createElement('canvas');
       canvas.width = bmp.width; canvas.height = bmp.height;
-      canvas.getContext('2d').drawImage(bmp, 0, 0);
+      canvas.getContext('2d').drawImage(bmp, 0, 0, bmp.width, bmp.height);
       bmp.close();
       return { canvas, meta: { nodeId: node.id, provider: 'asset', assetId: node.pano.assetId, seed: priorMeta?.seed ?? null, promptVersion: 1, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
     } finally { URL.revokeObjectURL(url); }
@@ -354,22 +440,34 @@ class App {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen?.();
     });
-    on('#debugBtn', 'click', () => {
-      const el = $('#debugOverlay');
-      el.hidden = !el.hidden;
-      $('#debugBtn').classList.toggle('active', !el.hidden);
-      this.mapRenderer.setDebug(!el.hidden);
-    });
+    on('#homeBtn', 'click', () => { this.landing?.show(); this.closePanels(); });
     on('#editBtn', 'click', () => this.togglePanel('simple'));
     on('#advEditBtn', 'click', () => this.togglePanel('adv'));
     on('#compass', 'click', () => { this.viewer.view.yawDeg = 0; });
+
+    // overflow menu (…)
+    const mm = $('#mainMenu');
+    on('#menuBtn', 'click', () => {
+      if (mm.classList.contains('open')) { mm.classList.remove('open'); return; }
+      this._buildMainMenu();
+      this._placePop(mm, '#menuBtn');
+      mm.classList.add('open');
+    });
+    document.addEventListener('click', (e) => {
+      if (!mm.contains(e.target) && !$('#menuBtn').contains(e.target)) mm.classList.remove('open');
+    });
+
+    // display modes (worlds with scene variants)
+    document.querySelectorAll('#modeGroup .mode-btn').forEach((b) => {
+      b.addEventListener('click', () => this.setDisplayMode(b.dataset.mode));
+    });
 
     // move pad
     document.querySelectorAll('#movePad .mbtn').forEach(b => {
       b.addEventListener('click', () => this.tryMove(b.dataset.dir));
     });
 
-    // map widget controls
+    // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
     on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.3));
     on('#mapFit', 'click', () => this.mapRenderer.fit());
@@ -378,6 +476,8 @@ class App {
       w.classList.toggle('full');
       setTimeout(() => this.mapRenderer.resize(), 260);
     });
+    on('#mapHide', 'click', () => { this.viewPrefs.map = false; this._applyViewPrefs(); prefsSvc.save({ view: this.viewPrefs }); });
+    on('#lcHide', 'click', () => { this.viewPrefs.locCard = false; this._applyViewPrefs(); prefsSvc.save({ view: this.viewPrefs }); });
 
     // AutoComplete quick toggle — a REAL switch (Spec §45)
     const acBtn = $('#acToggle');
@@ -401,15 +501,16 @@ class App {
     });
 
     on('#routeBtn', 'click', () => this.routeToNearestLandmark());
-
     on('#exportBtn', 'click', () => this.saveProject(true));
     on('#openBtn', 'click', () => this.openProject());
 
     // world menu
     const wm = $('#worldMenu');
     on('#worldBtn', 'click', async () => {
-      wm.classList.toggle('open');
-      if (wm.classList.contains('open')) await this._renderWorldMenu();
+      if (wm.classList.contains('open')) { wm.classList.remove('open'); return; }
+      await this._renderWorldMenu();
+      this._placePop(wm, '#worldBtn');
+      wm.classList.add('open');
     });
     document.addEventListener('click', (e) => {
       if (!wm.contains(e.target) && !$('#worldBtn').contains(e.target)) wm.classList.remove('open');
@@ -421,6 +522,87 @@ class App {
     si.addEventListener('keydown', (e) => { if (e.key === 'Escape') { si.value = ''; this._renderSearch(''); si.blur(); } });
 
     window.addEventListener('beforeunload', (e) => { if (this.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  }
+
+  _placePop(pop, sel) {
+    const btn = $(sel);
+    const r = btn.getBoundingClientRect?.() ?? { left: 0, right: 0, bottom: 60, top: 60 };
+    pop.style.top = `${(r.bottom ?? 60) + 6}px`;
+    pop.style.left = 'auto';
+    pop.style.right = `${Math.max(8, (document.documentElement.clientWidth || innerWidth || 1280) - (r.right ?? 60))}px`;
+    if (sel === '#worldBtn') { pop.style.left = `${Math.max(8, r.left ?? 8)}px`; pop.style.right = 'auto'; }
+  }
+
+  /* ---------- overflow menu ---------- */
+  _buildMainMenu() {
+    const mm = $('#mainMenu');
+    const vp = this.viewPrefs;
+    const item = (icon, label, fn, on = null) =>
+      `<button class="mi ${on === null ? '' : on ? 'on' : ''}" role="menuitem">
+        ${on !== null ? `<span class="chk"><svg><use href="#i-check"/></svg></span>` : `<svg class="ic"><use href="${icon}"/></svg>`}
+        <span class="grow">${label}</span>
+      </button>`;
+    mm.innerHTML = `
+      <div class="lab">Tools</div>
+      ${item('#i-route', 'Route to nearest landmark', null)}
+      ${item('#i-magic', `AutoComplete Panorama — ${this.acEnabled ? 'on' : 'off'}`, null)}
+      <div class="sep"></div><div class="lab">Show</div>
+      ${item(null, 'Movement pad', null, vp.movePad)}
+      ${item(null, 'Mini map', null, vp.map)}
+      ${item(null, 'Location card', null, vp.locCard)}
+      ${item(null, 'Compass', null, vp.compass)}
+      <div class="sep"></div><div class="lab">More</div>
+      ${item('#i-bug', 'Developer overlay', null)}
+      ${item('#i-home', 'Home — demos & create', null)}
+      ${item('#i-globe', 'About this world', null)}`;
+    const [miRoute, miAC, miPad, miMap, miCard, miCompass, miBug, miHome, miAbout] = mm.querySelectorAll('.mi');
+    miRoute.addEventListener('click', () => { mm.classList.remove('open'); this.routeToNearestLandmark(); });
+    miAC.addEventListener('click', () => { mm.classList.remove('open'); $('#acToggle').click(); });
+    const toggle = (key) => () => {
+      this.viewPrefs[key] = !this.viewPrefs[key];
+      prefsSvc.save({ view: this.viewPrefs });
+      this._applyViewPrefs();
+      const wasOpen = mm.classList.contains('open');
+      this._buildMainMenu();
+      if (wasOpen) mm.classList.add('open');
+    };
+    miPad.addEventListener('click', toggle('movePad'));
+    miMap.addEventListener('click', toggle('map'));
+    miCard.addEventListener('click', toggle('locCard'));
+    miCompass.addEventListener('click', toggle('compass'));
+    miBug.addEventListener('click', () => {
+      mm.classList.remove('open');
+      const el = $('#debugOverlay');
+      el.hidden = !el.hidden;
+      this.mapRenderer.setDebug(!el.hidden);
+    });
+    miHome.addEventListener('click', () => { mm.classList.remove('open'); this.landing?.show(); });
+    miAbout.addEventListener('click', () => {
+      mm.classList.remove('open');
+      const g = this.graph;
+      if (g) this.toast(`${g.name} — ${g.nodes.size} locations · ${g.edges.size} connections · ${g.environment.description || ''}`, null, 5200);
+    });
+  }
+
+  /* ---------- view preferences (optional UI) ---------- */
+  _applyViewPrefs() {
+    $('#movePad').style.display = this.viewPrefs.movePad ? '' : 'none';
+    $('#mapWidget').classList.toggle('hidden', !this.viewPrefs.map);
+    $('#locCard').classList.toggle('hidden', !this.viewPrefs.locCard);
+    $('#compass').style.display = this.viewPrefs.compass ? '' : 'none';
+    if (!this.viewPrefs.map) $('#mapWidget').classList.remove('full');
+    this._updateFab();
+    this.mapRenderer.resize();
+  }
+
+  _updateFab() {
+    const fab = $('#mapFab');
+    if (!fab) return;
+    if (!fab.dataset.bound) {
+      fab.dataset.bound = '1';
+      fab.addEventListener('click', () => { this.viewPrefs.map = true; prefsSvc.save({ view: this.viewPrefs }); this._applyViewPrefs(); });
+    }
+    fab.classList.toggle('show', !this.viewPrefs.map);
   }
 
   togglePanel(which) {
@@ -447,11 +629,12 @@ class App {
     const savedDemo = new Set(saved.map(p => p.id));
     wm.innerHTML = `
       ${DEMO_WORLDS.map(d => `
-        <button class="wm-item ${d.id === this.project?.id ? 'active' : ''}" data-w="${d.id}">
-          <span class="t">${d.name} <span style="color:var(--ink-3);font-weight:500">· ${d.tag}</span></span>
-          <span class="d">${savedDemo.has(d.id) ? 'Resume your saved copy' : 'Demo world'}</span>
+        <button class="mi wm-item ${d.id === this.project?.id ? 'active' : ''}" data-w="${d.id}">
+          <span class="t">${d.name}<span class="badge ${d.kind === 'real' ? 'real' : ''}">${d.tag}</span></span>
+          <span class="d">${savedDemo.has(d.id) ? 'Resume your saved copy' : (d.kind === 'real' ? 'AI photo panoramas · 3 display modes' : 'Demo world')}</span>
         </button>`).join('')}
-      <button class="wm-item" data-new="1"><span class="t">＋ New empty world</span><span class="d">Start from a blank map</span></button>`;
+      <div class="sep"></div>
+      <button class="mi wm-item" data-new="1"><span class="t">＋ New empty world</span><span class="d">Start from a blank map</span></button>`;
     wm.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', async () => {
       wm.classList.remove('open');
       const def = DEMO_WORLDS.find(d => d.id === b.dataset.w);
@@ -461,14 +644,20 @@ class App {
     }));
     wm.querySelector('[data-new]').addEventListener('click', () => {
       wm.classList.remove('open');
-      const name = prompt('Name your world:', 'My World');
-      if (!name) return;
-      const graph = new WorldGraph(new MapScale({ pixelsPerMeter: 2 }), { id: 'world_' + Date.now().toString(36), name });
-      graph.environment.features = [];
-      graph.description = 'Custom world';
-      const center = graph.addNode({ id: 'node_start', x: 0, y: 0, name: 'Start', pano: { kind: 'generated' } });
-      this.loadWorldJson({ ...graph.toJSON(), startNodeId: center.id }, { name });
+      this.createEmptyWorld({});
     });
+  }
+
+  createEmptyWorld({ openEditor = null } = {}) {
+    const name = prompt('Name your world:', 'My World');
+    if (!name) return;
+    const graph = new WorldGraph(new MapScale({ pixelsPerMeter: 2 }), { id: 'world_' + Date.now().toString(36), name });
+    graph.environment.features = [];
+    graph.description = 'Custom world';
+    const center = graph.addNode({ id: 'node_start', x: 0, y: 0, name: 'Start', pano: { kind: 'generated' } });
+    this.loadWorldJson({ ...graph.toJSON(), startNodeId: center.id }, { name });
+    if (openEditor === 'simple') setTimeout(() => { if (!this.simpleEditor.isOpen) this.togglePanel('simple'); }, 60);
+    if (openEditor === 'advanced') setTimeout(() => { if (!this.advancedEditor.isOpen) this.togglePanel('adv'); }, 60);
   }
 
   _buildSearchIndex() {
@@ -787,6 +976,12 @@ async function pickFile(accept) {
 }
 
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function hashStrLocal(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return h >>> 0;
+}
 
 /* ---------------- boot ---------------- */
 const app = new App();

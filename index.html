@@ -12,7 +12,7 @@
 </head>
 <body>
 
-<!-- ============ SVG icon sprite (Lucide-style, inline: offline-safe) ============ -->
+<!-- ============ SVG icon sprite (Lucide style, inline: offline-safe) ============ -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="7"/><path d="M5 21l4.5-5.5M19 21l-4.5-5.5"/><circle cx="12" cy="10" r="2"/></symbol>
@@ -46,50 +46,69 @@
     <symbol id="i-rain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2M16 14v6M8 14v6M12 16v6"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></symbol>
   </defs>
 </svg>
 
-<!-- ============ stage ============ -->
+<!-- ============ stage (canvas is the priority) ============ -->
 <div id="stage">
   <canvas id="panoCanvas" aria-label="Panorama viewer. Drag to look around, use W A S D to move."></canvas>
   <canvas id="fxCanvas" aria-hidden="true"></canvas>
   <div id="panoLoading" class="show"><div><div class="spinner"></div>Preparing panorama…</div></div>
 </div>
 
-<!-- ============ chrome ============ -->
-<div class="chrome" id="brandBar">
-  <div class="card" id="brand"><span class="logo"><svg><use href="#i-logo"/></svg></span><span class="txt">Panorama Maps</span></div>
-  <button class="card" id="worldBtn" aria-label="Choose world" title="Choose world"><svg><use href="#i-globe"/></svg><span id="worldName">World</span><svg><use href="#i-chev"/></svg></button>
-</div>
-
-<div class="chrome card" id="worldMenu" role="menu" aria-label="Worlds"></div>
-
-<div class="chrome" id="searchBar">
-  <div class="card" id="searchBox">
-    <svg><use href="#i-search"/></svg>
-    <input id="searchInput" type="search" placeholder="Search locations or landmarks" aria-label="Search locations or landmarks" autocomplete="off">
+<!-- ============ top toolbar — ONE surface, grouped controls ============ -->
+<header id="topbar">
+  <div class="tb-group" id="brandGroup">
+    <button class="tb-btn brand" id="homeBtn" title="Home — demos & create" aria-label="Home"><span class="logo"><svg><use href="#i-logo"/></svg></span><span class="tb-txt" id="brandTxt">Panorama Maps</span></button>
+    <button class="tb-btn" id="worldBtn" title="Choose world" aria-label="Choose world" aria-haspopup="true"><svg class="ic"><use href="#i-globe"/></svg><span class="tb-txt" id="worldName">World</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
   </div>
-  <div class="card" id="searchResults" role="listbox"></div>
-</div>
 
-<div class="chrome" id="actions">
-  <button class="iconbtn wide" id="exportBtn" title="Save project (.pmap)" aria-label="Save project as portable file"><svg><use href="#i-save"/></svg><span>Save</span></button>
-  <button class="iconbtn" id="openBtn" title="Open project / world" aria-label="Open project"><svg><use href="#i-open"/></svg></button>
-  <button class="iconbtn" id="editBtn" title="Map editor" aria-label="Open map editor"><svg><use href="#i-edit"/></svg></button>
-  <button class="iconbtn" id="advEditBtn" title="Advanced editor" aria-label="Open advanced editor"><svg><use href="#i-sliders"/></svg></button>
-  <button class="iconbtn" id="debugBtn" title="Developer overlay" aria-label="Toggle developer overlay"><svg><use href="#i-bug"/></svg></button>
-  <button class="iconbtn" id="fsBtn" title="Fullscreen" aria-label="Toggle fullscreen"><svg><use href="#i-max"/></svg></button>
-</div>
+  <div class="tb-group tb-grow" id="searchGroup">
+    <svg class="ic"><use href="#i-search"/></svg>
+    <input id="searchInput" type="search" placeholder="Search locations or landmarks" aria-label="Search locations or landmarks" autocomplete="off">
+    <div class="pop" id="searchResults" role="listbox"></div>
+  </div>
 
-<button id="compass" class="chrome" title="Reset north" aria-label="Compass — click to face north">
+  <div class="tb-group" id="modeGroup" hidden>
+    <button class="tb-btn mode-btn" data-mode="day" title="Daylight scenes"><svg class="ic"><use href="#i-sun"/></svg><span class="tb-txt">Day</span></button>
+    <button class="tb-btn mode-btn" data-mode="rain" title="Rain scenes"><svg class="ic"><use href="#i-rain"/></svg><span class="tb-txt">Rain</span></button>
+    <button class="tb-btn mode-btn" data-mode="night" title="Night scenes"><svg class="ic"><use href="#i-moon"/></svg><span class="tb-txt">Night</span></button>
+  </div>
+
+  <div class="tb-group">
+    <button class="tb-btn" id="exportBtn" title="Save project (.pmap)" aria-label="Save project as portable file"><svg class="ic"><use href="#i-save"/></svg><span class="tb-txt">Save</span></button>
+    <button class="tb-btn" id="openBtn" title="Open project / world" aria-label="Open project"><svg class="ic"><use href="#i-open"/></svg></button>
+    <button class="tb-btn" id="editBtn" title="Map editor" aria-label="Open map editor"><svg class="ic"><use href="#i-edit"/></svg></button>
+    <button class="tb-btn" id="advEditBtn" title="Advanced editor" aria-label="Open advanced editor"><svg class="ic"><use href="#i-sliders"/></svg></button>
+    <button class="tb-btn" id="menuBtn" title="More — view, route, developer" aria-label="More options" aria-haspopup="true"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <button class="tb-btn" id="fsBtn" title="Fullscreen" aria-label="Toggle fullscreen"><svg class="ic"><use href="#i-max"/></svg></button>
+  </div>
+</header>
+
+<div class="pop menu" id="mainMenu" role="menu" aria-label="More options"></div>
+<div class="pop menu" id="worldMenu" role="menu" aria-label="Worlds"></div>
+
+<!-- ============ floating widgets ============ -->
+<button id="compass" class="widget" title="Reset north" aria-label="Compass — click to face north">
   <span class="n">N</span>
   <svg class="needle" viewBox="0 0 24 24" id="compassNeedle"><path d="M12 3l4 9-4 9-4-9z" fill="#d93025"/><path d="M12 3l4 9h-4z" fill="#f4b3ac"/></svg>
 </button>
 
-<div class="chrome card" id="locCard">
-  <h2 id="locName">—</h2>
-  <div class="zone" id="locZone">—</div>
-  <dl>
+<section class="widget" id="locCard" aria-label="Current location">
+  <div class="lc-head">
+    <div class="lc-t">
+      <h2 id="locName">—</h2>
+      <div class="zone" id="locZone">—</div>
+    </div>
+    <button class="mini" id="lcHide" title="Hide card" aria-label="Hide location card"><svg><use href="#i-close"/></svg></button>
+  </div>
+  <dl id="lcDetails">
     <dt>Position</dt><dd id="locPos">—</dd>
     <dt>Distance walked</dt><dd id="locDist">0 m</dd>
     <dt>Zone boundary</dt><dd id="locBound">—</dd>
@@ -99,32 +118,39 @@
     <button class="chipbtn" id="acToggle" title="Detect and repair incomplete panorama regions" aria-pressed="true"><svg><use href="#i-magic"/></svg><span>AutoComplete</span></button>
     <button class="chipbtn" id="routeBtn" title="Route to nearest landmark"><svg><use href="#i-route"/></svg><span>Route</span></button>
   </div>
-</div>
+</section>
 
-<div class="chrome" id="movePad" role="group" aria-label="Movement controls">
+<div class="widget" id="movePad" role="group" aria-label="Movement controls">
   <button class="mbtn" data-dir="forward" title="Move forward (W)" aria-label="Move forward"><svg><use href="#i-up"/></svg></button>
-  <button class="mbtn" data-dir="left" title="Move left (A)" aria-label="Move left"><svg><use href="#i-left"/></svg></button>
-  <button class="mbtn" data-dir="backward" title="Move backward (S)" aria-label="Move backward"><svg><use href="#i-down"/></svg></button>
-  <button class="mbtn" data-dir="right" title="Move right (D)" aria-label="Move right"><svg><use href="#i-right"/></svg></button>
+  <div class="mp-row">
+    <button class="mbtn" data-dir="left" title="Move left (A)" aria-label="Move left"><svg><use href="#i-left"/></svg></button>
+    <button class="mbtn" data-dir="backward" title="Move backward (S)" aria-label="Move backward"><svg><use href="#i-down"/></svg></button>
+    <button class="mbtn" data-dir="right" title="Move right (D)" aria-label="Move right"><svg><use href="#i-right"/></svg></button>
+  </div>
 </div>
 
-<div class="chrome card" id="mapWidget">
+<section class="widget" id="mapWidget" aria-label="2D map">
   <div class="mw-head">
     <span class="t" id="mapTitle">Map</span>
-    <button class="iconbtn" id="mapZoomIn" title="Zoom in" aria-label="Zoom map in"><svg><use href="#i-zoomin"/></svg></button>
-    <button class="iconbtn" id="mapZoomOut" title="Zoom out" aria-label="Zoom map out"><svg><use href="#i-zoomout"/></svg></button>
-    <button class="iconbtn" id="mapFit" title="Fit world" aria-label="Fit world to map"><svg><use href="#i-fit"/></svg></button>
-    <button class="iconbtn" id="mapExpand" title="Expand map" aria-label="Expand map"><svg><use href="#i-max"/></svg></button>
+    <button class="mini" id="mapZoomIn" title="Zoom in" aria-label="Zoom map in"><svg><use href="#i-zoomin"/></svg></button>
+    <button class="mini" id="mapZoomOut" title="Zoom out" aria-label="Zoom map out"><svg><use href="#i-zoomout"/></svg></button>
+    <button class="mini" id="mapFit" title="Fit world" aria-label="Fit world to map"><svg><use href="#i-fit"/></svg></button>
+    <button class="mini" id="mapExpand" title="Expand map" aria-label="Expand map"><svg><use href="#i-max"/></svg></button>
+    <button class="mini" id="mapHide" title="Hide map" aria-label="Hide map"><svg><use href="#i-close"/></svg></button>
   </div>
   <div id="mapCanvasWrap"><canvas id="mapCanvas" aria-label="2D map"></canvas></div>
-</div>
+</section>
 
-<div class="chrome" id="debugOverlay" hidden aria-label="Developer overlay"></div>
+<button id="mapFab" title="Show map" aria-label="Show map"><svg><use href="#i-map"/></svg></button>
+<div id="debugOverlay" hidden aria-label="Developer overlay"></div>
 <div id="toasts" aria-live="polite"></div>
 
-<!-- ============ panels/mount points (editors render into these) ============ -->
-<div class="chrome card panel" id="editorPanel" hidden></div>
-<div class="chrome card panel" id="advPanel" hidden></div>
+<!-- ============ panels (editors render into these) ============ -->
+<aside class="panel" id="editorPanel" hidden></aside>
+<aside class="panel" id="advPanel" hidden></aside>
+
+<!-- ============ landing / start screen ============ -->
+<div id="landing" aria-modal="true" role="dialog" aria-label="Welcome to Panorama Maps"></div>
 
 <script type="module" src="js/main.js"></script>
 </body>

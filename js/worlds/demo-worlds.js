@@ -14,6 +14,7 @@
 import { WorldGraph, bearingDeg } from '../core/world-graph.js';
 import { MapScale } from '../core/scale.js';
 import { rngFor } from '../gen/util.js';
+import { buildWillowParish } from './willow-parish.js';
 
 let uid = 0;
 const nid = (p) => `${p}_${(uid++).toString(36)}`;
@@ -384,4 +385,5 @@ export const DEMO_WORLDS = [
   { id: 'demo_chapel_lane', name: 'Chapel Lane', tag: 'Small', build: buildChapelLane },
   { id: 'demo_millbrook', name: 'Millbrook', tag: 'Medium', build: buildMillbrook },
   { id: 'demo_great_vale', name: 'Great Vale', tag: 'Large · 1,000+ nodes', build: buildGreatVale },
+  { id: 'demo_willow_parish', name: 'Willow Parish', tag: 'Real · AI photos', kind: 'real', modes: ['day', 'rain', 'night'], thumb: 'assets/willow/day/n3.jpg', build: buildWillowParish },
 ];

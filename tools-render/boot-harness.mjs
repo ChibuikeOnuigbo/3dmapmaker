@@ -137,6 +137,20 @@ globalThis.indexedDB = {
 };
 globalThis.location = globalThis.window.location;
 globalThis.devicePixelRatio = 1;
+globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
+/* real-asset (willow parish) demo uses fetch + createImageBitmap — shim both */
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  if (u.startsWith('assets/willow/')) {
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(8), blob: async () => new Blob([new Uint8Array(8)], { type: 'image/jpeg' }), url: u };
+  }
+  throw new Error('fetch not expected in harness: ' + u);
+};
+globalThis.createImageBitmap = async () => {
+  const w = 16, h = 8, buf = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) { const o = i * 4; buf[o] = 90; buf[o + 1] = 110; buf[o + 2] = 140; buf[o + 3] = 255; }
+  return { width: w, height: h, _buf: buf, close() {} };
+};
 if (!globalThis.URL.createObjectURL) {
   globalThis.URL.createObjectURL = () => 'blob:harness';
   globalThis.URL.revokeObjectURL = () => {};
@@ -263,6 +277,54 @@ await verifyWorld('DEMO 2 · Millbrook', 100);
 await app.loadDemoWorld(DEMO_WORLDS.find((w) => w.id === 'demo_great_vale'));
 await waitFor(() => app.graph?.id === 'demo_great_vale' && app.cache.metaOf(app.movement.currentNodeId), 'great vale boot', 45000);
 const g3 = await verifyWorld('DEMO 3 · Great Vale', 1000);
+
+/* REAL DEMO · Willow Parish — pre-made image variants + mode spectra */
+console.log('\n=== DEMO 4 · Willow Parish (real images) ===');
+app.displayMode = 'day';
+await app.loadDemoWorld(DEMO_WORLDS.find((w) => w.id === 'demo_willow_parish'));
+await waitFor(() => app.graph?.id === 'demo_willow_parish' && app.cache.metaOf(`${app.movement.currentNodeId}@day`), 'willow boot', 20000);
+const g4 = app.graph;
+const wId = app.movement.currentNodeId;
+check('willow has 7 nodes', g4.nodes.size === 7, `have ${g4.nodes.size}`);
+const wDay = await app.cache.get(`${wId}@day`, async () => { throw new Error('must be cached'); });
+check('willow day variant non-blank', canvasStats(wDay.canvas).std > 8 || canvasStats(wDay.canvas).mean > 10, `std=${canvasStats(wDay.canvas).std}`);
+check('willow entry tagged mode=day', wDay.meta.mode === 'day', wDay.meta.mode);
+const pxDay = canvasStats(wDay.canvas);
+const wWeather0 = app.graph.environment.weather;
+check('willow node serves pre-made imagery (no procedural draw)', g4.getNode(wId).pano?.kind === 'urlset', `pano=${JSON.stringify(g4.getNode(wId).pano || null).slice(0, 80)}`);
+
+/* mode switch repaints, keeps weather, caches per variant */
+await app.setDisplayMode('rain');
+await waitFor(() => app.cache.metaOf(`${wId}@rain`), 'rain variant render', 20000);
+const wRain = await app.cache.get(`${wId}@rain`, async () => { throw new Error('must be cached'); });
+check('rain variant repainted with mode tag', wRain.meta.mode === 'rain');
+check('weather unchanged after mode switch', app.graph.environment.weather === wWeather0, `${wWeather0} → ${app.graph.environment.weather}`);
+check('day variant still cached (mode flip = free)', !!app.cache.metaOf(`${wId}@day`));
+/* step forward + back: reverse traversal uses the SAME cache key */
+const bearingTo4 = (fromId, toId) => {
+  const a = g4.getNode(fromId), b = g4.getNode(toId);
+  return (Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI + 360) % 360;
+};
+let wT = null;
+for (const e of g4.edgesOf(wId)) { if (!e.blocked) { wT = g4.otherEnd(e, wId); break; } }
+if (wT) {
+  g4.settings.walkSpeedMps = 60;   // 100 m willow gaps at 1.4 m/s ≈ 70 s — too slow for a test
+  app.viewer.view.yawDeg = bearingTo4(wId, wT);   // aim down the road, then press W
+  await app.tryMove('forward');
+  await waitFor(() => app.movement.currentNodeId === wT, 'willow forward', 15000).catch(() => null);
+  check('willow forward hop resolved', app.movement.currentNodeId === wT, `got ${app.movement.currentNodeId} from=${wId} to=${wT} aimed=${app.viewer.view.yawDeg}`);
+  await waitFor(() => app.cache.metaOf(`${wT}@rain`), 'arrival pano (rain)', 20000);
+  check('arrival panorama cached under rain variant', !!app.cache.metaOf(`${wT}@rain`));
+  app.viewer.view.yawDeg = bearingTo4(wT, wId);
+  await app.tryMove('forward');
+  await waitFor(() => app.movement.currentNodeId === wId, 'willow reverse', 15000).catch(() => null);
+  check('willow reverse returns to same node', app.movement.currentNodeId === wId);
+  check('reverse pano served from rain cache (no regen)', !!app.cache.metaOf(`${wId}@rain`));
+  app.setDisplayMode('day');
+} else {
+  check('willow forward hop resolved', false, 'var no link from willow boot node');
+}
+check('willow pixels are the shim color, not a rainbow error image', pxDay.mean > 80 && pxDay.mean < 120, `mean=${pxDay.mean}`);
 
 /* 500 m zone sanity inside the live app */
 const chapel = DEMO_WORLDS.find((w) => w.id === 'demo_chapel_lane').build();
