@@ -103,6 +103,12 @@ class App {
 
   savePrefs(patch = {}) { prefsSvc.save(patch); }
 
+  _setWorldName(n) {
+    document.title = `Panorama Maps · ${n}`;
+    const host = document.getElementById('locName');
+    if (host?.dataset) host.dataset.world = n;
+  }
+
   editorResize() { this.mapRenderer.resize(); }
 
   _detectPerf() {
@@ -129,7 +135,7 @@ class App {
   async loadDemoWorld(def) {
     const built = def.build();
     this.worldDef = def;
-    $('#worldName').textContent = def.name;
+    this._setWorldName(def.name);
     await this._adoptWorld(built.graph, {
       projectId: built.graph.id, name: def.name, blurb: def.blurb,
       startNodeId: built.startNodeId,
@@ -138,7 +144,7 @@ class App {
 
   async loadWorldJson(json, { project = null, name = null } = {}) {
     const graph = WorldGraph.fromJSON(json);
-    $('#worldName').textContent = name || graph.name;
+    this._setWorldName(name || graph.name);
     await this._adoptWorld(graph, {
       projectId: project?.id ?? graph.id, name: name || graph.name,
       startNodeId: json.startNodeId ?? [...graph.nodes.keys()][0],
@@ -183,8 +189,8 @@ class App {
   }
 
   /* ================= panorama pipeline =================
-     Cache check → (generate with FULL context → light continuity check) →
-     AutoComplete analysis → transition (never blank) → prefetch (Spec §70). */
+     Cache check, then full context generation with light continuity checks,
+     AutoComplete analysis, a transition that never goes blank, prefetch (Spec §70). */
   async _ensurePanorama(nodeId, { fromId = null, relativeDir = null } = {}) {
     const node = this.graph.getNode(nodeId);
     const distanceM = fromId ? this._edgeDist(fromId, nodeId) : null;
@@ -334,7 +340,7 @@ class App {
       ?? await this.storage.getAsset(this.project.id, node.pano.assetId);
     if (!rec?.blob) {
       node.pano.missing = true;
-      const canvas = placeholderCanvas('Panorama image missing', 'Use the editor → Upload panorama to replace it');
+      const canvas = placeholderCanvas('Panorama image missing', 'Replace it in the advanced editor with Upload panorama');
       return { canvas, meta: { nodeId: node.id, provider: 'asset', missing: true, seed: priorMeta?.seed ?? null, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
     }
     const url = URL.createObjectURL(rec.blob);
@@ -529,18 +535,6 @@ class App {
     // Sharpen applies to the panorama SOURCE once per node/amount and is
     // cached alongside the entry (see _present) — the viewer loop stays free.
 
-    // world menu
-    const wm = $('#worldMenu');
-    on('#worldBtn', 'click', async () => {
-      if (wm.classList.contains('open')) { wm.classList.remove('open'); return; }
-      await this._renderWorldMenu();
-      this._placePop(wm, '#worldBtn');
-      wm.classList.add('open');
-    });
-    document.addEventListener('click', (e) => {
-      if (!wm.contains(e.target) && !$('#worldBtn').contains(e.target)) wm.classList.remove('open');
-    });
-
     // search
     const si = $('#searchInput');
     si.addEventListener('input', () => this._renderSearch(si.value.trim()));
@@ -551,7 +545,7 @@ class App {
     // resizing between phone/tablet/desktop layouts must re-anchor any popup
     // that is open right now (old screens: desktop offsets slid off-screen)
     window.addEventListener('resize', () => {
-      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#worldMenu', '#worldBtn']]) {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn']]) {
         const pop = $(popSel);
         if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
       }
@@ -580,13 +574,8 @@ class App {
     const popW = Math.min(320, vw - 16);
     pop.style.top = `${Math.min(vh - 120, Math.max(56, r.bottom + 6))}px`;
     pop.style.bottom = 'auto';
-    if (sel === '#worldBtn') {
-      pop.style.left = `${Math.min(Math.max(8, r.left), Math.max(8, vw - popW - 8))}px`;
-      pop.style.right = 'auto';
-    } else {
-      pop.style.left = 'auto';
-      pop.style.right = `${Math.min(Math.max(8, vw - r.right), Math.max(8, vw - popW - 8))}px`;
-    }
+    pop.style.left = 'auto';
+    pop.style.right = `${Math.min(Math.max(8, vw - r.right), Math.max(8, vw - popW - 8))}px`;
   }
 
   /* ---------- studio (simple / advanced) ---------- */
@@ -737,7 +726,7 @@ class App {
     home.addEventListener('click', () => { mm.classList.remove('open'); this.closePanels(); this.landing?.show(); });
   }
 
-  /** Map slider 0..100 → 0.5..14 m/s (exponential — fine control at low end).
+  /** Map slider 0..100 into 0.5..14 m/s (exponential, fine control at low end).
       Default 65 ≈ 4 m/s: lively walk, no more seconds of waiting per step. */
   _applySpeed() {
     const v = Math.max(0, Math.min(100, +this.viewPrefs.speed || 65));
@@ -783,32 +772,6 @@ class App {
     this.simpleEditor.close();
     this.advancedEditor.close();
     this._syncStudioBtn();
-  }
-
-  async _renderWorldMenu() {
-    const wm = $('#worldMenu');
-    const { DEMO_WORLDS } = await import('./worlds/demo-worlds.js');
-    const saved = await this.storage.listProjects().catch(() => []);
-    const savedDemo = new Set(saved.map(p => p.id));
-    wm.innerHTML = `
-      ${DEMO_WORLDS.map(d => `
-        <button class="mi wm-item ${d.id === this.project?.id ? 'active' : ''}" data-w="${d.id}">
-          <span class="t">${d.name}<span class="badge ${d.kind === 'real' ? 'real' : ''}">${d.tag}</span></span>
-          <span class="d">${savedDemo.has(d.id) ? 'Resume your saved copy' : (d.kind === 'real' ? 'AI photo panoramas · 3 display modes' : 'Demo world')}</span>
-        </button>`).join('')}
-      <div class="sep"></div>
-      <button class="mi wm-item" data-new="1"><span class="t">＋ New empty world</span><span class="d">Start from a blank map</span></button>`;
-    wm.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', async () => {
-      wm.classList.remove('open');
-      const def = DEMO_WORLDS.find(d => d.id === b.dataset.w);
-      const snap = await this.storage.getProjectMeta(def.id).catch(() => null);
-      if (snap?.world) this.loadWorldJson(snap.world, { project: snap });
-      else this.loadDemoWorld(def);
-    }));
-    wm.querySelector('[data-new]').addEventListener('click', () => {
-      wm.classList.remove('open');
-      this.createEmptyWorld({});
-    });
   }
 
   createEmptyWorld({ openEditor = null } = {}) {
@@ -1038,7 +1001,7 @@ class App {
         + kv('x / y (m)', `${g.scale.pxToM(n.x).toFixed(1)} / ${g.scale.pxToM(n.y).toFixed(1)}`)
         + kv('zone', zones.join(', ') || '—')
         + kv('dist travelled', `${this.movement.distanceTravelledM.toFixed(1)} m`)
-        + kv('step', `${g.scale.movement.stepPixels}px → ${g.scale.stepMeters().toFixed(1)}m (ppm ${g.scale.pixelsPerMeter})`)
+        + kv('step', `${g.scale.movement.stepPixels}px per step, ${g.scale.stepMeters().toFixed(1)}m real (ppm ${g.scale.pixelsPerMeter})`)
         + kv('heading / pitch', `${v.yawDeg.toFixed(1)}° / ${v.pitchDeg.toFixed(1)}°`)
         + kv('pitch limits', `${this.viewer.pitchLimits.min.toFixed(0)}° … ${this.viewer.pitchLimits.max.toFixed(0)}°`)
         + kv('fov', `${v.fovDeg.toFixed(0)}°`)
@@ -1096,7 +1059,7 @@ class App {
     document.addEventListener('keydown', (e) => {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
-      if (e.key === 'Escape') { this.closePanels(); $('#worldMenu').classList.remove('open'); return; }
+      if (e.key === 'Escape') { this.closePanels(); document.querySelectorAll('.pop.open').forEach(el => el.classList.remove('open')); return; }
       if (e.key === 'Enter' && this.simpleEditor.isOpen) { this.simpleEditor.onEnterKey(); return; }
 
       const dir = KEY_DIRS[e.code];

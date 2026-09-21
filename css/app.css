@@ -383,7 +383,7 @@ svg { display: block; }
 }
 #landing.show { display: block; }
 .land-bg { position: fixed; inset: 0; pointer-events: none; }
-.land-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 62%; transform: scale(1.04); opacity: 0.25; }
+.land-bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 55%; transform: scale(1.04); opacity: 0.45; }
 /* dark bluish layer above the picture: the photo stays a ghosted texture,
    text keeps full contrast */
 .land-scrim {
@@ -392,11 +392,13 @@ svg { display: block; }
     linear-gradient(212deg, rgba(17, 34, 74, 0.86) 0%, rgba(10, 18, 40, 0.9) 46%, rgba(6, 11, 26, 0.94) 100%);
 }
 
+.land-view { position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.land-view[hidden] { display: none; }
 .land-wrap {
-  position: relative; z-index: 1;
-  min-height: 100vh; min-height: 100dvh;
+  position: relative; z-index: 1; flex: 1;
   display: flex; flex-direction: column;
-  max-width: 1120px; margin: 0 auto; padding: clamp(14px, 3vh, 28px) clamp(16px, 4vw, 40px) 22px;
+  max-width: 1120px; margin: 0 auto; width: 100%;
+  padding: clamp(14px, 3vh, 28px) clamp(16px, 4vw, 40px) 22px;
 }
 .land-brand { display: flex; align-items: center; gap: 10px; }
 .land-brand .mark {
@@ -412,7 +414,7 @@ svg { display: block; }
   margin: 0; font-size: clamp(30px, 6vw, 54px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 800;
   text-wrap: balance; max-width: 14ch; color: #ffffff;
 }
-.land-center h1 em { font-style: normal; color: transparent; background: linear-gradient(92deg, #afcdff, #d7c9ff 52%, #b3e3ff); -webkit-background-clip: text; background-clip: text; }
+.land-center h1 em { font-style: normal; color: #a9c8ff; }
 .land-center .tag { margin: clamp(10px, 2vh, 18px) 0 0; font-size: clamp(14px, 1.8vw, 16.5px); line-height: 1.55; color: rgba(243, 247, 255, 0.9); max-width: 52ch; }
 
 .land-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: clamp(18px, 4vh, 32px); }
@@ -432,6 +434,7 @@ svg { display: block; }
 .land-btn.primary:hover { box-shadow: 0 14px 32px rgba(61, 116, 240, 0.55); }
 .land-btn.active { border-color: rgba(141, 180, 255, 0.8); }
 .land-btn svg { width: 17px; height: 17px; }
+.land-btn .arr { width: 14px; height: 14px; opacity: 0.85; }
 
 .land-skip {
   margin-top: clamp(14px, 3vh, 26px); align-self: flex-start;
@@ -441,7 +444,7 @@ svg { display: block; }
   border-bottom: 1px dashed rgba(243, 247, 255, 0.45);
 }
 .land-skip:hover { color: #fff; border-bottom-color: #fff; }
-.land-skip .arrow { transition: transform 0.15s; }
+.land-skip .arrow { width: 14px; height: 14px; transition: transform 0.15s; }
 .land-skip:hover .arrow { transform: translateX(3px); }
 
 .land-grid {
@@ -769,3 +772,16 @@ body.landing-open #topbar { visibility: hidden; }
 /* debug overlay is a tool, not decoration: dimmer, smaller until hovered */
 #debugOverlay { opacity: 0.78; transition: opacity 0.15s; }
 #debugOverlay:hover { opacity: 1; }
+
+
+/* demos page bar */
+.land-demobar { display: flex; align-items: center; gap: 16px; padding-top: 6px; }
+.land-back {
+  width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1); color: #eef2fb; border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer; transition: background 0.15s; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.land-back:hover { background: rgba(255, 255, 255, 0.2); }
+.land-back svg { width: 20px; height: 20px; }
+.land-demobar .dl h2 { margin: 0; font-size: clamp(22px, 4vw, 30px); letter-spacing: -0.02em; color: #ffffff; }
+.land-demobar .dl p { margin: 4px 0 0; font-size: 13.5px; color: rgba(243, 247, 255, 0.72); }

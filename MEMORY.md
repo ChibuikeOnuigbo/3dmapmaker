@@ -62,7 +62,7 @@ Date: 2026-09-21 · Branch state: arena/01a0be25-3dmapmaker tip.
 | Multiplayer, cloud project sync | PLANNED | no code exists; not advertised in UI |
 
 ## UI consolidation state (this pass)
-- Topbar: brand | world | search(+expand) | panels | view | bookmarks | studio toggle | zoom | close | fullscreen — every item real.
+- Topbar: brand | search (expand overlay) | panels | view | bookmarks | studio toggle | zoom | close | fullscreen. The world chip popup was removed by directive: world switching lives on the landing demos page via the back button.
 - One Panels menu for all secondary UI (widgets, debug, view tweaks) — no scattered toggles.
 - Popups clamp to viewport; mobile popups open upward from the bottom dock.
 - Toast: max 3, identical messages refresh in place.

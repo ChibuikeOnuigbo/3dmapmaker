@@ -1,15 +1,13 @@
 /**
- * Panorama Maps — ui/landing.js
+ * Panorama Maps · ui/landing.js
  *
- * Start hero. A real scene backdrop (a demo panorama, locally generated
- * asset), a brand row, a single clear headline, primary actions, and the
- * demo rail. Nothing decorative-only: every control does something.
- *
- *   Explore demos        → demo rail with LIVE preview thumbnails
- *   Create a world       → studio choice popup (Simple or Advanced)
- *   Open project         → import a .pmap
- *   Continue where I left off → straight back to the last world
- * Landing re appears from the back button in the toolbar at any time.
+ * Two page start experience inside one overlay:
+ *   page HERO   · brand, headline, three primary actions
+ *   page DEMOS  · its own page (Explore demos moves the user here) with a
+ *                 grid of demo cards carrying LIVE preview thumbnails and a
+ *                 back control to the hero page
+ * The back button in the topbar re opens the landing at any time, so
+ * switching worlds always means: back to landing, pick a demo.
  */
 import { DEMO_WORLDS } from '../worlds/demo-worlds.js';
 import { GenerationContextBuilder } from '../gen/context.js';
@@ -24,57 +22,78 @@ export class Landing {
 
   get isShown() { return this.el.classList.contains('show'); }
 
-  show() { this._render(); this.el.classList.add('show'); document.body.classList.add('landing-open'); }
+  show(view = 'hero') {
+    this._render();
+    this.el.classList.add('show');
+    document.body.classList.add('landing-open');
+    this._view(view);
+  }
   hide() { this.el.classList.remove('show'); document.body.classList.remove('landing-open'); }
 
-  /* ---------------- base screen ---------------- */
+  _view(name) {
+    this.el.querySelectorAll('[data-view]').forEach((v) => { v.hidden = v.dataset.view !== name; });
+    if (name === 'demos') this._buildDemos();
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    this.el.querySelector('[data-view="hero"]')?.scrollTo?.(0, 0);
+    if (!reduced) this.el.querySelector(`[data-view="${name}"]`)?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
+  }
+
+  /* ---------------- hero page ---------------- */
   _render() {
     this.el.innerHTML = `
-      <picture class="land-bg" aria-hidden="true"><img src="assets/willow/day/n1.jpg" alt=""></picture>
+      <picture class="land-bg" aria-hidden="true"><img src="assets/landing-bg.jpg" alt=""></picture>
       <div class="land-scrim" aria-hidden="true"></div>
 
-      <div class="land-wrap">
-        <header class="land-brand">
-          <span class="mark"><svg><use href="#i-logo"/></svg></span>
-          <span class="word">Panorama&nbsp;Maps</span>
-          <span class="v">v0.3</span>
-        </header>
+      <div class="land-view" data-view="hero">
+        <div class="land-wrap">
+          <header class="land-brand">
+            <span class="mark"><svg><use href="#i-logo"/></svg></span>
+            <span class="word">Panorama&nbsp;Maps</span>
+          </header>
 
-        <main class="land-center">
-          <h1>Walk connected worlds<br><em>in full 360</em>.</h1>
-          <p class="tag">Every place is a node on a real 2D map. Step forward with WASD, a double click, or the pad and the next panorama is predicted from where you stand — one world stays one world.</p>
+          <main class="land-center">
+            <h1>Walk connected worlds<br><em>in full 360</em>.</h1>
+            <p class="tag">Every place is a node on a real 2D map. Step forward with WASD, a double click, or the pad and the next panorama is predicted from where you stand, so one world stays one world.</p>
 
-          <div class="land-cta">
-            <button class="land-btn primary lg" data-act="demos"><svg><use href="#i-globe"/></svg>Explore demos</button>
-            <button class="land-btn lg" data-act="create"><svg><use href="#i-plus"/></svg>Create a world</button>
-            <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open project</button>
-          </div>
+            <div class="land-cta">
+              <button class="land-btn primary lg" data-act="demos"><svg><use href="#i-globe"/></svg>Explore demos<svg class="arr"><use href="#i-right"/></svg></button>
+              <button class="land-btn lg" data-act="create"><svg><use href="#i-plus"/></svg>Create a world</button>
+              <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open project</button>
+            </div>
 
-          <button class="land-skip" data-act="resume">Continue where I left off<span class="arrow">→</span></button>
+            <button class="land-skip" data-act="resume">Continue where I left off<svg class="arrow"><use href="#i-right"/></svg></button>
+          </main>
+        </div>
+      </div>
 
-          <div class="land-grid" id="landDemos" hidden></div>
-        </main>
+      <div class="land-view" data-view="demos" hidden>
+        <div class="land-wrap">
+          <header class="land-demobar">
+            <button class="land-back" data-act="back" aria-label="Back" title="Back"><svg><use href="#i-left"/></svg></button>
+            <div class="dl">
+              <h2>Explore demos</h2>
+              <p>Pick a world to walk. Every demo opens as a real, connected map.</p>
+            </div>
+          </header>
+          <div class="land-grid" id="landDemos"></div>
+        </div>
+      </div>
 
-        <div class="land-pop-host" id="landPopHost"></div>
-      </div>`;
+      <div class="land-pop-host" id="landPopHost"></div>`;
 
     const on = (sel, fn) => this.el.querySelector(sel)?.addEventListener('click', fn);
-    on('[data-act="demos"]', () => this._demos());
+    on('[data-act="demos"]', () => this._view('demos'));
+    on('[data-act="back"]', () => this._view('hero'));
     on('[data-act="create"]', () => this._choice({ what: 'create' }));
-    on('[data-act="open"]', () => { this._prefs(); this.hide(); this.app.openProject(); });
-    on('[data-act="resume"]', () => { this._prefs(); this.hide(); });
+    on('[data-act="open"]', () => { this.hide(); this.app.openProject(); });
+    on('[data-act="resume"]', () => { this.hide(); });
   }
 
-  _prefs() {
-    if (this.el.querySelector('#landHide')?.checked) this.app.savePrefs({ hideLanding: true });
-  }
-
-  /* ---------------- demo rail with live previews ---------------- */
-  _demos() {
+  /* ---------------- demos page: grid with live previews ---------------- */
+  _buildDemos() {
     const host = this.el.querySelector('#landDemos');
-    host.hidden = !host.hidden;
-    if (host.hidden) { this.el.querySelector('.land-cta [data-act="demos"]')?.classList.remove('active'); return; }
-    this.el.querySelector('.land-cta [data-act="demos"]')?.classList.add('active');
+    if (!host || host.dataset.built === '1') return;
+    host.dataset.built = '1';
     host.innerHTML = DEMO_WORLDS.map((w) => `
       <button class="land-card" data-w="${w.id}" aria-label="Open ${esc(w.name)}">
         <div class="thumb" data-thumb="${w.id}">
@@ -101,7 +120,7 @@ export class Landing {
   }
 
   /* Render a small live preview of a procedural demo world using the SAME
-     renderer the app itself uses — the preview is always honest. */
+     renderer the app itself uses; the preview is always honest. */
   async _thumb(def) {
     if (this._thumbs.has(def.id)) return this._thumbs.get(def.id);
     this._thumbs.set(def.id, null);   // in flight
@@ -133,7 +152,7 @@ export class Landing {
     const host = this.el.querySelector('#landPopHost');
     host.innerHTML = `
       <div class="land-pop-backdrop" data-x="1">
-        <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open" onclick="event.stopPropagation()">
+        <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open">
           <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
           <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Explore it as a viewer, or open it in a studio.'}</p>
           <div class="land-pop-row">
@@ -148,7 +167,6 @@ export class Landing {
       const go = b.dataset.go;
       host.innerHTML = '';
       if (go === 'cancel') return;
-      this._prefs();
       this.hide();
       if (what === 'create') {
         this.app.setStudio(go, { open: false });

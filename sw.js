@@ -6,7 +6,7 @@
  * data lives in IndexedDB and is NEVER touched by this worker — and an app
  * update never deletes user projects.
  */
-const APP_CACHE = 'panorama-maps-shell-v4';
+const APP_CACHE = 'panorama-maps-shell-v5';
 const SHELL = [
   './',
   './index.html',
@@ -34,6 +34,7 @@ const SHELL = [
   './js/worlds/demo-worlds.js',
   './js/worlds/willow-parish.js',
   './js/ui/landing.js',
+  './assets/landing-bg.jpg',
 ];
 
 self.addEventListener('install', (e) => {
