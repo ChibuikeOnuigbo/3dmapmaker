@@ -389,7 +389,7 @@ svg { display: block; }
 .land-scrim {
   position: fixed; inset: 0; pointer-events: none;
   background:
-    linear-gradient(212deg, rgba(17, 34, 74, 0.86) 0%, rgba(10, 18, 40, 0.9) 46%, rgba(6, 11, 26, 0.94) 100%);
+    linear-gradient(212deg, rgba(17, 34, 74, 0.52) 0%, rgba(10, 18, 40, 0.6) 46%, rgba(6, 11, 26, 0.72) 100%);
 }
 
 .land-view { position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
@@ -413,9 +413,10 @@ svg { display: block; }
 .land-center h1 {
   margin: 0; font-size: clamp(30px, 6vw, 54px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 800;
   text-wrap: balance; max-width: 14ch; color: #ffffff;
+  text-shadow: 0 2px 18px rgba(4, 8, 20, 0.55), 0 1px 3px rgba(4, 8, 20, 0.65);
 }
 .land-center h1 em { font-style: normal; color: #a9c8ff; }
-.land-center .tag { margin: clamp(10px, 2vh, 18px) 0 0; font-size: clamp(14px, 1.8vw, 16.5px); line-height: 1.55; color: rgba(243, 247, 255, 0.9); max-width: 52ch; }
+.land-center .tag { margin: clamp(10px, 2vh, 18px) 0 0; font-size: clamp(14px, 1.8vw, 16.5px); line-height: 1.55; color: rgba(243, 247, 255, 0.92); max-width: 52ch; text-shadow: 0 1px 12px rgba(4, 8, 20, 0.6); }
 
 .land-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: clamp(18px, 4vh, 32px); }
 .land-btn {
