@@ -51,7 +51,10 @@ class App {
     this._saveHandle = null;
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
-    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 35, ...(this.prefs.view || {}) };
+    this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
+    // migrate the v1 speed scale (1.4 m/s was its middle — felt like walking
+    // in mud): reset everyone to the v2 default once
+    if ((this.viewPrefs.speedV ?? 1) < 2) { this.viewPrefs.speed = 65; this.viewPrefs.speedV = 2; }
     // phones: start with a clean canvas; widgets come back from the FAB/menu
     if (!this.prefs.view && window.matchMedia?.('(max-width: 700px)').matches) {
       this.viewPrefs.map = false; this.viewPrefs.locCard = false;
@@ -500,13 +503,16 @@ class App {
     const sp = $('#speedRange');
     if (sp && !sp.dataset.bound) {
       sp.dataset.bound = '1';
+      const paint = () => sp.style?.setProperty?.('--fill', `${sp.value}%`);
       sp.addEventListener('input', () => {
+        paint();
         this.viewPrefs.speed = +sp.value;
         this._applySpeed();
         prefsSvc.save({ view: this.viewPrefs });
       });
+      paint();
     }
-    if (sp) sp.value = String(this.viewPrefs.speed ?? 35);
+    if (sp) { sp.value = String(this.viewPrefs.speed ?? 65); sp.style?.setProperty?.('--fill', `${sp.value}%`); }
 
     // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
@@ -731,10 +737,11 @@ class App {
     home.addEventListener('click', () => { mm.classList.remove('open'); this.closePanels(); this.landing?.show(); });
   }
 
-  /** Map slider 0..100 → 0.6..8 m/s (exponential — fine control at low end). */
+  /** Map slider 0..100 → 0.5..14 m/s (exponential — fine control at low end).
+      Default 65 ≈ 4 m/s: lively walk, no more seconds of waiting per step. */
   _applySpeed() {
-    const v = Math.max(0, Math.min(100, +this.viewPrefs.speed || 35));
-    const mps = +(0.6 * Math.pow(13.333, v / 100)).toFixed(2);
+    const v = Math.max(0, Math.min(100, +this.viewPrefs.speed || 65));
+    const mps = +(0.5 * Math.pow(28, v / 100)).toFixed(2);
     if (this.graph) this.graph.settings.walkSpeedMps = mps;
     const lbl = $('#speedTxt');
     if (lbl) lbl.textContent = `${mps >= 10 ? mps.toFixed(0) : mps.toFixed(1)} m/s`;

@@ -1,10 +1,14 @@
 /**
  * Panorama Maps — ui/landing.js
  *
- * Start screen. Deliberately minimal: title, one line, and the actions.
- *   Explore demos  → grid of demo cards with LIVE preview thumbnails
- *   +  (create)    → studio choice popup (Simple or Advanced)
- *   demo card      → first asks HOW to open it: explore, or which studio
+ * Start hero. A real scene backdrop (a demo panorama, locally generated
+ * asset), a brand row, a single clear headline, primary actions, and the
+ * demo rail. Nothing decorative-only: every control does something.
+ *
+ *   Explore demos        → demo rail with LIVE preview thumbnails
+ *   Create a world       → studio choice popup (Simple or Advanced)
+ *   Open project         → import a .pmap
+ *   Continue where I left off → straight back to the last world
  * Landing re appears from the back button in the toolbar at any time.
  */
 import { DEMO_WORLDS } from '../worlds/demo-worlds.js';
@@ -20,31 +24,40 @@ export class Landing {
 
   get isShown() { return this.el.classList.contains('show'); }
 
-  show() { this._render(); this.el.classList.add('show'); }
-  hide() { this.el.classList.remove('show'); }
+  show() { this._render(); this.el.classList.add('show'); document.body.classList.add('landing-open'); }
+  hide() { this.el.classList.remove('show'); document.body.classList.remove('landing-open'); }
 
   /* ---------------- base screen ---------------- */
   _render() {
     this.el.innerHTML = `
-      <div class="land-wrap slim">
-        <div class="land-hero">
-          <div class="mark"><svg><use href="#i-logo"/></svg></div>
-          <h1>Panorama Maps</h1>
-          <p>Walk connected worlds in full 360 on a real 2D map.</p>
-        </div>
+      <picture class="land-bg" aria-hidden="true"><img src="assets/willow/day/n1.jpg" alt=""></picture>
+      <div class="land-scrim" aria-hidden="true"></div>
 
-        <div class="land-cta">
-          <button class="land-btn primary lg" data-act="demos"><svg><use href="#i-globe"/></svg>Explore demos</button>
-          <button class="land-btn lg round" data-act="create" title="Create a blank world" aria-label="Create a blank world"><svg><use href="#i-plus"/></svg><span class="lg-txt">Create</span></button>
-          <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open project</button>
-        </div>
+      <div class="land-wrap">
+        <header class="land-brand">
+          <span class="mark"><svg><use href="#i-logo"/></svg></span>
+          <span class="word">Panorama&nbsp;Maps</span>
+          <span class="v">v0.3</span>
+        </header>
 
-        <div class="land-grid" id="landDemos" hidden></div>
+        <main class="land-center">
+          <h1>Walk connected worlds<br><em>in full 360</em>.</h1>
+          <p class="tag">Every place is a node on a real 2D map. Step forward with WASD, a double click, or the pad and the next panorama is predicted from where you stand — one world stays one world.</p>
 
-        <div class="land-foot">
-          <button class="land-skip" data-act="resume">Continue where I left off</button>
+          <div class="land-cta">
+            <button class="land-btn primary lg" data-act="demos"><svg><use href="#i-globe"/></svg>Explore demos</button>
+            <button class="land-btn lg" data-act="create"><svg><use href="#i-plus"/></svg>Create a world</button>
+            <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open project</button>
+          </div>
+
+          <button class="land-skip" data-act="resume">Continue where I left off<span class="arrow">→</span></button>
+
+          <div class="land-grid" id="landDemos" hidden></div>
+        </main>
+
+        <footer class="land-foot">
           <label class="land-ck"><input type="checkbox" id="landHide"> Do not show again</label>
-        </div>
+        </footer>
         <div class="land-pop-host" id="landPopHost"></div>
       </div>`;
 
@@ -59,11 +72,11 @@ export class Landing {
     if (this.el.querySelector('#landHide')?.checked) this.app.savePrefs({ hideLanding: true });
   }
 
-  /* ---------------- demo grid with live previews ---------------- */
+  /* ---------------- demo rail with live previews ---------------- */
   _demos() {
     const host = this.el.querySelector('#landDemos');
     host.hidden = !host.hidden;
-    if (host.hidden) return;
+    if (host.hidden) { this.el.querySelector('.land-cta [data-act="demos"]')?.classList.remove('active'); return; }
     this.el.querySelector('.land-cta [data-act="demos"]')?.classList.add('active');
     host.innerHTML = DEMO_WORLDS.map((w) => `
       <button class="land-card" data-w="${w.id}" aria-label="Open ${esc(w.name)}">
@@ -72,7 +85,7 @@ export class Landing {
             ? `<img src="${w.thumb}" alt="" loading="lazy"><span class="badge real">AI REAL</span>`
             : `<div class="thumb-spin"><div class="spinner"></div></div><span class="badge">ANIM</span>`}
         </div>
-        <div class="body"><div class="n">${esc(w.name)}</div><div class="d">${esc(w.tag)} · ${esc(shortDesc(w))}</div></div>
+        <div class="body"><div class="n">${esc(w.name)}</div><div class="d">${esc(shortDesc(w))}</div></div>
       </button>`).join('');
     host.querySelectorAll('[data-w]').forEach((b) => b.addEventListener('click', () => {
       this._choice({ what: 'demo', def: DEMO_WORLDS.find((w) => w.id === b.dataset.w) });
@@ -123,7 +136,7 @@ export class Landing {
     const host = this.el.querySelector('#landPopHost');
     host.innerHTML = `
       <div class="land-pop-backdrop" data-x="1">
-        <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open">
+        <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open" onclick="event.stopPropagation()">
           <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
           <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Explore it as a viewer, or open it in a studio.'}</p>
           <div class="land-pop-row">
@@ -158,10 +171,10 @@ export class Landing {
 
 function shortDesc(w) {
   switch (w.id) {
-    case 'demo_chapel_lane': return 'Parish lane with the 500 m church zone';
-    case 'demo_millbrook': return 'Market town with bridges and branches';
-    case 'demo_great_vale': return 'A full town of over one thousand places';
-    default: return 'One real street in day, rain and night';
+    case 'demo_chapel_lane': return 'Parish lane, 500 m church zone';
+    case 'demo_millbrook': return 'Market town, bridges, branches';
+    case 'demo_great_vale': return 'A full town, over one thousand places';
+    default: return 'One real street · day, rain, night';
   }
 }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
