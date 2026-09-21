@@ -55,9 +55,6 @@ export class Landing {
           <div class="land-grid" id="landDemos" hidden></div>
         </main>
 
-        <footer class="land-foot">
-          <label class="land-ck"><input type="checkbox" id="landHide"> Do not show again</label>
-        </footer>
         <div class="land-pop-host" id="landPopHost"></div>
       </div>`;
 
