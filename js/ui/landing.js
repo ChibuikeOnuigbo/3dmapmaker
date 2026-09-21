@@ -153,14 +153,15 @@ export class Landing {
     host.innerHTML = `
       <div class="land-pop-backdrop" data-x="1">
         <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open">
-          <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
-          <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Explore it as a viewer, or open it in a studio.'}</p>
-          <div class="land-pop-row">
-            ${what === 'demo' ? `<button class="land-btn" data-go="view"><svg><use href="#i-play"/></svg>Just explore</button>` : ''}
-            <button class="land-btn" data-go="simple"><svg><use href="#i-edit"/></svg>Simple studio</button>
-            <button class="land-btn primary" data-go="advanced"><svg><use href="#i-sliders"/></svg>Advanced studio</button>
+          <div class="lp-body">
+            <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
+            <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Open it in the studio that fits the job.'}</p>
+            <div class="land-pop-stack">
+              <button class="lp-opt" data-go="simple"><svg><use href="#i-edit"/></svg><span>Simple studio</span></button>
+              <button class="lp-opt primary" data-go="advanced"><svg><use href="#i-sliders"/></svg><span>Advanced studio</span></button>
+            </div>
+            <div class="lp-cancel-row"><button class="lp-cancel" data-go="cancel">Cancel</button></div>
           </div>
-          <button class="land-skip" data-go="cancel">Cancel</button>
         </div>
       </div>`;
     host.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', async () => {
@@ -172,10 +173,9 @@ export class Landing {
         this.app.setStudio(go, { open: false });
         this.app.createEmptyWorld({ openEditor: go });
       } else {
-        const g = go === 'simple' || go === 'advanced' ? go : null;
-        if (g) this.app.setStudio(g, { open: false });
+        this.app.setStudio(go, { open: false });
         await this.app.loadDemoWorld(def);
-        if (g) this.app.togglePanel(g === 'advanced' ? 'adv' : 'simple');
+        this.app.togglePanel(go === 'advanced' ? 'adv' : 'simple');
       }
     }));
     host.querySelector('[data-x]')?.addEventListener('click', (e) => {
