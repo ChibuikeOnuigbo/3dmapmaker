@@ -404,16 +404,16 @@ svg { display: block; }
   background: linear-gradient(135deg, #3d7bfd, #7a5cff); box-shadow: 0 8px 22px rgba(61, 123, 253, 0.45);
 }
 .land-brand .mark svg { width: 24px; height: 24px; color: #fff; }
-.land-brand .word { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.land-brand .word { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; color: #ffffff; }
 .land-brand .v { font-size: 10.5px; font-weight: 700; color: rgba(238, 242, 251, 0.55); border: 1px solid rgba(238, 242, 251, 0.24); border-radius: 999px; padding: 2px 8px; margin-top: -4px; }
 
 .land-center { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: clamp(18px, 6vh, 48px) 0; }
 .land-center h1 {
   margin: 0; font-size: clamp(30px, 6vw, 54px); line-height: 1.04; letter-spacing: -0.03em; font-weight: 800;
-  text-wrap: balance; max-width: 14ch;
+  text-wrap: balance; max-width: 14ch; color: #ffffff;
 }
-.land-center h1 em { font-style: normal; color: transparent; background: linear-gradient(92deg, #8db4ff, #c3aeff 55%, #8ad4ff); -webkit-background-clip: text; background-clip: text; }
-.land-center .tag { margin: clamp(10px, 2vh, 18px) 0 0; font-size: clamp(14px, 1.8vw, 16.5px); line-height: 1.55; color: rgba(238, 242, 251, 0.78); max-width: 52ch; }
+.land-center h1 em { font-style: normal; color: transparent; background: linear-gradient(92deg, #afcdff, #d7c9ff 52%, #b3e3ff); -webkit-background-clip: text; background-clip: text; }
+.land-center .tag { margin: clamp(10px, 2vh, 18px) 0 0; font-size: clamp(14px, 1.8vw, 16.5px); line-height: 1.55; color: rgba(243, 247, 255, 0.9); max-width: 52ch; }
 
 .land-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: clamp(18px, 4vh, 32px); }
 .land-btn {
@@ -436,9 +436,9 @@ svg { display: block; }
 .land-skip {
   margin-top: clamp(14px, 3vh, 26px); align-self: flex-start;
   background: none; border: 0; padding: 6px 0;
-  color: rgba(238, 242, 251, 0.72); font-size: 13.5px; font-weight: 650; cursor: pointer;
+  color: rgba(243, 247, 255, 0.86); font-size: 13.5px; font-weight: 650; cursor: pointer;
   display: inline-flex; align-items: center; gap: 8px;
-  border-bottom: 1px dashed rgba(238, 242, 251, 0.35);
+  border-bottom: 1px dashed rgba(243, 247, 255, 0.45);
 }
 .land-skip:hover { color: #fff; border-bottom-color: #fff; }
 .land-skip .arrow { transition: transform 0.15s; }
@@ -468,7 +468,7 @@ svg { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .land-card .body { padding: 12px 14px 14px; }
 .land-card .body .n { font-size: 14.5px; font-weight: 750; }
-.land-card .body .d { font-size: 12px; color: rgba(238, 242, 251, 0.62); margin-top: 3px; line-height: 1.45; }
+.land-card .body .d { font-size: 12px; color: rgba(243, 247, 255, 0.72); margin-top: 3px; line-height: 1.45; }
 
 .land-foot { display: flex; justify-content: flex-end; padding-top: 10px; }
 .land-ck { display: inline-flex; align-items: center; gap: 8px; color: rgba(238, 242, 251, 0.55); font-size: 12.5px; cursor: pointer; }
