@@ -31,6 +31,10 @@ export class PanoramaViewer {
     this._rawPitch = 0;
 
     this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, transitionMs: 420 };
+    // movement feel: morph style + strength come from the Motion settings
+    // popup (prefs) — style 'morph' | 'fade' | 'snap', amount 0..1 scales the
+    // dolly zoom of the morph
+    this.motion = { style: 'morph', amount: 0.8, durMs: null };
     this._drag = null;
     this._vel = { x: 0, y: 0 };
     this._running = false;
@@ -109,10 +113,15 @@ export class PanoramaViewer {
    * @param {object} opts {direction:'forward'|'backward'|'left'|'right'|null, durationMs}
    */
   transitionTo(source, headingDeg, opts = {}) {
-    const dur = opts.durationMs ?? this.immersion.transitionMs ?? 420;
+    let dur = this.motion.durMs ?? opts.durationMs ?? this.immersion.transitionMs ?? 420;
+    if (this.motion.style === 'snap') dur = Math.min(dur, 110);
+    const amt = Math.max(0, Math.min(1, this.motion.amount ?? 0.8));
+    const base = this.motion.style === 'fade'
+      ? 1
+      : ({ forward: 1.14, backward: 0.9, left: 1.06, right: 1.06 }[opts.direction] ?? 1.08);
+    const dirZoom = 1 + (base - 1) * amt;
     this.renderer.setImageB(source, headingDeg);
     this.view.hasB = true;
-    const dirZoom = { forward: 1.14, backward: 0.9, left: 1.06, right: 1.06 }[opts.direction] ?? 1.08;
     this._transition = { t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom };
     return new Promise((resolve) => { this._transition.resolve = resolve; });
   }

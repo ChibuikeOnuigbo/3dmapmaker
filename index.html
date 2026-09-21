@@ -143,6 +143,28 @@
   <svg class="ic" aria-hidden="true"><use href="#i-speed"/></svg>
   <input id="speedRange" type="range" min="0" max="100" step="1" aria-label="Walk speed" title="Walk speed">
   <span id="speedTxt" aria-live="off">1.4 m/s</span>
+  <button class="mgear" id="motionBtn" title="Motion settings" aria-label="Motion settings" aria-haspopup="true"><svg class="ic"><use href="#i-sliders"/></svg></button>
+</div>
+
+<div class="pop" id="motionPop" role="menu" aria-label="Motion settings">
+  <div class="mfield">
+    <div class="mlabel">Transition type</div>
+    <div class="mseg" id="mStyle">
+      <button type="button" data-ms="morph" role="menuitemradio">Morph</button>
+      <button type="button" data-ms="fade" role="menuitemradio">Fade</button>
+      <button type="button" data-ms="snap" role="menuitemradio">Snap</button>
+    </div>
+    <div class="mhint">Morph zooms through the turn, Fade blends in place, Snap is instant.</div>
+  </div>
+  <div class="mfield" data-mrow="morph">
+    <div class="mlabel">Morph strength <span class="mval" id="mAmtVal">80%</span></div>
+    <input type="range" id="mAmt" min="0" max="100" value="80" aria-label="Morph strength">
+  </div>
+  <div class="mfield">
+    <div class="mlabel">Transition time <span class="mval" id="mDurVal">Auto</span></div>
+    <input type="range" id="mDur" min="0" max="100" value="0" aria-label="Transition time">
+    <div class="mhint">Auto follows the walk speed; drag right to slow the blend down.</div>
+  </div>
 </div>
 <div id="debugOverlay" hidden aria-label="Developer overlay"></div>
 <div id="toasts" aria-live="polite"></div>

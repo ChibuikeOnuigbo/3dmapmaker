@@ -52,6 +52,7 @@ class App {
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
     this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
+    this.motion = { style: 'morph', amount: 80, dur: 0, ...(this.prefs.motion || {}) };
     // migrate the v1 speed scale (1.4 m/s was its middle — felt like walking
     // in mud): reset everyone to the v2 default once
     if ((this.viewPrefs.speedV ?? 1) < 2) { this.viewPrefs.speed = 65; this.viewPrefs.speedV = 2; }
@@ -179,6 +180,7 @@ class App {
     }
     this._syncModeGroup();
     this._applySpeed();
+    this._applyMotion();
     prefsSvc.save({ lastProjectId: projectId });
     this.project.updatedAt = new Date().toISOString();
     await this.storage.saveProjectMeta({ ...this.project, world: graph.toJSON() }).catch(() => {});
@@ -391,7 +393,11 @@ class App {
       if (btn) { btn.classList.remove('blockshake'); void btn.offsetWidth; btn.classList.add('blockshake'); }
       this.toast('No path that way', null, 1400);
     });
-    this.bus.on('walk:started', () => { /* keep panorama; transition fires on arrival */ });
+    this.bus.on('walk:started', ({ to, from }) => {
+      // start warming the destination while we glide, so the transition at
+      // arrival is a cache hit (Spec: never blank, never waiting)
+      this._ensurePanorama(to, { fromId: from }).catch(() => {});
+    });
     this.bus.on('walk:progress', (pos) => { this.mapRenderer.setWalkProgress(pos); });
     this.bus.on('position:changed', async ({ nodeId, edge, fromId, teleport }) => {
       this.mapRenderer.setWalkProgress(null);
@@ -520,6 +526,42 @@ class App {
     }
     if (sp) { sp.value = String(this.viewPrefs.speed ?? 65); sp.style?.setProperty?.('--fill', `${sp.value}%`); }
 
+    // Motion settings popup (blur / morph / fade "fake walking" feel)
+    const mp = $('#motionPop');
+    if (mp && !mp.dataset.bound) {
+      mp.dataset.bound = '1';
+      on('#motionBtn', 'click', () => {
+        if (mp.classList.contains('open')) { mp.classList.remove('open'); return; }
+        this._paintMotionPop();
+        this._placePop(mp, '#motionBtn');
+        mp.classList.add('open');
+      });
+      document.addEventListener('click', (e) => {
+        if (mp.classList.contains('open') && !mp.contains(e.target) && !$('#motionBtn').contains(e.target)) mp.classList.remove('open');
+      });
+      mp.addEventListener('keydown', (e) => { if (e.key === 'Escape') mp.classList.remove('open'); });
+      $('#mStyle').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ms]');
+        if (!b) return;
+        this.motion.style = b.dataset.ms;
+        prefsSvc.save({ motion: this.motion });
+        this._applyMotion();
+        this._paintMotionPop();
+      });
+      $('#mAmt').addEventListener('input', () => {
+        this.motion.amount = +$('#mAmt').value;
+        prefsSvc.save({ motion: this.motion });
+        this._applyMotion();
+        $('#mAmtVal').textContent = `${this.motion.amount}%`;
+      });
+      $('#mDur').addEventListener('input', () => {
+        this.motion.dur = +$('#mDur').value;
+        prefsSvc.save({ motion: this.motion });
+        this._applyMotion();
+        this._paintMotionDur();
+      });
+    }
+
     // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
     on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.3));
@@ -545,10 +587,11 @@ class App {
     // resizing between phone/tablet/desktop layouts must re-anchor any popup
     // that is open right now (old screens: desktop offsets slid off-screen)
     window.addEventListener('resize', () => {
-      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn']]) {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn']]) {
         const pop = $(popSel);
         if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
       }
+      this._applyViewPrefs();
     });
   }
 
@@ -734,10 +777,56 @@ class App {
     if (this.graph) this.graph.settings.walkSpeedMps = mps;
     const lbl = $('#speedTxt');
     if (lbl) lbl.textContent = `${mps >= 10 ? mps.toFixed(0) : mps.toFixed(1)} m/s`;
+    this._applyMotion();
+  }
+
+  /** Apply motion prefs to the live viewer + re-time the transition so a
+      faster walk NEVER means a longer morph (spec: keys respond < 0.8s). */
+  _applyMotion() {
+    if (!this.viewer) return;
+    this.viewer.motion.style = this.motion.style;
+    this.viewer.motion.amount = (this.motion.amount ?? 80) / 100;
+    // transition duration: explicit override? or auto = hop time × 0.5,
+    // clamped 120..520 so blends never outpace the step itself
+    if ((this.motion.dur ?? 0) > 0) {
+      const ms = Math.floor(120 + (this.motion.dur / 100) * 780);
+      this.viewer.motion.durMs = ms;
+    } else {
+      this.viewer.motion.durMs = null;
+      this.viewer.immersion.transitionMs = Math.floor(Math.min(520, Math.max(120, (this.graph?.settings.walkSpeedMps ?? 4) * 65)));
+    }
+  }
+
+  _paintMotionPop() {
+    document.querySelectorAll('#mStyle [data-ms]').forEach(b => {
+      const onB = b.dataset.ms === this.motion.style;
+      b.classList.toggle('on', onB);
+      b.setAttribute('aria-checked', String(onB));
+    });
+    $('#mAmt').value = String(this.motion.amount ?? 80);
+    $('#mAmtVal').textContent = `${this.motion.amount ?? 80}%`;
+    $('#mDur').value = String(this.motion.dur ?? 0);
+    this._paintMotionDur();
+    const row = document.querySelector('[data-mrow="morph"]');
+    if (row) row.hidden = this.motion.style !== 'morph';
+  }
+
+  _paintMotionDur() {
+    const v = this.motion.dur ?? 0;
+    $('#mDurVal').textContent = v === 0 ? 'Auto' : `${Math.floor(120 + (v / 100) * 780)} ms`;
   }
 
   /* ---------- view preferences (optional UI) ---------- */
   _applyViewPrefs() {
+    document.body.classList.toggle('noLocCard', !this.viewPrefs.locCard);
+    const stack = () => {
+      const lc = $('#locCard');
+      const desktop = typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 701px)').matches;
+      const visible = this.viewPrefs.locCard && lc && !lc.classList.contains('hidden') && desktop;
+      if (visible && lc.offsetHeight) document.body.style?.setProperty?.('--speedctl-bottom', `${lc.offsetHeight + 18}px`);
+      else document.body.style?.removeProperty?.('--speedctl-bottom');
+    };
+    requestAnimationFrame(stack);
     $('#movePad').style.display = this.viewPrefs.movePad ? '' : 'none';
     $('#mapWidget').classList.toggle('hidden', !this.viewPrefs.map);
     $('#locCard').classList.toggle('hidden', !this.viewPrefs.locCard);

@@ -114,7 +114,10 @@ export class MovementController {
       this.bus.emit('move:blocked', { nodeId: this.currentNodeId, relativeDir, yawDeg, reason: plan.reason });
       return plan;
     }
-    const walkMs = Math.max(140, (plan.distanceM / this.graph.settings.walkSpeedMps) * 1000);
+    // responsiveness contract: a key press must land within ~0.8s no matter
+    // how long the street is; short lanes complete faster and floor at 220ms
+    // so taps never strobe
+    const walkMs = Math.floor(Math.min(780, Math.max(220, (plan.distanceM / this.graph.settings.walkSpeedMps) * 1000)));
     this._walk = {
       plan, fromId: this.currentNodeId,
       t0: nowFn(), durationMs: walkMs,
