@@ -478,43 +478,67 @@ svg { display: block; }
 .land-ck { display: inline-flex; align-items: center; gap: 8px; color: rgba(238, 242, 251, 0.55); font-size: 12.5px; cursor: pointer; }
 .land-ck input { accent-color: #7a8fff; width: 15px; height: 15px; }
 
-/* studio choice modal: breathing card, solid touch rows, centered cancel */
-.land-pop-backdrop { position: fixed; inset: 0; background: rgba(6, 8, 18, 0.6); backdrop-filter: blur(5px); display: grid; place-items: center; z-index: 2; padding: 20px; }
-.land-pop {
-  width: min(400px, 100%);
-  background: #ffffff; border-radius: 14px;
-  box-shadow: 0 28px 70px rgba(2, 6, 22, 0.55), 0 2px 8px rgba(2, 6, 22, 0.3);
+/* ============ studio choice modal ============
+   One coherent spacing system (no per-element one-offs):
+   --lp-pad    outer text-block padding ......... 24 / 20 (small screens)
+   --lp-gap    gap between stacked option rows .. 10
+   --lp-r      modal radius ..................... 12 (options 8 = smaller sibling)
+   Head 24 24 0 · Stack 18 24 0 · Foot 22+18 24 24 — everything derived. */
+.land-pop-backdrop {
+  position: fixed; inset: 0; display: grid; place-items: center; z-index: 2;
+  background: rgba(7, 11, 24, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  padding: 24px;
 }
-.land-pop .lp-body { padding: 24px; }
-.land-pop h3 { margin: 0; font-size: 18.5px; letter-spacing: -0.01em; color: #141a2c; }
-.land-pop p { margin: 7px 0 0; color: #5a6478; font-size: 13.5px; line-height: 1.5; }
-.land-pop-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.land-pop {
+  --lp-pad: 24px; --lp-gap: 10px; --lp-r: 12px; --lp-btn-r: 8px;
+  width: min(400px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px);
+  overflow-y: auto; overscroll-behavior: contain;
+  background: #ffffff; border-radius: var(--lp-r);
+  box-shadow: 0 8px 24px rgba(3, 8, 24, 0.16), 0 28px 72px rgba(3, 8, 24, 0.28);
+}
+
+/* head: title (strongest) + description (secondary), never edge-hugging */
+.land-pop .lp-head { padding: var(--lp-pad) var(--lp-pad) 0; }
+.land-pop h3 { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 750; letter-spacing: -0.01em; color: #131a30; }
+.land-pop p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: #5b6577; }
+
+/* the option family: identical geometry, one set of states */
+.land-pop .lp-stack { padding: 18px var(--lp-pad) 0; display: flex; flex-direction: column; gap: var(--lp-gap); }
 .lp-opt {
   display: flex; align-items: center; gap: 12px;
-  width: 100%; min-height: 48px; height: 48px; padding: 0 16px;
-  background: #f5f7fa; color: #1d2540; border: 1px solid #e4e8f2; border-radius: 6px;
-  font-size: 14px; font-weight: 650; cursor: pointer;
-  transition: background 0.14s, border-color 0.14s, transform 0.14s;
+  width: 100%; height: 50px; padding: 0 16px;
+  background: #f7f9fc; color: #1f2742;
+  border: 1px solid #e2e8f1; border-radius: var(--lp-btn-r);
+  font-size: 14px; line-height: 1; font-weight: 650; font-family: inherit; text-align: left;
+  cursor: pointer; transition: background 0.14s, border-color 0.14s, transform 0.12s;
 }
-.lp-opt svg { width: 16px; height: 16px; flex: none; color: #55627e; }
-.lp-opt:hover { background: #e9edf6; border-color: #cfd7e8; }
+.lp-opt .li { width: 18px; height: 18px; flex: none; display: grid; place-items: center; color: #5b677f; }
+.lp-opt .li svg { width: 15px; height: 15px; display: block; }
+.lp-opt .lt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-opt:hover { background: #edf1f8; border-color: #ccd6e8; }
 .lp-opt:active { transform: translateY(1px); }
-.lp-opt:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(33, 102, 243, 0.3); }
-.lp-opt.primary {
-  background: #2166f3; border-color: #2166f3; color: #ffffff;
-  box-shadow: 0 6px 16px rgba(33, 102, 243, 0.35);
-}
-.lp-opt.primary svg { color: rgba(255, 255, 255, 0.92); }
-.lp-opt.primary:hover { background: #1b59d9; border-color: #1b59d9; }
-.lp-cancel-row { display: flex; justify-content: center; margin-top: 16px; }
+.lp-opt:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(33, 102, 243, 0.28); border-color: #2166f3; }
+.lp-opt.primary { background: #2166f3; border-color: #2166f3; color: #ffffff; box-shadow: 0 2px 6px rgba(33, 102, 243, 0.24); }
+.lp-opt.primary .li { color: rgba(255, 255, 255, 0.95); }
+.lp-opt.primary:hover { background: #1d5ad9; border-color: #1d5ad9; }
+.lp-opt.primary:active { background: #1a52c5; }
+
+/* footer: cancel is a deliberate low-emphasis centered action */
+.land-pop .lp-foot { display: flex; justify-content: center; padding: 22px var(--lp-pad) 18px; }
 .lp-cancel {
-  background: none; border: 0; padding: 8px 14px; border-radius: 6px;
-  color: #7a8296; font-size: 13px; font-weight: 600; cursor: pointer;
+  min-height: 40px; padding: 0 18px; border-radius: var(--lp-btn-r); border: 0; background: none;
+  color: #6c7488; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
+  transition: background 0.14s, color 0.14s;
 }
-.lp-cancel:hover { color: #3e4763; background: #f2f4f9; }
+.lp-cancel:hover { background: #f1f4f9; color: #3d465e; }
+.lp-cancel:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(33, 102, 243, 0.28); }
+
+/* small screens: same system, only the padding token steps down */
 @media (max-width: 480px) {
-  .land-pop { width: 100%; }
-  .land-pop .lp-body { padding: 20px; }
+  .land-pop-backdrop { padding: 16px; }
+  .land-pop { --lp-pad: 20px; width: 100%; }
+  .land-pop .lp-foot { padding-bottom: 16px; }
 }
 
 @media (max-width: 700px) {

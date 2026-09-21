@@ -153,15 +153,15 @@ export class Landing {
     host.innerHTML = `
       <div class="land-pop-backdrop" data-x="1">
         <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open">
-          <div class="lp-body">
+          <div class="lp-head">
             <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
             <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Open it in the studio that fits the job.'}</p>
-            <div class="land-pop-stack">
-              <button class="lp-opt" data-go="simple"><svg><use href="#i-edit"/></svg><span>Simple studio</span></button>
-              <button class="lp-opt primary" data-go="advanced"><svg><use href="#i-sliders"/></svg><span>Advanced studio</span></button>
-            </div>
-            <div class="lp-cancel-row"><button class="lp-cancel" data-go="cancel">Cancel</button></div>
           </div>
+          <div class="lp-stack">
+            <button class="lp-opt" data-go="simple"><span class="li"><svg><use href="#i-edit"/></svg></span><span class="lt">Simple studio</span></button>
+            <button class="lp-opt primary" data-go="advanced"><span class="li"><svg><use href="#i-sliders"/></svg></span><span class="lt">Advanced studio</span></button>
+          </div>
+          <div class="lp-foot"><button class="lp-cancel" data-go="cancel">Cancel</button></div>
         </div>
       </div>`;
     host.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', async () => {
@@ -181,6 +181,10 @@ export class Landing {
     host.querySelector('[data-x]')?.addEventListener('click', (e) => {
       if (e.target.dataset.x) host.innerHTML = '';
     });
+    host.querySelector('.land-pop')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); host.innerHTML = ''; }
+    });
+    host.querySelector('.lp-opt')?.focus({ preventScroll: true });
   }
 }
 
