@@ -34,7 +34,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; overflow-x: hidden; }
 body {
   margin: 0; font-family: var(--font); color: var(--ink);
   background: #0e1118; overflow: hidden;
@@ -152,8 +152,11 @@ svg { display: block; }
 /* ============ floating widgets ============ */
 .widget {
   position: fixed; z-index: var(--z-widget);
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-lg); box-shadow: var(--sh-1);
+  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 14px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 
 /* compass */
@@ -746,3 +749,22 @@ body.landing-open #topbar { visibility: hidden; }
   #speedCtl { bottom: calc(76px + env(safe-area-inset-bottom)); left: var(--s2); }
   #speedRange { width: 78px; }
 }
+
+
+/* ============ calm pass: consistent quiet controls ============ */
+/* all toolbar icon buttons share one geometry/state system */
+.tb-btn, .iconbtn {
+  outline: none;
+}
+.tb-btn:focus-visible, .iconbtn:focus-visible, .mbtn:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 4.5px rgba(61,123,253,0.55);
+}
+/* no glow halos on active toolbar states — a calm filled state instead */
+.tb-btn[aria-pressed="true"], .tb-btn.active { box-shadow: none; }
+/* floating widgets drop glassy haze: solid surfaces read calmer over photo panoramas */
+#locCard, #compass, #mapWidget, #speedCtl, #movePad { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+/* panels & popovers: one consistent primary radius */
+.pop { border-radius: var(--r-lg); }
+/* debug overlay is a tool, not decoration: dimmer, smaller until hovered */
+#debugOverlay { opacity: 0.78; transition: opacity 0.15s; }
+#debugOverlay:hover { opacity: 1; }

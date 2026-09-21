@@ -2,9 +2,20 @@
 
 Every acceptance criterion of the brief maps to an executable test or a
 recorded end-to-end run in this document. Status: **all green** as of
-2026-09-20.
+2026-09-21.
 
-## 1. Node core suite — `tests/core.test.mjs` (33 tests)
+QA vocabulary for every feature line (root `MEMORY.md` holds the current
+inventory; never report by trial-and-error memory):
+
+| Word | Meaning |
+|---|---|
+| SUPPORTED | implemented in the shipped code and presented as working |
+| PLANNED | designed but not shipped; must be labelled planned in UI, never faked |
+| BLOCKED | blocked by an external condition (e.g. server-side AI needs deployed credentials) |
+| NOT-SUPPORTED | deliberately out of scope (e.g. 3D object placement — the app is a walker) |
+| PASSED / FAILED | result of an executable check on this commit |
+
+## 1. Node core suite — `tests/core.test.mjs` (34 tests)
 
 ```
 node tests/core.test.mjs     → 29/29 PASS
