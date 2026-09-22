@@ -8,7 +8,7 @@ Date: 2026-09-21 · Branch state: arena/01a0be25-3dmapmaker tip.
 | Feature | State | Evidence |
 |---|---|---|
 | Animated procedural worlds (Chapel Lane, Millbrook, Great Vale) | SUPPORTED + TESTED | boot-harness 58 checks walk them; live `/tools-render/` previews from committed generator |
-| AI real demo worlds (Willow Wood, day/rain/night) | SUPPORTED + TESTED | `assets/stills/willow-*.png`; 21 committed 2048×1024 panoramas in `assets/willow/` + postcard + front page still |
+| AI real demo worlds (Willow Wood, day/rain/night) | SUPPORTED + TESTED | `assets/stills/willow-*.png`; expanded to a 34 spot village graph (102 planned frames); generation grounded by identity chaining to the committed village style; day batch for nodes 8 to 17 done |
 | Void mode (empty world import) | SUPPORTED | start-null guard removed; move pads/keys toasts "this world has no places" |
 | Project open/save/export `.pmap` | SUPPORTED | ProjectArchive export/import round-trip, atomic staged import |
 | Auto-save to IndexedDB | SUPPORTED | debounced persist on every world change |

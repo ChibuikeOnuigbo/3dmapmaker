@@ -361,22 +361,32 @@ test('movement: rotate 90° then forward === strafe (plaza grid, all 8 direction
 });
 
 /* ---------------- willow parish straight line math: 500 / spacing -------- */
-test('willow parish: straight street at 100 m spacing, real meter edges', async () => {
+test('willow parish: 34 spot village graph, real meter edges, one connected tree', async () => {
   const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
   const w = buildWillowParish();
-  const ids = [...w.graph.nodes.keys()].sort();
-  assert.equal(ids.length, 7);
-  let prev = null, total = 0;
-  for (const id of ids) {
-    if (prev) {
-      const e = w.graph.edgesOf(prev).find((e) => w.graph.otherEnd(e, prev) === id);
-      assert.ok(e, `${prev} → ${id} connected`);
-      assert.ok(Math.abs(e.distM - 100) < 0.01, `edge ${prev}→${id} is really 100 m (got ${e.distM})`);
-      total += e.distM;
-    }
-    prev = id;
+  assert.equal(w.graph.nodes.size, 34, '34 photo spots');
+  assert.equal(w.graph.edges.size, 33, 'tree: n-1 edges');
+  // main street chain: six 100 m edges
+  const chain = ['willow_060', 'willow_160', 'willow_260', 'willow_360', 'willow_460', 'willow_560', 'willow_660'];
+  let total = 0;
+  for (let i = 1; i < chain.length; i++) {
+    const e = w.graph.edgesOf(chain[i - 1]).find((e) => w.graph.otherEnd(e, chain[i - 1]) === chain[i]);
+    assert.ok(e, `${chain[i - 1]} → ${chain[i]} connected`);
+    assert.ok(Math.abs(e.distM - 100) < 0.01, `edge ${chain[i]} is really 100 m (got ${e.distM})`);
+    total += e.distM;
   }
   assert.equal(total, 600, 'street spans 600 m of real distance');
+  // every node reachable from the church start (connected, no islands)
+  const seen = new Set([w.startNodeId]);
+  const q = [w.startNodeId];
+  while (q.length) {
+    const cur = q.shift();
+    for (const e of w.graph.edgesOf(cur)) {
+      const o = w.graph.otherEnd(e, cur);
+      if (!seen.has(o)) { seen.add(o); q.push(o); }
+    }
+  }
+  assert.equal(seen.size, 34, 'every spur connects back to the church');
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */

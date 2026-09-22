@@ -193,7 +193,7 @@ function shortDesc(w) {
     case 'demo_chapel_lane': return 'Parish lane, 500 m church zone';
     case 'demo_millbrook': return 'Market town, bridges, branches';
     case 'demo_great_vale': return 'A full town, over one thousand places';
-    default: return 'One real street · day, rain, night';
+    default: return 'A whole AI village · green, forge, school, orchard';
   }
 }
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
