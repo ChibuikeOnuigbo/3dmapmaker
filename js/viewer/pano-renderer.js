@@ -32,6 +32,7 @@ uniform float uPitch;     // radians
 uniform float uTanHalfFov;
 uniform float uAspect;
 uniform float uZoom;      // transition dolly feel: 1 = neutral
+uniform float uBlur;      // softness while blending (texture-space uv units)
 uniform float uHeadA;     // per-node heading offsets, radians
 uniform float uHeadB;
 const float PI = 3.141592653589793;
@@ -53,10 +54,21 @@ vec2 eqUv(vec3 d, float head){
   return vec2(u, v);
 }
 
+vec4 blurSample(sampler2D tsrc, vec2 uv){
+  float d = uBlur;
+  if (d < 0.0002) return texture2D(tsrc, uv);
+  vec4 c = texture2D(tsrc, uv) * 0.4;
+  c += texture2D(tsrc, vec2(fract(uv.x + d), uv.y)) * 0.15;
+  c += texture2D(tsrc, vec2(fract(uv.x - d), uv.y)) * 0.15;
+  c += texture2D(tsrc, uv + vec2(0.0, d * 0.55)) * 0.15;
+  c += texture2D(tsrc, uv - vec2(0.0, d * 0.55)) * 0.15;
+  return c;
+}
+
 void main(){
   vec3 dir = viewRay();
-  vec4 a = texture2D(uTexA, eqUv(dir, uHeadA));
-  vec4 b = texture2D(uTexB, eqUv(dir, uHeadB));
+  vec4 a = blurSample(uTexA, eqUv(dir, uHeadA));
+  vec4 b = blurSample(uTexB, eqUv(dir, uHeadB));
   gl_FragColor = mix(a, b, uMix * uHasB);
 }
 `;
@@ -101,7 +113,7 @@ export class PanoRenderer {
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     this.u = {};
-    for (const name of ['uTexA', 'uTexB', 'uHasB', 'uMix', 'uYaw', 'uPitch', 'uTanHalfFov', 'uAspect', 'uZoom', 'uHeadA', 'uHeadB']) {
+    for (const name of ['uTexA', 'uTexB', 'uHasB', 'uMix', 'uYaw', 'uPitch', 'uTanHalfFov', 'uAspect', 'uZoom', 'uBlur', 'uHeadA', 'uHeadB']) {
       this.u[name] = gl.getUniformLocation(prog, name);
     }
     gl.uniform1i(this.u.uTexA, 0);
@@ -170,6 +182,7 @@ export class PanoRenderer {
     gl.uniform1f(this.u.uMix, s.mix ?? 0);
     gl.uniform1f(this.u.uHasB, s.hasB ? 1 : 0);
     gl.uniform1f(this.u.uZoom, s.zoom ?? 1);
+    gl.uniform1f(this.u.uBlur, s.blurUv ?? 0);
     gl.uniform1f(this.u.uHeadA, this.headA);
     gl.uniform1f(this.u.uHeadB, this.headB);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

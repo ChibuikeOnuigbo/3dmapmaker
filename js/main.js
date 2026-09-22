@@ -808,7 +808,7 @@ class App {
     $('#mDur').value = String(this.motion.dur ?? 0);
     this._paintMotionDur();
     const row = document.querySelector('[data-mrow="morph"]');
-    if (row) row.hidden = this.motion.style !== 'morph';
+    if (row) row.hidden = this.motion.style !== 'morph' && this.motion.style !== 'blur';
   }
 
   _paintMotionDur() {

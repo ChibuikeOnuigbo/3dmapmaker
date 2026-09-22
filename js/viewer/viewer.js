@@ -122,7 +122,7 @@ export class PanoramaViewer {
     const dirZoom = 1 + (base - 1) * amt;
     this.renderer.setImageB(source, headingDeg);
     this.view.hasB = true;
-    this._transition = { t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom };
+    this._transition = { t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom, style: this.motion.style };
     return new Promise((resolve) => { this._transition.resolve = resolve; });
   }
 
@@ -164,7 +164,11 @@ export class PanoramaViewer {
       this.view.mix = e;
       const dirZoom = 1 + (this._transition.dirZoom - 1) * (1 - e);
       this.view.zoom = dirZoom;
-      if (t >= 1) this._finishTransition();
+      // blur-style morph: softness peaks at the midpoint and returns to zero
+      this.view.blurUv = (this._transition.style === 'blur')
+        ? Math.sin(Math.PI * t) * 0.006 * (this.motion.amount ?? 0.8)
+        : 0;
+      if (t >= 1) { this.view.blurUv = 0; this._finishTransition(); }
     }
 
     // immersion offsets — visual only (never stored to world state)
