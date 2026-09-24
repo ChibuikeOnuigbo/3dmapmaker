@@ -52,7 +52,8 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n18..n27    |  Y    |  -     |  -      |
 | n28..n34    |  -    |  -     |  -      |
 | n35..n44    |  Y    |  -     |  -      |
-| n45..n58    |  -    |  -     |  -      |
+| n45..n54    |  Y    |  -     |  -      |
+| n55..n58    |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -61,13 +62,21 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | 1 | 2026-09-21 | day n8..n17                        | 10 926 | verified, committed e9c3df7 |
 | 2 | 2026-09-21 | day n18..n27                       | 10 936 | verified, committed 6f7df74 |
 | 3 | 2026-09-21 | world densified 34→58, map surroundings + barriers + GENERATION-LOG.md created | 0 | tests 35 + 58 green |
-| 4 | 2026-09-21 | day n35..n44 waypoints (main street mids, manor mile, church path, west bend approach) | 10 946 | normalized, pending commit |
+| 4 | 2026-09-21 | day n35..n44 waypoints (main street mids, manor mile, church path, west bend approach) | 10 946 | normalized, committed df4c912 |
+| 4 | 2026-09-21 | day n35..n44 waypoints (main street mids, manor mile, church path, west bend approach) | 10 946 | normalized, committed df4c912 |
+| 5 | 2026-09-24 | day n45..n54 waypoints (inn mews corner, west hedgeline, manor mile limes, manor gate approach, inn front, main east end, meadow gate, croft gate, croft hedgerow, Westfold path) | 10 | normalized, spot-verified, pending commit |
 
-## Next batch (iteration 5)
+## Next batch (iteration 6)
 
-day n35..n44 waypoints (prompt: "midway along <EDGE> between <A> and <B>"):
-35 mid main 060-160, 36 mid 160-260, 37 mid 260-360, 38 mid 360-460,
-39 mid 460-560, 40 mid 560-660, 41 mid 660-n7..w30? (use EDGES order),
-42 mid w30-manor_mile, 43 mid w30-main? no — read densified output order
-via a quick node script before prompting; then n45..n58 day;
-then rain n1..n10, night n1..n10, etc.
+1. day n55..n58 (4 frames) — the remaining densified waypoints; list names via
+   `node -e "import('./js/worlds/willow-parish.js').then(m=>console.log(m.NODES.length))"`
+   or read the waypoint suffixes from the densify output — then DAY is COMPLETE (58/58).
+2. Then RAIN n1..n58 in batches of 10 and NIGHT n1..n58 in batches of 10 —
+   keep the LOCKED style block identical, only swap the lighting/weather line:
+   - RAIN: "steady rain, wet reflective cobbles and puddles, heavy overcast, umbrellas on porches"
+   - NIGHT: "night, warm lantern and window glow, moonlit slate roofs, deep blue sky, street lamps on the green"
+   Rain/night frames for n1..n7 already exist — resume rain/night at n8.
+3. After every batch: `.venv/bin/python tools-render/normalize-willow.py`
+   (recreate `.venv` with opencv-python-headless first if missing),
+   spot-verify 2 frames via read_file, tick the table, append the iteration row, commit.
+   NEVER stop the loop; the user says "continue" to trigger the next batch.
