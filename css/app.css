@@ -209,7 +209,7 @@ svg { display: block; }
 @keyframes bshake { 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
 
 /* map widget */
-#mapWidget { right: var(--s3); bottom: var(--s3); width: 280px; overflow: hidden; display: flex; flex-direction: column; }
+#mapWidget { right: var(--s3); bottom: var(--s3); width: 340px; overflow: hidden; display: flex; flex-direction: column; }
 #mapWidget.hidden { display: none; }
 #mapWidget.full {
   inset: 74px var(--s3) var(--s3) var(--s3); width: auto; z-index: var(--z-panel);
@@ -231,7 +231,7 @@ svg { display: block; }
 .iconbtn svg { width: 16px; height: 16px; }
 .mini:hover { background: rgba(24, 32, 54, 0.07); color: var(--ink); }
 .mini svg { width: 15px; height: 15px; }
-#mapCanvasWrap { height: 190px; }
+#mapCanvasWrap { height: 234px; }
 #mapWidget.full #mapCanvasWrap { flex: 1; height: auto; }
 #mapCanvas { width: 100%; height: 100%; display: block; cursor: grab; }
 #mapCanvas:active { cursor: grabbing; }
@@ -849,3 +849,17 @@ body.landing-open #topbar { visibility: hidden; }
 .pop .mi { border-radius: var(--r-sm); }
 #debugOverlay h4 { margin: 0 0 var(--s2); font-size: 11.5px; color: #8b94a3; }
 #debugOverlay .sec { height: 1px; background: rgba(255,255,255,0.08); margin: var(--s2) 0; }
+
+
+/* map node menu (preview first, editing only when a studio is open) */
+#nodeMenu { width: 232px; }
+.nm-title {
+  padding: 6px 10px 4px; font-size: 12.5px; font-weight: 750; color: var(--ink);
+  border-bottom: 1px solid var(--line-soft); margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* simple editor: combined Add menu popup */
+.ed-add { position: absolute; left: 12px; top: 96px; z-index: var(--z-pop); display: block; min-width: 180px; }
+.ed-add[hidden] { display: none; }
+.ed-add .mi.on { background: rgba(24, 32, 54, 0.08); }

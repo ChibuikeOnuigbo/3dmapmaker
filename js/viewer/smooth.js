@@ -90,3 +90,42 @@ export async function smoothCanvas(srcCanvas, strength = 0.6) {
   c.getContext('2d').putImageData(new ImageData(out, w, h), 0, 0);
   return c;
 }
+
+/**
+ * Wrap seam care for equirectangular sources (pure buffer core).
+ * The left and right columns of an equirectangular image are neighbors in
+ * the 360 projection; a hard cut there reads as a razor line inside the
+ * viewer. For every column within `strip` pixels of the seam we recompute
+ * it as a wrap-aware 5-tap gaussian neighborhood (1-4-6-4-1), so the two
+ * ends blend continuously. Columns deeper than `strip` into the image are
+ * untouched, so the center stays bit-identical.
+ */
+export function seamBlendBuffer(data, w, h, { strip = 14 } = {}) {
+  const s = Math.max(2, Math.min(strip, Math.floor(w / 8)));
+  const out = new Uint8ClampedArray(data);
+  const K = [1, 4, 6, 4, 1];
+  const sample = (x, y, ch) => data[(y * w + ((x % w) + w) % w) * 4 + ch];
+  for (let y = 0; y < h; y++) {
+    for (let x = -s; x < s; x++) {
+      const col = ((x % w) + w) % w;
+      const o = (y * w + col) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        let acc = 0;
+        for (let k = -2; k <= 2; k++) acc += K[k + 2] * sample(col + k, y, ch);
+        out[o + ch] = acc >> 4;
+      }
+    }
+  }
+  return out;
+}
+
+/** Canvas wrapper: softens the wrap seam of a full-resolution source. */
+export function seamBlendCanvas(srcCanvas, stripPx = 14) {
+  const w = srcCanvas.width, h = srcCanvas.height;
+  const ctx = srcCanvas.getContext('2d', { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, w, h);
+  const out = seamBlendBuffer(img.data, w, h, { strip: stripPx });
+  if (typeof ImageData !== 'undefined') { ctx.putImageData(new ImageData(out, w, h), 0, 0); return srcCanvas; }
+  img.data.set(out); ctx.putImageData(img, 0, 0);
+  return srcCanvas;
+}

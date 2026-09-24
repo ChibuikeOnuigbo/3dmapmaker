@@ -13,7 +13,7 @@ import { PanoRenderer } from './viewer/pano-renderer.js';
 import { PanoramaViewer } from './viewer/viewer.js';
 import { detectMissingRegions, completePanorama } from './viewer/completion.js';
 import { sharpenCanvas } from './viewer/sharpen.js';
-import { smoothCanvas } from './viewer/smooth.js';
+import { smoothCanvas, seamBlendCanvas } from './viewer/smooth.js';
 import { ProceduralWorldProvider } from './gen/provider.js';
 import { GenerationContextBuilder } from './gen/context.js';
 import { PanoramaCache, prefetchPlan } from './gen/cache.js';
@@ -79,7 +79,7 @@ class App {
     window.addEventListener('resize', () => { this.viewer.renderer.resize(); this.editorResize(); });
 
     this.mapRenderer = new MapRenderer($('#mapCanvas'), this.bus);
-    this.mapRenderer.onNodeClick = (n) => this.teleport(n.id);
+    this.mapRenderer.onNodeClick = (n, e) => this._openNodeMenu(n, e);
 
     this.simpleEditor = new SimpleEditor(this);
     this.advancedEditor = new AdvancedEditor(this);
@@ -91,6 +91,7 @@ class App {
 
     this.viewer.renderer.resize();
     this.mapRenderer.resize();
+    this._wireNodeMenu();
     this._startDebugOverlay();
     this._registerServiceWorker();
     this._applyViewPrefs();
@@ -371,6 +372,16 @@ class App {
     } else {
       this.viewer.setPitchLimits({ min: -80, max: 80, tight: !report?.complete });
     }
+    // wrap seam care: always soften the equirect cut line once per source
+    // (the generated village frames blur poorly at the rectangle ends)
+    if (display?.width && display.width > 64) {
+      if (entry._seam?.src === display) display = entry._seam.canvas;
+      else {
+        const soft = seamBlendCanvas((() => { const c = document.createElement('canvas'); c.width = display.width; c.height = display.height; c.getContext('2d').drawImage(display, 0, 0); return c; })());
+        entry._seam = { src: display, canvas: soft };
+        display = soft;
+      }
+    }
     const sm = this.viewPrefs.smooth;
     if (sm?.on && (sm.amt ?? 0) > 0.02 && display?.width) {
       if (entry._smooth?.amt === sm.amt && entry._smooth.src === display) display = entry._smooth.canvas;
@@ -451,6 +462,7 @@ class App {
   }
 
   teleport(nodeId) {
+    this._closeNodeMenu?.();
     if (!this.graph.getNode(nodeId)) return;
     this.movement.cancelWalk();
     const from = this.movement.currentNodeId;
@@ -1141,6 +1153,42 @@ class App {
     this._toasts.add(el);
     host.appendChild(el);
     el._arm(ms);
+  }
+
+  /** Map node click → Preview first; studio shortcuts only while editing. */
+  _wireNodeMenu() {
+    const pop = $('#nodeMenu');
+    if (!pop) return;
+    const close = () => { pop.classList.remove('open'); this._nmNodeId = null; };
+    this._closeNodeMenu = close;
+    document.addEventListener('click', (e) => {
+      if (pop.classList.contains('open') && !pop.contains(e.target) && !$('#mapCanvas')?.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    $('#nmPreview').addEventListener('click', () => {
+      const id = this._nmNodeId; close();
+      if (id) this.teleport(id);
+    });
+    $('#nmEdit').addEventListener('click', () => {
+      const id = this._nmNodeId; close();
+      if (id) this.selectNode(id);
+    });
+  }
+
+  _openNodeMenu(node, e) {
+    const pop = $('#nodeMenu');
+    if (!pop || !node) return;
+    this._nmNodeId = node.id;
+    $('#nmTitle').textContent = node.name || node.id;
+    const studioOpen = this.simpleEditor?.isOpen || this.advancedEditor?.isOpen;
+    $('#nmEdit').hidden = !studioOpen;
+    pop.classList.add('open');
+    // anchor at the click point, clamped into the viewport
+    const cw = pop.offsetWidth || 232, ch = pop.offsetHeight || 96;
+    const x = Math.min(Math.max(8, (e?.clientX ?? innerWidth / 2) + 6), innerWidth - cw - 8);
+    const y = Math.min(Math.max(8, (e?.clientY ?? innerHeight / 2) + 6), innerHeight - ch - 8);
+    pop.style.left = `${x}px`; pop.style.right = 'auto';
+    pop.style.top = `${y}px`; pop.style.bottom = 'auto';
   }
 
   /* ================= keyboard ================= */

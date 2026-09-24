@@ -433,6 +433,28 @@ test('smoothen: kills pepper noise, keeps hard edges intact', async () => {
   assert.ok(out.every((v, i) => (i + 1) % 4 !== 0 || v === 255), 'alpha preserved');
 });
 
+/* ---------------- seam blend: wrap edges soften, center untouched --------- */
+test('seam blend: equirect cut line softens, central pixels bit identical', async () => {
+  const { seamBlendBuffer } = await import('../js/viewer/smooth.js');
+  const w = 64, h = 24;
+  const img = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const x = i % w;
+    img[i * 4] = x < 8 ? 255 : x > 55 ? 0 : 120;   // hard bright/dark poles at the seam
+    img[i * 4 + 3] = 255;
+  }
+  const out = seamBlendBuffer(img, w, h, { strip: 14 });
+  const mid = 32 * 4;
+  assert.equal(out[mid], 120, 'center column survives untouched');
+  // seam gradient: the cut is now a ramp — neighboring columns near the seam
+  // must be closer in value than the original 255↔0 jump
+  const jumpBefore = Math.abs(img[0] - img[63 * 4]);
+  const jumpAfter = Math.abs(out[0] - out[63 * 4]);
+  assert.ok(jumpAfter <= jumpBefore * 0.5, `seam jump ${jumpBefore} -> ${jumpAfter}`);
+  // interior columns outside the strip stay identical
+  assert.equal(out[16 * 4], 120, 'columns beyond the strip stay bit identical');
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — core test suite');

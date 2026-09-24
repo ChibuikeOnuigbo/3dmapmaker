@@ -56,11 +56,14 @@ export class SimpleEditor {
       <div class="p-body">
         <div class="toolbar" role="toolbar" aria-label="Editor tools">
           <button class="tool active" data-tool="select"><svg><use href="#i-pin"/></svg><span>Select</span></button>
-          <button class="tool" data-tool="add-node"><svg><use href="#i-plus"/></svg><span>Location</span></button>
-          <button class="tool" data-tool="connect"><svg><use href="#i-link"/></svg><span>Connect</span></button>
-          <button class="tool" data-tool="landmark"><svg><use href="#i-flag"/></svg><span>Landmark</span></button>
-          <button class="tool" data-tool="road"><svg><use href="#i-route"/></svg><span>Road</span></button>
+          <button class="tool" data-addmenu aria-haspopup="true" id="edAddBtn"><svg><use href="#i-plus"/></svg><span id="edAddLabel">Add</span></button>
           <button class="tool" data-tool="delete"><svg><use href="#i-trash"/></svg><span>Delete</span></button>
+        </div>
+        <div class="pop ed-add" id="edAdd" role="menu" aria-label="Add tools" hidden>
+          <button class="mi" data-tool="add-node"><svg class="ic"><use href="#i-plus"/></svg><span class="grow">Location</span></button>
+          <button class="mi" data-tool="connect"><svg class="ic"><use href="#i-link"/></svg><span class="grow">Connect</span></button>
+          <button class="mi" data-tool="landmark"><svg class="ic"><use href="#i-flag"/></svg><span class="grow">Landmark</span></button>
+          <button class="mi" data-tool="road"><svg class="ic"><use href="#i-route"/></svg><span class="grow">Road</span></button>
         </div>
         <div class="hint" id="edHint">${TOOL_HINTS.select}</div>
         <div id="edSelection"></div>
@@ -71,13 +74,33 @@ export class SimpleEditor {
         <button class="btn block" data-act="save"><svg><use href="#i-save"/></svg>Save project</button>
       </div>`;
     this.panel.addEventListener('click', (e) => this._click(e));
+    document.addEventListener('click', (e) => {
+      const pop = this.panel.querySelector('#edAdd');
+      if (pop && !pop.hidden && !this.panel.contains(e.target)) pop.hidden = true;
+    });
+    this.panel.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { const pop = this.panel.querySelector('#edAdd'); if (pop) pop.hidden = true; }
+    });
   }
 
   _click(e) {
+    const addBtn = e.target.closest('[data-addmenu]');
+    if (addBtn) {
+      const pop = this.panel.querySelector('#edAdd');
+      pop.hidden = !pop.hidden;
+      return;
+    }
     const toolBtn = e.target.closest('[data-tool]');
     if (toolBtn) {
       this.tool = toolBtn.dataset.tool;
       this.panel.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b === toolBtn));
+      const isAdd = ['add-node', 'connect', 'landmark', 'road'].includes(this.tool);
+      if (isAdd) this.panel.querySelector('#edAddBtn').classList.add('active');
+      const names = { 'add-node': 'Location', connect: 'Connect', landmark: 'Landmark', road: 'Road' };
+      const lbl = this.panel.querySelector('#edAddLabel');
+      if (lbl) lbl.textContent = isAdd ? `${names[this.tool]}` : 'Add';
+      this.panel.querySelector('#edAdd').hidden = true;
+      this.panel.querySelectorAll('#edAdd .mi').forEach(b => b.classList.toggle('on', b === toolBtn));
       this.panel.querySelector('#edHint').textContent = TOOL_HINTS[this.tool];
       this.connectFrom = null;
       this.roadPoints = [];

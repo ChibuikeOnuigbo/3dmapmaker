@@ -139,6 +139,12 @@
 
 <button id="mapFab" title="Show map" aria-label="Show map"><svg><use href="#i-map"/></svg></button>
 
+<div class="pop" id="nodeMenu" role="menu" aria-label="Place actions">
+  <div class="nm-title" id="nmTitle">Place</div>
+  <button class="mi" id="nmPreview" role="menuitem"><svg class="ic"><use href="#i-play"/></svg><span class="grow">Preview this place</span></button>
+  <button class="mi" id="nmEdit" role="menuitem" hidden><svg class="ic"><use href="#i-edit"/></svg><span class="grow">Open in studio</span></button>
+</div>
+
 <div class="widget" id="speedCtl" aria-label="Walk speed">
   <svg class="ic" aria-hidden="true"><use href="#i-speed"/></svg>
   <input id="speedRange" type="range" min="0" max="100" step="1" aria-label="Walk speed" title="Walk speed">
