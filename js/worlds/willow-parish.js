@@ -73,30 +73,45 @@ const EDGES = [
   [6, 32], [32, 33],
 ];
 
-const DENSE_MIN_M = 55;
+export const DENSE_MIN_M = 35;
+export const DENSE_FIRST_IMG = 35;
 
 /**
- * Waypoint densification: long edges get a midpoint spot so the walk has a
- * photo frame roughly every 25 to 50 metres (the previous 100 m hops felt
- * like teleport jumps on the map).
+ * Waypoint densification — RECURSIVE: passes keep splitting every edge of
+ * DENSE_MIN_M or more at its midpoint until no edge remains that long.
+ * Result: a photo frame every ~17.5–35 m, so a walk hop renders as a handful
+ * of ~5 m dolly steps (see js/viewer/walk-steps.js) instead of a jump.
+ *
+ * Pure per call: never mutates the module table (the world can be built many
+ * times in one session, e.g. app boot plus landing previews). Deterministic:
+ * same pass order + stable EDGES order ⇒ stable img numbers.
  */
-function densify() {
-  // pure per call: never mutate the module table (the world can be built
-  // many times in one session, e.g. app boot plus landing previews)
+export function densify(minM = DENSE_MIN_M) {
   const xy = new Map(NODES.map(([img, , x, y]) => [img, [x, y]]));
   const nodes = NODES.map((n) => [...n]);
-  const finer = [];
-  let img = 35;
-  for (const [a, b] of EDGES) {
-    const [ax, ay] = xy.get(a), [bx, by] = xy.get(b);
-    const d = Math.hypot(bx - ax, by - ay);
-    if (d >= DENSE_MIN_M) {
-      nodes.push([img, `w${img}`, (ax + bx) / 2, (ay + by) / 2, `Waypoint · ${img}`]);
-      finer.push([a, img], [img, b]);
-      img++;
-    } else finer.push([a, b]);
+  let img = DENSE_FIRST_IMG;
+  const split = (edges, threshold) => {
+    const finer = [];
+    for (const [a, b] of edges) {
+      const [ax, ay] = xy.get(a), [bx, by] = xy.get(b);
+      if (Math.hypot(bx - ax, by - ay) >= threshold) {
+        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        xy.set(img, [mx, my]);
+        nodes.push([img, `w${img}`, mx, my, `Waypoint · ${img}`]);
+        finer.push([a, img], [img, b]);
+        img++;
+      } else finer.push([a, b]);
+    }
+    return finer;
+  };
+  // seed pass replicates the original 55 m split so already-generated frames
+  // n35..n58 keep their map positions forever; recursion then refines to minM
+  let edges = split(EDGES.map((e) => [...e]), 55);
+  for (let pass = 0; pass < 8; pass++) {
+    if (edges.every(([a, b]) => { const [ax, ay] = xy.get(a), [bx, by] = xy.get(b); return Math.hypot(bx - ax, by - ay) < minM; })) break;
+    edges = split(edges, minM);
   }
-  return { nodes, edges: finer };
+  return { nodes, edges };
 }
 
 export function buildWillowParish() {

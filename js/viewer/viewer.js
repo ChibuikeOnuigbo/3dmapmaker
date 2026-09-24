@@ -8,6 +8,7 @@
  */
 import { PanoRenderer } from './pano-renderer.js';
 import { softClampPitch } from './completion.js';
+import { walkSchedule, strideEase, walkBobDeg } from './walk-steps.js';
 
 export class PanoramaViewer {
   /**
@@ -122,7 +123,23 @@ export class PanoramaViewer {
     const dirZoom = 1 + (base - 1) * amt;
     this.renderer.setImageB(source, headingDeg);
     this.view.hasB = true;
-    this._transition = { t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom, style: this.motion.style };
+    // 'walk' style: stride-by-stride dolly on the SOURCE panorama first — the
+    // viewer sees the same scene from 5 m closer, again and again, and only
+    // then the destination photo (shot from exactly that closer spot) blends
+    // in. Reads as continuous walking; never a jump.
+    const walk = this.motion.style === 'walk'
+      && !opts.teleport
+      && (opts.direction === 'forward' || opts.direction === 'backward')
+      && (opts.distM ?? 0) > 0;
+    const sched = walk ? walkSchedule(opts.distM, { amount: amt }) : { steps: 0, dollyMax: dirZoom };
+    if (walk && (this.motion.durMs ?? 0) <= 0) dur = Math.max(dur, 650 + sched.steps * 140); // strides need room
+    this._transition = {
+      t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom,
+      style: this.motion.style,
+      walk: walk && sched.steps > 0
+        ? { steps: sched.steps, dollyMax: sched.dollyMax, bob: sched.bobCycles, amt, back: opts.direction === 'backward' }
+        : null,
+    };
     return new Promise((resolve) => { this._transition.resolve = resolve; });
   }
 
@@ -158,14 +175,37 @@ export class PanoramaViewer {
     else this._rawPitch = sc.pitch + sc.overdrag * 0.78; // spring back
 
     // transition progress
+    this._walkBob = 0;
     if (this._transition) {
-      const t = Math.min(1, (now - this._transition.t0) / this._transition.dur);
-      const e = 1 - Math.pow(1 - t, 3);
-      this.view.mix = e;
-      const dirZoom = 1 + (this._transition.dirZoom - 1) * (1 - e);
-      this.view.zoom = dirZoom;
+      const tr = this._transition;
+      const t = Math.min(1, (now - tr.t0) / tr.dur);
+      if (tr.walk) {
+        // WALK: stride-by-stride dolly on the source (62% of the time), then
+        // a short handover where the destination — photographed from exactly
+        // that closer spot — blends in while the zoom relaxes back to 1.
+        const DOLLY = 0.62;
+        const w = tr.walk;
+        if (t < DOLLY) {
+          const p = strideEase(t / DOLLY, w.steps);
+          const k = (w.dollyMax - 1) * p;
+          this.view.mix = 0;
+          this.view.zoom = w.back ? 1 - k * 0.42 : 1 + k;   // backward: gentle retreat
+        } else {
+          const p = (t - DOLLY) / (1 - DOLLY);
+          const e = p * p * (3 - 2 * p);                    // smoothstep handover
+          const k = (w.dollyMax - 1) * (1 - e);
+          this.view.mix = e;
+          this.view.zoom = w.back ? 1 - k * 0.42 : 1 + k;
+        }
+        this._walkBob = walkBobDeg(t, w.bob, w.amt) * (1 - t); // settle to zero by arrival
+      } else {
+        const e = 1 - Math.pow(1 - t, 3);
+        this.view.mix = e;
+        const dirZoom = 1 + (tr.dirZoom - 1) * (1 - e);
+        this.view.zoom = dirZoom;
+      }
       // blur-style morph: softness peaks at the midpoint and returns to zero
-      this.view.blurUv = (this._transition.style === 'blur')
+      this.view.blurUv = (tr.style === 'blur')
         ? Math.sin(Math.PI * t) * 0.006 * (this.motion.amount ?? 0.8)
         : 0;
       if (t >= 1) { this.view.blurUv = 0; this._finishTransition(); }
@@ -174,6 +214,7 @@ export class PanoramaViewer {
     // immersion offsets — visual only (never stored to world state)
     let yawOff = 0, pitchOff = 0;
     const time = (now - this._t0) / 1000;
+    pitchOff += this._walkBob;
     if (this.immersion.sway) {
       const i = this.immersion.swayIntensity;
       yawOff += Math.sin(time * 0.9) * 0.35 * i;

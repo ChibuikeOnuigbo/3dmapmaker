@@ -364,11 +364,11 @@ test('movement: rotate 90° then forward === strafe (plaza grid, all 8 direction
 test('willow parish: 34 spot village graph, real meter edges, one connected tree', async () => {
   const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
   const w = buildWillowParish();
-  assert.equal(w.graph.nodes.size, 58, '34 named spots + 24 dense waypoints');
-  assert.equal(w.graph.edges.size, 57, 'tree: n-1 edges');
-  // no long gaps: every edge is under 55 m after densification
+  assert.equal(w.graph.nodes.size, 81, '34 named spots + 47 dense waypoints');
+  assert.equal(w.graph.edges.size, 80, 'tree: n-1 edges');
+  // no long gaps: recursive densification keeps every edge under 35 m
   for (const e of w.graph.edges.values()) {
-    assert.ok(e.distM < 55, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected walkable hop`);
+    assert.ok(e.distM < 35, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected walkable hop`);
   }
   // main street path total stays 600 m of real distance end to end
   let cur = 'willow_060', prev = null, total = 0;
@@ -388,7 +388,7 @@ test('willow parish: 34 spot village graph, real meter edges, one connected tree
       if (!seen.has(o)) { seen.add(o); q.push(o); }
     }
   }
-  assert.equal(seen.size, 58, 'every spur and waypoint connects back to the church');
+  assert.equal(seen.size, 81, 'every spur and waypoint connects back to the church');
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */
@@ -455,6 +455,33 @@ test('seam blend: equirect cut line softens, central pixels bit identical', asyn
   assert.ok(jumpAfter <= jumpBefore * 0.5, `seam jump ${jumpBefore} -> ${jumpAfter}`);
   // interior columns outside the strip stay identical
   assert.equal(out[16 * 4], 120, 'columns beyond the strip stay bit identical');
+});
+
+/* ---------------- walk feel: stride scheduling is pure + recursive -------- */
+test('walk steps: recursive 5 m strides, stable schedule, never a jump', async () => {
+  const { walkStrides, walkSchedule, strideEase, walkBobDeg } = await import('../js/viewer/walk-steps.js');
+  // a 30 m hop splits recursively (halving) into equal strides of at most 5 m
+  const s = walkStrides(30);
+  assert.equal(s.length, 8, '30 m halves to 8 strides of 3.75 m');
+  assert.ok(s.every((d) => d > 0 && d <= 5), 'every stride ≤ 5 m');
+  assert.ok(Math.abs(s.reduce((a, b) => a + b, 0) - 30) < 1e-9, 'strides sum to the hop');
+  // non-multiples recurse to halves (e.g. 18 m → 4 × 4.5 m), still ≤ 5
+  const s2 = walkStrides(18);
+  assert.ok(s2.every((d) => d <= 5) && Math.abs(s2.reduce((a, b) => a + b, 0) - 18) < 1e-9);
+  // schedule: dolly peak bounded, short hops gentler than long ones
+  const long = walkSchedule(30), short = walkSchedule(8);
+  assert.ok(long.dollyMax > short.dollyMax && long.dollyMax <= 1.4, 'dolly grows with hop, capped 1.4');
+  assert.equal(walkSchedule(0).steps, 0, 'zero-distance = plain fade');
+  // stride ease: monotonic 0..1, holds between strides (no backwards motion)
+  let prev = -1;
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const e = strideEase(Math.min(1, t), 6);
+    assert.ok(e >= prev - 1e-9 && e >= -1e-9 && e <= 1 + 1e-9, 'monotonic, clamped');
+    prev = e;
+  }
+  assert.equal(strideEase(1, 6), 1);
+  // head bob is periodic, bounded, and zero at t=0 (arrival offset removed by caller scaling)
+  assert.ok(Math.abs(walkBobDeg(0.25, 3, 1)) <= 1.1 + 1e-9);
 });
 
 /* ---------------- runner ---------------- */

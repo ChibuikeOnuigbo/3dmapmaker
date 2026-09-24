@@ -285,7 +285,7 @@ await app.loadDemoWorld(DEMO_WORLDS.find((w) => w.id === 'demo_willow_parish'));
 await waitFor(() => app.graph?.id === 'demo_willow_parish' && app.cache.metaOf(`${app.movement.currentNodeId}@day`), 'willow boot', 20000);
 const g4 = app.graph;
 const wId = app.movement.currentNodeId;
-check('willow has 58 nodes', g4.nodes.size === 58, `have ${g4.nodes.size}`);
+check('willow has 81 nodes', g4.nodes.size === 81, `have ${g4.nodes.size}`);
 const wDay = await app.cache.get(`${wId}@day`, async () => { throw new Error('must be cached'); });
 check('willow day variant non-blank', canvasStats(wDay.canvas).std > 8 || canvasStats(wDay.canvas).mean > 10, `std=${canvasStats(wDay.canvas).std}`);
 check('willow entry tagged mode=day', wDay.meta.mode === 'day', wDay.meta.mode);

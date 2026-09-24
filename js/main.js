@@ -52,7 +52,9 @@ class App {
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
     this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
-    this.motion = { style: 'morph', amount: 80, dur: 0, ...(this.prefs.motion || {}) };
+    // default 'walk': stride-by-stride dolly — same panorama 5 m closer,
+    // repeated — so hops read as walking, never a jump (user directive)
+    this.motion = { style: 'walk', amount: 80, dur: 0, ...(this.prefs.motion || {}) };
     // migrate the v1 speed scale (1.4 m/s was its middle — felt like walking
     // in mud): reset everyone to the v2 default once
     if ((this.viewPrefs.speedV ?? 1) < 2) { this.viewPrefs.speed = 65; this.viewPrefs.speedV = 2; }
@@ -412,7 +414,8 @@ class App {
     this.bus.on('walk:progress', (pos) => { this.mapRenderer.setWalkProgress(pos); });
     this.bus.on('position:changed', async ({ nodeId, edge, fromId, teleport }) => {
       this.mapRenderer.setWalkProgress(null);
-      await this._enterNode(nodeId, { fromId, teleport, relativeDir: this._lastMove?.relativeDir ?? null });
+      this._lastDistM = edge?.distM ?? this._lastDistM ?? 0;
+      await this._enterNode(nodeId, { fromId, teleport, relativeDir: this._lastMove?.relativeDir ?? null, distM: this._lastDistM });
       // chained walking (key held down)
       if (this._pendingDir) { const d = this._pendingDir; this._pendingDir = null; this.tryMove(d); }
     });
@@ -426,7 +429,7 @@ class App {
     this.movement.tryMove(relativeDir, this.viewer.view.yawDeg);
   }
 
-  async _enterNode(nodeId, { fromId = null, teleport = false, relativeDir = null, initial = false } = {}) {
+  async _enterNode(nodeId, { fromId = null, teleport = false, relativeDir = null, initial = false, distM = 0 } = {}) {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
     this.bus.emit('debug:node', nodeId);
@@ -442,6 +445,7 @@ class App {
     } else {
       await this.viewer.transitionTo(display, heading, {
         direction: relativeDir,
+        distM, teleport,
         durationMs: (teleport ? 0.6 : 1) * this.viewer.immersion.transitionMs,
       });
     }
