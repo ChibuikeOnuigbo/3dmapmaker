@@ -364,18 +364,20 @@ test('movement: rotate 90° then forward === strafe (plaza grid, all 8 direction
 test('willow parish: 34 spot village graph, real meter edges, one connected tree', async () => {
   const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
   const w = buildWillowParish();
-  assert.equal(w.graph.nodes.size, 34, '34 photo spots');
-  assert.equal(w.graph.edges.size, 33, 'tree: n-1 edges');
-  // main street chain: six 100 m edges
-  const chain = ['willow_060', 'willow_160', 'willow_260', 'willow_360', 'willow_460', 'willow_560', 'willow_660'];
-  let total = 0;
-  for (let i = 1; i < chain.length; i++) {
-    const e = w.graph.edgesOf(chain[i - 1]).find((e) => w.graph.otherEnd(e, chain[i - 1]) === chain[i]);
-    assert.ok(e, `${chain[i - 1]} → ${chain[i]} connected`);
-    assert.ok(Math.abs(e.distM - 100) < 0.01, `edge ${chain[i]} is really 100 m (got ${e.distM})`);
-    total += e.distM;
+  assert.equal(w.graph.nodes.size, 58, '34 named spots + 24 dense waypoints');
+  assert.equal(w.graph.edges.size, 57, 'tree: n-1 edges');
+  // no long gaps: every edge is under 55 m after densification
+  for (const e of w.graph.edges.values()) {
+    assert.ok(e.distM < 55, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected walkable hop`);
   }
-  assert.equal(total, 600, 'street spans 600 m of real distance');
+  // main street path total stays 600 m of real distance end to end
+  let cur = 'willow_060', prev = null, total = 0;
+  while (cur !== 'willow_660') {
+    const next = w.graph.edgesOf(cur).map((e) => ({ to: w.graph.otherEnd(e, cur), dist: e.distM })).find((c) => c.to !== prev);
+    assert.ok(next, `main street continues past ${cur}`);
+    total += next.dist; prev = cur; cur = next.to;
+  }
+  assert.ok(Math.abs(total - 600) < 0.01, `main street spans 600 m (got ${total.toFixed(1)})`);
   // every node reachable from the church start (connected, no islands)
   const seen = new Set([w.startNodeId]);
   const q = [w.startNodeId];
@@ -386,7 +388,7 @@ test('willow parish: 34 spot village graph, real meter edges, one connected tree
       if (!seen.has(o)) { seen.add(o); q.push(o); }
     }
   }
-  assert.equal(seen.size, 34, 'every spur connects back to the church');
+  assert.equal(seen.size, 58, 'every spur and waypoint connects back to the church');
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */

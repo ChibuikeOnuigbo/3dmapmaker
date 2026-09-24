@@ -73,6 +73,32 @@ const EDGES = [
   [6, 32], [32, 33],
 ];
 
+const DENSE_MIN_M = 55;
+
+/**
+ * Waypoint densification: long edges get a midpoint spot so the walk has a
+ * photo frame roughly every 25 to 50 metres (the previous 100 m hops felt
+ * like teleport jumps on the map).
+ */
+function densify() {
+  // pure per call: never mutate the module table (the world can be built
+  // many times in one session, e.g. app boot plus landing previews)
+  const xy = new Map(NODES.map(([img, , x, y]) => [img, [x, y]]));
+  const nodes = NODES.map((n) => [...n]);
+  const finer = [];
+  let img = 35;
+  for (const [a, b] of EDGES) {
+    const [ax, ay] = xy.get(a), [bx, by] = xy.get(b);
+    const d = Math.hypot(bx - ax, by - ay);
+    if (d >= DENSE_MIN_M) {
+      nodes.push([img, `w${img}`, (ax + bx) / 2, (ay + by) / 2, `Waypoint · ${img}`]);
+      finer.push([a, img], [img, b]);
+      img++;
+    } else finer.push([a, b]);
+  }
+  return { nodes, edges: finer };
+}
+
 export function buildWillowParish() {
   const scale = new MapScale({ pixelsPerMeter: 2, movement: { stepPixels: 12, stepMinPixels: 10, stepMaxPixels: 15 } });
   const g = new WorldGraph(scale, { id: 'demo_willow_parish', name: 'Willow Parish' });
@@ -80,7 +106,7 @@ export function buildWillowParish() {
     ...g.environment,
     timeOfDay: 'day', weather: 'clear', sunAzimuthDeg: 118, sunElevationDeg: 34,
     groundBase: '#7d9b68',
-    description: 'A photoreal village: the 700 m willow lane ending at St. Hilda’s church, with ten spurs around the green, forge, school and orchard. AI-generated panoramas, three scene modes.',
+    description: 'A photoreal village: the willow lane ending at St. Hilda’s church, with ten spurs around the green, forge, school and orchard. 57 photo spots dense enough to walk frame by frame. AI-generated panoramas, three scene modes.',
     features: [],
   };
   g.settings.nodeSpacingPx = 200;
@@ -109,8 +135,31 @@ export function buildWillowParish() {
   road('road_meadow', 'Meadow Rise', [[0, 560], [115, 560]], 4.5);
   g.environment.features.push({ id: 'pond_green', type: 'plaza', kind: 'water', name: 'Village Pond', x: M(-115), y: M(215), w: M(30), d: M(22), color: '#aacdec' });
 
+  // surroundings: the map should never sit in a featureless void
+  g.environment.features.push(
+    { id: 'field_w', type: 'region', shape: 'rect', kind: 'meadow', name: 'Merrick Field', x: M(-260), y: M(60), w: M(70), h: M(700), color: '#cfe0b4' },
+    { id: 'field_e', type: 'region', shape: 'rect', kind: 'meadow', name: 'Chapel Field', x: M(190), y: M(-60), w: M(60), h: M(520), color: '#cfe0b4' },
+    { id: 'field_n', type: 'region', shape: 'rect', kind: 'meadow', name: 'Manor Fields', x: M(-90), y: M(900), w: M(180), h: M(70), color: '#cfe0b4' },
+    { id: 'field_s', type: 'region', shape: 'rect', kind: 'meadow', name: 'Glebe', x: M(-60), y: M(-120), w: M(220), h: M(60), color: '#cfe0b4' },
+  );
+  // hedge and track lines that read as boundaries, Google-Maps style
+  const hedge = (id, name, pts) => g.environment.features.push({ id, type: 'road', name, points: pts.map(p => [p[0] * PXM, p[1] * PXM]), widthM: 1.6, surface: 'dirt' });
+  hedge('hedge_green_n', 'Green Hedge North', [[-185, 105], [-185, 225]]);
+  hedge('hedge_green_w', 'Green Hedge West', [[-185, 105], [-185, 225]]);
+  hedge('hedge_field_e', 'Chapel Field Hedge', [[185, -50], [185, 420]]);
+  hedge('track_pinfold', 'Pinfold Track', [[170, -4], [230, -4]]);
+  // visible barriers at every dead end: walkers can see why a lane stops
+  const wall = (id, name, xM, yM, vert) => g.environment.features.push({ id, type: 'building', kind: 'wall', name, x: M(xM), y: M(yM), w: M(vert ? 1.2 : 7), d: M(vert ? 7 : 1.2), h: 1.1, color: '#b9b0a0' });
+  wall('bar_pinfold_east', 'Stone Wall', 176, -4, true);
+  wall('bar_west_end', 'Farm Gate', -196, 160, true);
+  wall('bar_smithy_end', 'Meadow Gate', -115, 516, false);
+  wall('bar_manor_gate', 'Manor Gates', 0, 866, false);
+  wall('bar_pond_bank', 'Pond Bank Fence', -115, 225, false);
+
+  const { nodes: allNodes, edges: densifiedEdges } = densify();
+
   const byImg = new Map();
-  for (const [img, suffix, xM, yM, name] of NODES) {
+  for (const [img, suffix, xM, yM, name] of allNodes) {
     const node = g.addNode({
       id: `willow_${suffix}`, x: xM * PXM, y: yM * PXM,
       name,
@@ -125,7 +174,7 @@ export function buildWillowParish() {
     });
     byImg.set(img, node.id);
   }
-  for (const [a, b] of EDGES) g.connect(byImg.get(a), byImg.get(b));
+  for (const [a, b] of densifiedEdges) g.connect(byImg.get(a), byImg.get(b));
 
   // landmarks + map dressing
   g.addLandmark({ id: 'lm_hilda', type: 'church', name: 'St. Hilda’s Church', x: churchX, y: churchYpx, importance: 1 });
