@@ -64,7 +64,9 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n79..n81    |  Y    |  -     |  -      |
 | n82..n91    |  Y    |  -     |  -      |
 | n92..n101   |  Y    |  -     |  -      |
-| n102..n319  |  -    |  -     |  -      |
+| n102        |  -    |  -     |  -      |
+| n103..n111  |  Y    |  -     |  -      |
+| n112..n319  |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -84,10 +86,12 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 
 | 10 | 2026-09-25 | WASD trapwire crosscheck added to core tests (straight-segment hop < 8 m forward; A/D never yields a long lateral hop; junction laterals resolve ≤ 8 m); day n92..n101 terrace/school-turn/forge-chimney/northern thinning stride frames | 10 | tests 37 core green; normalized, 2 spot-verified, pending commit |
 
-## Next batch (iteration 11)
+| 11 | 2026-09-25 | A/D strictness locked: coneDeg 45 verified in resolveEdge, crosscheck test strengthened to assert left/right STRICTLY blocked on a straight segment; day n103..n111 (orchard track mouth, manor-lane ha-has, lime avenue, trough + crest stone, clock-tower rise, manor-gates bend) | 9 (+n102 deferred: 10/turn cap hit) | tests 37 core green; normalized, 2 spot-verified, pending commit |
 
-1. day n102..n111 (10 stride frames continuing the numbered waypoint order —
-   print coords first via `node --input-type=module -e "import('./js/worlds/willow-parish.js').then(m=>{const {nodes}=m.densify();nodes.slice(101,111).forEach(n=>console.log(n[0],n[2].toFixed(0),n[3].toFixed(0)))})"`),
+## Next batch (iteration 12)
+
+1. day n102 FIRST (retry), then n112..n120 continuing the numbered order —
+   print coords first via `node --input-type=module -e "import('./js/worlds/willow-parish.js').then(m=>{const {nodes}=m.densify();nodes.slice(102,121).forEach(n=>console.log(n[0],n[2].toFixed(0),n[3].toFixed(0)))})"`,
    prompts descriptive of what's between the already-shot neighbors.
 2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
    EDITS (see below), then night n8…, same technique.

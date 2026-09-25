@@ -415,8 +415,8 @@ test('willow WASD: forward hop is one stride, A/D only where a path exists', asy
   // A/D on the same segment: NO path — bloom/bush/wall, never a pano inside
   const left = planMove(g, straight.id, 'left', straight.yaw);
   const right = planMove(g, straight.id, 'right', straight.yaw);
-  assert.ok(!(left.ok && left.distanceM > 8) && !(right.ok && right.distanceM > 8),
-    'no long lateral hops: strafe only lands nearby if at all');
+  assert.equal(left.ok, false, 'A on a straight street: strictly blocked — no pano inside a bush');
+  assert.equal(right.ok, false, 'D on a straight street: strictly blocked — no pano inside a bush');
   // at a junction at least one lateral direction resolves to a short hop
   const fwdJ = planMove(g, junction, 'forward', g.edgeBearing(g.edgesOf(junction)[0], junction));
   const lat = ['left', 'right'].map((d) => planMove(g, junction, d, fwdJ.bearing)).find((p) => p.ok);
