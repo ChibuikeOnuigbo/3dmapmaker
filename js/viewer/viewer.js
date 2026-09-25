@@ -132,7 +132,7 @@ export class PanoramaViewer {
       && (opts.direction === 'forward' || opts.direction === 'backward')
       && (opts.distM ?? 0) > 0;
     const sched = walk ? walkSchedule(opts.distM, { amount: amt }) : { steps: 0, dollyMax: dirZoom };
-    if (walk && (this.motion.durMs ?? 0) <= 0) dur = Math.max(dur, 650 + sched.steps * 140); // strides need room
+    if (walk && (this.motion.durMs ?? 0) <= 0) dur = Math.max(dur, 950 + sched.steps * 200); // strides need room: SLOW motion, user directive
     this._transition = {
       t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom,
       style: this.motion.style,
@@ -183,7 +183,7 @@ export class PanoramaViewer {
         // WALK: stride-by-stride dolly on the source (62% of the time), then
         // a short handover where the destination — photographed from exactly
         // that closer spot — blends in while the zoom relaxes back to 1.
-        const DOLLY = 0.62;
+        const DOLLY = 0.68;                       // most of the time is spent striding, only the tail hands over
         const w = tr.walk;
         if (t < DOLLY) {
           const p = strideEase(t / DOLLY, w.steps);
