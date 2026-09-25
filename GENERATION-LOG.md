@@ -20,6 +20,11 @@ exactly what to generate next. Continue until every box is ticked.
 - Frame: seamless equirectangular 360 photo, 2:1 ratio → normalize every
   generated frame to **2048x1024** (Lanczos) with a light micro contrast
   pass before committing (script below).
+- **METHOD (user directive, iteration 14):** every waypoint neighbor frame
+  is a CAMERA-SHIFT EDIT of an existing chained frame — the source jpg is
+  the image input and the prompt only moves the camera ~6–7 m forward /
+  backward / left / right, so the street cannot hallucinate between hops.
+  Text-only prompts are reserved for brand-new named views.
 - Grounding is identity chaining: every new frame is generated with the
   committed frames as the fixed style reference — never invent a
   different village. Gem AI never lan, never drift off for ms.
@@ -68,7 +73,15 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n102        |  Y    |  -     |  -      |
 | n103..n111  |  Y    |  -     |  -      |
 | n112..n120  |  Y    |  -     |  -      |
-| n121..n319  |  -    |  -     |  -      |
+| n121..n166  |  -    |  -     |  -      |
+| n167..n173  |  Y    |  -     |  -      |
+| n174..n200  |  -    |  -     |  -      |
+| n201..n202  |  Y    |  -     |  -      |
+| n203..n255  |  -    |  -     |  -      |
+| n256        |  Y    |  -     |  -      |
+| n257..n311  |  -    |  -     |  -      |
+| n312        |  Y    |  -     |  -      |
+| n313..n319  |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -94,13 +107,19 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 
 | 13 | 2026-09-25 | live preview server restarted (port 8080) for hands-on WASD; BACKFILL: n28..n34 (orchard row/end, manor mile, manor gates close, meadow rise mouth + far gate, Pinfold wall) + n55..n57 (orchard mouth, orchard mid-row, meadow-rise turn) — gap now only n58 | 10 | suites green; normalized, 2 spot-verified (manor gates chain to n48..n113 ✓), pending commit |
 
-## Next batch (iteration 14)
+| 14 | 2026-09-25 | USER DIRECTIVE — CAMERA-SHIFT EDITS become the mandatory fill method (kills hallucination at hops): neighbor panoramas must be generated as EDITS of an existing chained frame, prompt pattern below; proof: n87 → n172/n173 (6 m forward/backward — same inn, same baskets, coherent parallax), n60 → n167/n168, junction n2 → n169/n170/n256 (forward/backward/LEFT-strafe onto Green Road), junction n6 → n201/n202/n312 (forward/backward/RIGHT-strafe onto Meadow Rise) | 10 | chain verified visually n87↔n172; normalized; suites green; pending commit |
 
-1. n58 (mid at 85,560 — meadow rise last mid) + day n121..n129 continuing
-   the numbered order (coords one-liner from the iterations log).
-2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
-   EDITS (see below), then night n8…, same technique.
-3. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
+## Next batch (iteration 15)
+
+1. CAMERA-SHIFT ONLY from here on: take a frame whose neighbors are missing
+   (compute via the coverage audit one-liner in §3), generate each missing
+   neighbor as an edit `[images: day/nX.jpg]` of the chained frame:
+   - W (forward): "shift the camera about 6 metres NORTH/FORWARD along the
+     street: same scene, only the viewpoint changes, correct parallax"
+   - S (backward): same with SOUTH/BACKWARD
+   - A (leftward)/D (rightward): only at junctions, ~7 m onto the side lane
+   Fill in rings around existing frames until day coverage is 319/319;
+   then resume rain/night via day-frame edits.
    (pass images: [assets/willow/day/nX.jpg]) so buildings/street stay
    pixel-identical; only weather/lighting changes:
    - RAIN prompt: "same exact panorama, every building and object in the same
