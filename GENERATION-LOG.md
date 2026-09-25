@@ -64,9 +64,10 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n79..n81    |  Y    |  -     |  -      |
 | n82..n91    |  Y    |  -     |  -      |
 | n92..n101   |  Y    |  -     |  -      |
-| n102        |  -    |  -     |  -      |
+| n102        |  Y    |  -     |  -      |
 | n103..n111  |  Y    |  -     |  -      |
-| n112..n319  |  -    |  -     |  -      |
+| n112..n120  |  Y    |  -     |  -      |
+| n121..n319  |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -88,11 +89,23 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 
 | 11 | 2026-09-25 | A/D strictness locked: coneDeg 45 verified in resolveEdge, crosscheck test strengthened to assert left/right STRICTLY blocked on a straight segment; day n103..n111 (orchard track mouth, manor-lane ha-has, lime avenue, trough + crest stone, clock-tower rise, manor-gates bend) | 9 (+n102 deferred: 10/turn cap hit) | tests 37 core green; normalized, 2 spot-verified, pending commit |
 
-## Next batch (iteration 12)
+| 12 | 2026-09-25 | live WASD simulation printed (6 W presses = 7.5 m each from the porch, A/D strictly blocked mid-segment, S walks 7.5 m back); day n102 + n112..n120 (hedged lane, upper manor lane, manor gates close, south church approach, lych-gate corner, churchyard corner, yew-avenue strides x4 to the Glebe stile) | 10 | suites green; normalized, 2 spot-verified, pending commit |
 
-1. day n102 FIRST (retry), then n112..n120 continuing the numbered order —
-   print coords first via `node --input-type=module -e "import('./js/worlds/willow-parish.js').then(m=>{const {nodes}=m.densify();nodes.slice(102,121).forEach(n=>console.log(n[0],n[2].toFixed(0),n[3].toFixed(0)))})"`,
-   prompts descriptive of what's between the already-shot neighbors.
+## GAP (priority — fill before n121+)
+
+n28..n34 (named) and n55..n58 (waypoints) were skipped when densification
+superseded the numbering: n28 Orchard Row, n29 Orchard End, n30 Manor Mile,
+n31 Manor Gate, n32 Meadow Rise, n33 Meadow Rise Far, n34 Pinfold Way,
+n55 mid (28,660), n56 mid (85,660), n57 mid (28,560), n58 mid (85,560).
+
+## Next batch (iteration 13)
+
+1. BACKFILL n28..n34 + n55..n57 (10 frames — the gap above): orchard row/
+   orchard end under old fruit trees, manor mile lime avenue at 760, manor
+   gate at the piers, meadow rise west/east ends with five-bar gate, Pinfold
+   Way end at the stone wall, and the three (x,660)/(x,560) mids.
+2. Iteration 14: n58 + day n121..n129 continuing the numbered order
+   (coords one-liner from iteration 12's log entry).
 2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
    EDITS (see below), then night n8…, same technique.
 2. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
@@ -112,3 +125,5 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
    spot-verify 2 frames via read_file, tick the table, append the iteration
    row, commit. NEVER stop the loop; the user says "continue" to trigger
    the next batch.
+4. AUTHORITATIVE coverage audit (run instead of trusting the table):
+   `node --input-type=module -e "import('./js/worlds/willow-parish.js').then(async m=>{const ids=m.densify().nodes.map(n=>n[0]);const fs=await import('fs');const have=new Set(fs.readdirSync('assets/willow/day').filter(f=>f.endsWith('.jpg')).map(f=>+f.slice(1,-4)));console.log(ids.filter(i=>!have.has(i)).join(','))})"`
