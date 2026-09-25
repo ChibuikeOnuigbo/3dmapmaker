@@ -391,6 +391,38 @@ test('willow parish: 34 spot village graph, real meter edges, one connected tree
   assert.equal(seen.size, 319, 'every spur and waypoint connects back to the church');
 });
 
+/* ---------------- willow movement crosscheck: WASD = one stride ------------ */
+test('willow WASD: forward hop is one stride, A/D only where a path exists', async () => {
+  const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
+  const { planMove } = await import('../js/core/movement.js');
+  const w = buildWillowParish();
+  const g = w.graph;
+  let straight = null, junction = null;
+  for (const n of g.nodes.values()) {
+    const es = g.edgesOf(n.id);
+    if (es.length >= 3 && !junction) junction = n.id;
+    if (es.length === 2 && !straight) {
+      const b0 = g.edgeBearing(es[0], n.id), b1 = g.edgeBearing(es[1], n.id);
+      const delta = Math.abs(((b0 - b1 + 180) % 360) - 180);   // 180 = opposite
+      if (delta > 150) straight = { id: n.id, yaw: b0 };       // nearly collinear neighbors
+    }
+  }
+  assert.ok(straight && junction, 'found a straight segment and a junction');
+  // W: hop must be a single stride — the photo you land on is 5-8 m away
+  const fwd = planMove(g, straight.id, 'forward', straight.yaw);
+  assert.ok(fwd.ok, 'forward is walkable on a straight street');
+  assert.ok(fwd.distanceM < 8, `forward hop ${fwd.distanceM.toFixed(1)} m is one stride`);
+  // A/D on the same segment: NO path — bloom/bush/wall, never a pano inside
+  const left = planMove(g, straight.id, 'left', straight.yaw);
+  const right = planMove(g, straight.id, 'right', straight.yaw);
+  assert.ok(!(left.ok && left.distanceM > 8) && !(right.ok && right.distanceM > 8),
+    'no long lateral hops: strafe only lands nearby if at all');
+  // at a junction at least one lateral direction resolves to a short hop
+  const fwdJ = planMove(g, junction, 'forward', g.edgeBearing(g.edgesOf(junction)[0], junction));
+  const lat = ['left', 'right'].map((d) => planMove(g, junction, d, fwdJ.bearing)).find((p) => p.ok);
+  assert.ok(lat && lat.distanceM <= 8, 'junction lateral hop is one stride too');
+});
+
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */
 test('sharpen: unsharp mask boosts edges, keeps brightness and alpha', async () => {
   const { sharpenBuffer } = await import('../js/viewer/sharpen.js');

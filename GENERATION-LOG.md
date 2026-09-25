@@ -63,7 +63,8 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n69..n78    |  Y    |  -     |  -      |
 | n79..n81    |  Y    |  -     |  -      |
 | n82..n91    |  Y    |  -     |  -      |
-| n92..n319   |  -    |  -     |  -      |
+| n92..n101   |  Y    |  -     |  -      |
+| n102..n319  |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -81,12 +82,13 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 
 | 9 | 2026-09-25 | 8 m stride densification: staged recursion (55→35→8 m) takes the world to 319 spots / 318 edges, every hop ≤ 7.5 m; older frames n35..n81 positions untouched; mini map draws waypoints small and faint, named spots full-size; day n82..n91 (main-street south stride frames) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, pending commit |
 
-## Next batch (iteration 10)
+| 10 | 2026-09-25 | WASD trapwire crosscheck added to core tests (straight-segment hop < 8 m forward; A/D never yields a long lateral hop; junction laterals resolve ≤ 8 m); day n92..n101 terrace/school-turn/forge-chimney/northern thinning stride frames | 10 | tests 37 core green; normalized, 2 spot-verified, pending commit |
 
-1. day n92..n101 (10 stride frames, main street continuing north in ~25 m
-   prompt steps: terrace rows, hall lane junction area, forge smoke glimpse,
-   smithy chimney, forge lane mouth, hedged gardens, barn end, kissing gate,
-   pasture opening). Sequential-in-place prompts keep the chain identity.
+## Next batch (iteration 11)
+
+1. day n102..n111 (10 stride frames continuing the numbered waypoint order —
+   print coords first via `node --input-type=module -e "import('./js/worlds/willow-parish.js').then(m=>{const {nodes}=m.densify();nodes.slice(101,111).forEach(n=>console.log(n[0],n[2].toFixed(0),n[3].toFixed(0)))})"`),
+   prompts descriptive of what's between the already-shot neighbors.
 2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
    EDITS (see below), then night n8…, same technique.
 2. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
