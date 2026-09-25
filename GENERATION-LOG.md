@@ -50,7 +50,8 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | Spot        | n Day | n Rain | n Night |
 |-------------|-------|--------|---------|
 | n1..n7      |  Y    |  Y     |  Y      |
-| n8..n17     |  Y    |  -     |  -      |
+| n8..n14     |  Y    |  Y     |  -      |
+| n15..n17    |  Y    |  -     |  -      |
 | n18..n27    |  Y    |  -     |  -      |
 | n28..n34    |  -    |  -     |  -      |
 | n35..n44    |  Y    |  -     |  -      |
@@ -58,7 +59,7 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n55..n58    |  -    |  -     |  -      |
 | n59..n68    |  Y    |  -     |  -      |
 | n69..n78    |  Y    |  -     |  -      |
-| n79..n81    |  -    |  -     |  -      |
+| n79..n81    |  Y    |  -     |  -      |
 
 ## Iterations
 
@@ -71,13 +72,14 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | 4 | 2026-09-21 | day n35..n44 waypoints (main street mids, manor mile, church path, west bend approach) | 10 946 | normalized, committed df4c912 |
 | 5 | 2026-09-24 | day n45..n54 waypoints (inn mews corner, west hedgeline, manor mile limes, manor gate approach, inn front, main east end, meadow gate, croft gate, croft hedgerow, Westfold path) | 10 | normalized, spot-verified, committed aba8eb1 |
 | 6 | 2026-09-24 | world re-densified RECURSIVELY 58→81 spots (threshold 55→35 m, seed pass preserves n35..n58 positions; max hop now 30 m); walk-feel engine js/viewer/walk-steps.js (recursive 5 m stride schedule + quantized dolly + head-bob, Motion pop gains "Walk" default style); day n59..n68 (main street mids y 85..535) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, committed d5df8fa |
-| 7 | 2026-09-25 | walk pacing made SLOWER per user directive (950 + 200 ms per stride, dolly phase 68% of the hop, stray \n in index.html motion pop fixed); day n69..n78 (village-north thinning, orchard junction, manor lane ha-has/lime avenue/parkland/manor gates, church path yews→stile, pond walk) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, pending commit |
+| 7 | 2026-09-25 | walk pacing made SLOWER per user directive (950 + 200 ms per stride, dolly phase 68% of the hop, stray \n in index.html motion pop fixed); day n69..n78 (village-north thinning, orchard junction, manor lane ha-has/lime avenue/parkland/manor gates, church path yews→stile, pond walk) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, committed fcf76a4 |
+| 8 | 2026-09-25 | DAY COMPLETE 81/81: day n79 (school bell gable on School Rise), n80 (smithy forge mouth, anvil, glow, horseshoes), n81 (orchard walk far end, beehives, pasture gate); rain sweep STARTED as day-frame edits: rain n8..n14 (wet lanes, puddles, rain streaks, heavy sky) | 10 | spot-verified n80 + n11; normalized; suites green; pending commit |
 
-## Next batch (iteration 8)
+## Next batch (iteration 9)
 
-1. day n79..n81 (3 frames): n79 school rise mid, n80 forge lane mid,
-   n81 orchard walk far end — then DAY is COMPLETE (81/81).
-2. Then RAIN and NIGHT sweeps n1..n81, batches of 10. CRITICAL for identity
+1. rain n15..n24 (10 frames) — same edit technique as below (day frame as
+   image input). Continue rain sweeps 10/turn until n81, then NIGHT sweep.
+2. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
    match: generate rain/night frames as EDITS of the committed day jpg
    (pass images: [assets/willow/day/nX.jpg]) so buildings/street stay
    pixel-identical; only weather/lighting changes:
