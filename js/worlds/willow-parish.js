@@ -73,18 +73,23 @@ const EDGES = [
   [6, 32], [32, 33],
 ];
 
-export const DENSE_MIN_M = 35;
+export const DENSE_MIN_M = 8;
 export const DENSE_FIRST_IMG = 35;
 
 /**
- * Waypoint densification — RECURSIVE: passes keep splitting every edge of
- * DENSE_MIN_M or more at its midpoint until no edge remains that long.
- * Result: a photo frame every ~17.5–35 m, so a walk hop renders as a handful
- * of ~5 m dolly steps (see js/viewer/walk-steps.js) instead of a jump.
+ * Waypoint densification — RECURSIVE, STAGED: passes keep splitting every
+ * edge at its midpoint while it is longer than the stage threshold:
+ *   stage 55 m → the original 24 waypoints (n35..n58)
+ *   stage 35 m → the walk-feel pass (n59..n81)
+ *   stage DENSE_MIN_M (8 m) → one photo frame per real stride
+ * Older stages run first and in the same order every time, so already
+ * generated frames n35..nN keep their map positions FOREVER as new shorter
+ * hops are added. Result: every map hop is one real step of ≤ 8 m, so the
+ * photo you land on after a WASD press was taken ~5–8 m from the one you
+ * stand on — map distance and image distance agree.
  *
- * Pure per call: never mutates the module table (the world can be built many
- * times in one session, e.g. app boot plus landing previews). Deterministic:
- * same pass order + stable EDGES order ⇒ stable img numbers.
+ * Pure per call: never mutates the module table. Deterministic: same stage
+ * order + stable EDGES order ⇒ stable img numbers.
  */
 export function densify(minM = DENSE_MIN_M) {
   const xy = new Map(NODES.map(([img, , x, y]) => [img, [x, y]]));
@@ -104,12 +109,13 @@ export function densify(minM = DENSE_MIN_M) {
     }
     return finer;
   };
-  // seed pass replicates the original 55 m split so already-generated frames
-  // n35..n58 keep their map positions forever; recursion then refines to minM
-  let edges = split(EDGES.map((e) => [...e]), 55);
-  for (let pass = 0; pass < 8; pass++) {
-    if (edges.every(([a, b]) => { const [ax, ay] = xy.get(a), [bx, by] = xy.get(b); return Math.hypot(bx - ax, by - ay) < minM; })) break;
-    edges = split(edges, minM);
+  let edges = EDGES.map((e) => [...e]);
+  const stages = [55, 35, minM].filter((v, i, a) => v >= minM && a.indexOf(v) === i);
+  for (const t of stages) {
+    for (let pass = 0; pass < 8; pass++) {
+      if (edges.every(([a, b]) => { const [ax, ay] = xy.get(a), [bx, by] = xy.get(b); return Math.hypot(bx - ax, by - ay) < t; })) break;
+      edges = split(edges, t);
+    }
   }
   return { nodes, edges };
 }

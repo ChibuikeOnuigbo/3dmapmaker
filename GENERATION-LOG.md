@@ -9,12 +9,14 @@ exactly what to generate next. Continue until every box is ticked.
 - World: `demo_willow_parish` — photoreal fictional English village
   with honey limestone cottages, dark slate roofs, willow trees,
   overcast spring sky, no people, no cars, no text.
-- Spots: 34 named + 47 recursive waypoint densification = **81 spots**
-  (nodes `n1`..`n81`), one connected tree of 80 edges, every end
+- Spots: 34 named + 285 staged-recursive waypoint densification = **319 spots**
+  (nodes `n1`..`n319`), one connected tree of 318 edges, every end
   dead-ends at a visible barrier on the 2D map.
-- Modes: day / rain / night for each spot → **243 target frames**.
-  Waypoints come from RECURSIVE midpoint splitting until every edge is under
-  35 m (seed pass keeps n35..n58 at their original spots forever).
+- Modes: day / rain / night for each spot → **957 target frames**.
+  Waypoints come from STAGED recursive midpoint splitting: 55 m stage
+  (n35..n58), 35 m stage (n59..n81), 8 m stage (n82..). Every hop ≤ 8 m —
+  one WASD press = one real stride = one photo taken 5–8 m away; map
+  distance and image distance are the same thing (user directive).
 - Frame: seamless equirectangular 360 photo, 2:1 ratio → normalize every
   generated frame to **2048x1024** (Lanczos) with a light micro contrast
   pass before committing (script below).
@@ -60,6 +62,8 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n59..n68    |  Y    |  -     |  -      |
 | n69..n78    |  Y    |  -     |  -      |
 | n79..n81    |  Y    |  -     |  -      |
+| n82..n91    |  Y    |  -     |  -      |
+| n92..n319   |  -    |  -     |  -      |
 
 ## Iterations
 
@@ -75,10 +79,16 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | 7 | 2026-09-25 | walk pacing made SLOWER per user directive (950 + 200 ms per stride, dolly phase 68% of the hop, stray \n in index.html motion pop fixed); day n69..n78 (village-north thinning, orchard junction, manor lane ha-has/lime avenue/parkland/manor gates, church path yews→stile, pond walk) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, committed fcf76a4 |
 | 8 | 2026-09-25 | DAY COMPLETE 81/81: day n79 (school bell gable on School Rise), n80 (smithy forge mouth, anvil, glow, horseshoes), n81 (orchard walk far end, beehives, pasture gate); rain sweep STARTED as day-frame edits: rain n8..n14 (wet lanes, puddles, rain streaks, heavy sky) | 10 | spot-verified n80 + n11; normalized; suites green; pending commit |
 
-## Next batch (iteration 9)
+| 9 | 2026-09-25 | 8 m stride densification: staged recursion (55→35→8 m) takes the world to 319 spots / 318 edges, every hop ≤ 7.5 m; older frames n35..n81 positions untouched; mini map draws waypoints small and faint, named spots full-size; day n82..n91 (main-street south stride frames) | 10 | tests 36 core + 58 harness green; normalized, 2 spot-verified, pending commit |
 
-1. rain n15..n24 (10 frames) — same edit technique as below (day frame as
-   image input). Continue rain sweeps 10/turn until n81, then NIGHT sweep.
+## Next batch (iteration 10)
+
+1. day n92..n101 (10 stride frames, main street continuing north in ~25 m
+   prompt steps: terrace rows, hall lane junction area, forge smoke glimpse,
+   smithy chimney, forge lane mouth, hedged gardens, barn end, kissing gate,
+   pasture opening). Sequential-in-place prompts keep the chain identity.
+2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
+   EDITS (see below), then night n8…, same technique.
 2. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
    match: generate rain/night frames as EDITS of the committed day jpg
    (pass images: [assets/willow/day/nX.jpg]) so buildings/street stay

@@ -264,19 +264,21 @@ export class MapRenderer {
       ctx.stroke();
     }
 
-    // nodes
+    // nodes — dense 8 m waypoints render as faint small dots (the ground
+    // truth for stride movement); only named spots are full-size/labeled
     const nodeR = Math.max(2.2, Math.min(7, 3.4 * Math.sqrt(s)));
     const showLabels = s > 0.35;
     ctx.font = `${Math.max(10, 10 * (devicePixelRatio || 1))}px system-ui`;
     for (const n of g.nodes.values()) {
       if (!inView(n.x, n.y)) continue;
       const p = this.worldToScreen(n.x, n.y);
+      const isWaypoint = /(^|_)w\d+$/.test(n.id);
       if (this.highlight.has(n.id)) { ctx.fillStyle = '#e8a33d'; }
       else if (n.id === this.currentNodeId) { continue; }    // marker drawn later
       else if (this.visited.has(n.id)) ctx.fillStyle = '#4d7fc0';
-      else ctx.fillStyle = n.zoneId?.includes('church') ? '#b99256' : '#8798ab';
-      ctx.beginPath(); ctx.arc(p.x, p.y, nodeR, 0, Math.PI * 2); ctx.fill();
-      if (showLabels && n.id !== this.currentNodeId && s > 0.9) {
+      else ctx.fillStyle = n.zoneId?.includes('church') ? '#b99256' : (isWaypoint ? 'rgba(135,152,171,0.55)' : '#8798ab');
+      ctx.beginPath(); ctx.arc(p.x, p.y, isWaypoint ? Math.max(1.3, nodeR * 0.45) : nodeR, 0, Math.PI * 2); ctx.fill();
+      if (showLabels && n.id !== this.currentNodeId && s > 0.9 && !isWaypoint) {
         ctx.fillStyle = 'rgba(60,70,84,0.85)';
         ctx.fillText(n.name, p.x + nodeR + 3, p.y - nodeR - 2);
       }

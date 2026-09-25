@@ -364,11 +364,11 @@ test('movement: rotate 90° then forward === strafe (plaza grid, all 8 direction
 test('willow parish: 34 spot village graph, real meter edges, one connected tree', async () => {
   const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
   const w = buildWillowParish();
-  assert.equal(w.graph.nodes.size, 81, '34 named spots + 47 dense waypoints');
-  assert.equal(w.graph.edges.size, 80, 'tree: n-1 edges');
-  // no long gaps: recursive densification keeps every edge under 35 m
+  assert.equal(w.graph.nodes.size, 319, '34 named spots + 285 staged-recursive waypoints');
+  assert.equal(w.graph.edges.size, 318, 'tree: n-1 edges');
+  // one stride per hop: staged recursion keeps every edge under 8 m, so// map distance and panorama distance are the same thing
   for (const e of w.graph.edges.values()) {
-    assert.ok(e.distM < 35, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected walkable hop`);
+    assert.ok(e.distM < 8, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected one-stride hop`);
   }
   // main street path total stays 600 m of real distance end to end
   let cur = 'willow_060', prev = null, total = 0;
@@ -388,7 +388,7 @@ test('willow parish: 34 spot village graph, real meter edges, one connected tree
       if (!seen.has(o)) { seen.add(o); q.push(o); }
     }
   }
-  assert.equal(seen.size, 81, 'every spur and waypoint connects back to the church');
+  assert.equal(seen.size, 319, 'every spur and waypoint connects back to the church');
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */
