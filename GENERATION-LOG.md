@@ -55,10 +55,11 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 | n8..n14     |  Y    |  Y     |  -      |
 | n15..n17    |  Y    |  -     |  -      |
 | n18..n27    |  Y    |  -     |  -      |
-| n28..n34    |  -    |  -     |  -      |
+| n28..n34    |  Y    |  -     |  -      |
 | n35..n44    |  Y    |  -     |  -      |
 | n45..n54    |  Y    |  -     |  -      |
-| n55..n58    |  -    |  -     |  -      |
+| n55..n57    |  Y    |  -     |  -      |
+| n58         |  -    |  -     |  -      |
 | n59..n68    |  Y    |  -     |  -      |
 | n69..n78    |  Y    |  -     |  -      |
 | n79..n81    |  Y    |  -     |  -      |
@@ -91,25 +92,15 @@ python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
 
 | 12 | 2026-09-25 | live WASD simulation printed (6 W presses = 7.5 m each from the porch, A/D strictly blocked mid-segment, S walks 7.5 m back); day n102 + n112..n120 (hedged lane, upper manor lane, manor gates close, south church approach, lych-gate corner, churchyard corner, yew-avenue strides x4 to the Glebe stile) | 10 | suites green; normalized, 2 spot-verified, pending commit |
 
-## GAP (priority — fill before n121+)
+| 13 | 2026-09-25 | live preview server restarted (port 8080) for hands-on WASD; BACKFILL: n28..n34 (orchard row/end, manor mile, manor gates close, meadow rise mouth + far gate, Pinfold wall) + n55..n57 (orchard mouth, orchard mid-row, meadow-rise turn) — gap now only n58 | 10 | suites green; normalized, 2 spot-verified (manor gates chain to n48..n113 ✓), pending commit |
 
-n28..n34 (named) and n55..n58 (waypoints) were skipped when densification
-superseded the numbering: n28 Orchard Row, n29 Orchard End, n30 Manor Mile,
-n31 Manor Gate, n32 Meadow Rise, n33 Meadow Rise Far, n34 Pinfold Way,
-n55 mid (28,660), n56 mid (85,660), n57 mid (28,560), n58 mid (85,560).
+## Next batch (iteration 14)
 
-## Next batch (iteration 13)
-
-1. BACKFILL n28..n34 + n55..n57 (10 frames — the gap above): orchard row/
-   orchard end under old fruit trees, manor mile lime avenue at 760, manor
-   gate at the piers, meadow rise west/east ends with five-bar gate, Pinfold
-   Way end at the stone wall, and the three (x,660)/(x,560) mids.
-2. Iteration 14: n58 + day n121..n129 continuing the numbered order
-   (coords one-liner from iteration 12's log entry).
+1. n58 (mid at 85,560 — meadow rise last mid) + day n121..n129 continuing
+   the numbered order (coords one-liner from the iterations log).
 2. When day n1..n319 is complete, resume the rain sweep n15.. via day-frame
    EDITS (see below), then night n8…, same technique.
-2. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
-   match: generate rain/night frames as EDITS of the committed day jpg
+3. CRITICAL identity rule, unchanged: generate rain/night frames as EDITS of the committed day jpg
    (pass images: [assets/willow/day/nX.jpg]) so buildings/street stay
    pixel-identical; only weather/lighting changes:
    - RAIN prompt: "same exact panorama, every building and object in the same
