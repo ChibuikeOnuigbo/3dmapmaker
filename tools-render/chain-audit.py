@@ -53,8 +53,15 @@ def load_frames():
 
 
 def graph_edges():
-    """Run the world densify in node and dump edges as img pairs."""
-    import subprocess, json
+    """Collapsed walk pairs: consecutive EXISTING frames along each branch.
+
+    The 4 m sub-stride stage inserts topology knots whose photos are still
+    being generated, so raw edges hardly ever join two existing frames.
+    Walk each branch from every existing frame until the NEXT existing
+    frame on that branch and compare THOSE — exactly the visual pair a
+    walker experiences.
+    """
+    import subprocess, json, os
     js = """
 import { densify } from './js/worlds/willow-parish.js';
 const { edges } = densify();
@@ -62,7 +69,27 @@ console.log(JSON.stringify(edges));
 """
     out = subprocess.run(['node', '--input-type=module', '-e', js], cwd=ROOT,
                          capture_output=True, text=True, check=True)
-    return json.loads(out.stdout)
+    raw = json.loads(out.stdout)
+    adj = {}
+    for a, b in raw:
+        adj.setdefault(a, []).append(b)
+        adj.setdefault(b, []).append(a)
+    have = set()
+    for f in os.listdir(DAY):
+        if f.endswith('.jpg'):
+            have.add(int(f[1:-4]))
+    pairs = set()
+    for start in sorted(have):
+        for nb in adj.get(start, []):
+            prev, cur, hops = start, nb, 1
+            while cur not in have and hops < 24:           # walk toward next existing frame
+                nxts = [x for x in adj.get(cur, []) if x != prev]
+                if not nxts: break
+                prev, cur = cur, nxts[0]
+                hops += 1
+            if cur in have:
+                pairs.add(tuple(sorted((start, cur))))
+    return sorted(pairs)
 
 
 def main():

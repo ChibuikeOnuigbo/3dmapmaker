@@ -38,6 +38,17 @@ parallax. Same overcast daylight, no people, no text."
 |------|----------------|--------|--------------------|----------|----------------|
 | 15 | point_correct_1 = n1 (willow_060, Willow Street 60 m) | S → n82; N → n114; W-A → West Bend chain | **7** | n162 (6.3 m S), n226 (7.5 m N), n244 (6.9 m W/A), n124 (6.9 m W ← n244), n245 (6.9 m E ← n44), n246 (6.9 m W ← n44), n247 (6.9 m E ← n13) | ✓ n244→n124 visual: same flint cottage/rose gate/spire, correct parallax |
 | 16 | ring cells around anchors n82/n59/n83/n35/n86/n36/n88 (streetside) + n246/n256/n312 (lane seams) | S chain ×7 + W seams ×2 + E seam ×1 | **10** | n125 (6.9 m W ← n246) — closes the n1–n13 seam; n130 (6.9 m W ← n256, Green Road); n158 (6.9 m E ← n312, Meadow Rise); n163 (6.3 m S ← n82), n164 (S ← n59), n165 (S ← n83), n166 (S ← n35), n171 (S ← n86), n174 (S ← n36), n175 (S ← n88) | ✓ n163←n82 visual: same willow, church tower, cottages. ⚠ n125 drifted to an open-meadow look — RE-CHECK against n246/n247 (regenerate if it offends) |
+| 17 | USER OVERRIDE: supersede ring-resume — go back to point_correct_1 and add MORE steps to the +x chains; PLUS user anti-drift audit command | 4 m sub-stride stage added to densify (637 nodes / 636 edges / max hop 3.75 m, all earlier imgs unchanged); OpenCV auditor `tools-render/chain-audit.py` (collapsed-branch walkable pairs: HSV correl + sky-band Δ + exposure Δ) ran over all frames: 145 pairs, worst breaks fixed | **10 regenerations** | n119←n117, n124←n246, n116←n115, n244←n1, n82←n162, n90←n62, n91←n63, n97←n66, n93←n64, n17←n78 | ✓ breaks n11↔n119 (−0.68), n124↔n245 (−0.32), n63↔n91, n82↔n162, n97-family all cleared. Residual offenders: n3↔n45 (−0.654), n9↔n116 (canopy-vs-open false-positive risk + palette), n1↔n244 (still −0.146, skyΔ 83 — regenerate n244 again next turn), n37↔n91, n4↔n94 |
+
+## Anti-drift rule (user directive, permanent)
+
+- After every batch: run `.venv/bin/python tools-render/chain-audit.py --top 15`.
+- A pair with correl < −0.05 OR skyΔ > 40 = a hallucination break → regenerate
+  the outlier frame as a camera-shift edit of its best-correlated neighbor
+  (same prompt + "keep the SAME overcast grey-white sky and identical
+  materials"). Cross-canopy pairs (churchyard yews vs open sky) may show
+  skyΔ false positives — judge by correl first.
+- The committed audit report lives at `tools-render/chain-audit.txt`.
 
 ## Ring optics (updated state)
 
@@ -49,4 +60,4 @@ parallax. Same overcast daylight, no people, no text."
 
 ## Cursor
 
-`anchor=ring-cell n176 next (S ← n?) — resume the sorted ring scan in finx_genmap protocol step 4: rebuild ring list from the graph each iteration, take the first 10 missing-adjacent imgs, edit from their existing neighbor; after the ring closes around main street, re-run for church path, west bend, green road, hall/pond/school/forge/meadow/orchard/manor branches`
+`anchor=point_correct_1 +x chains EXPANDED (4 m sub-strides live: hops now 3.1–3.75 m). Iteration 18 queue: (1) regenerate n320..n323 / n448..n451 / n486..n487 sub-stride frames [LOST in a workspace reset — 4 m graphs regenerated, frames still missing], (2) regenerate n244 AGAIN (audit still −0.146 vs n1; source n124-east family), (3) fix n3↔n45 (−0.654), n4↔n94, n37↔n91, (4) then resume ring scan. Report in tools-render/chain-audit.txt before/after.`
