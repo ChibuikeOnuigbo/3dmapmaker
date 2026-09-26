@@ -1,59 +1,50 @@
-chain audit: 154 walkable edges checked, 121 suspect breaks
+chain audit: 160 walkable edges checked, 134 suspect breaks
 
 WORST FRAMES (regenerate as edits of their best neighbor):
-  n1: 3 suspect edges   suggested source n226 (correl 0.12)
-  n2: 3 suspect edges   suggested source n510 (correl 0.16)
+  n1: 3 suspect edges   suggested source n448 (correl 0.46)
+  n2: 3 suspect edges   suggested source n335 (correl 0.54)
   n3: 3 suspect edges   suggested source n89 (correl 0.00)
   n4: 3 suspect edges   suggested source n93 (correl 0.62)
   n5: 3 suspect edges   suggested source n98 (correl 0.21)
-  n7: 3 suspect edges   suggested source n55 (correl 0.28)
-  n8: 3 suspect edges   suggested source n117 (correl 0.80)
-  n17: 3 suspect edges   suggested source n78 (correl 0.95)
-  n226: 2 suspect edges   suggested source n114 (correl 0.82)
-  n320: 2 suspect edges   suggested source n162 (correl 0.06)
-  n170: 2 suspect edges   suggested source n86 (correl 0.48)
-  n335: 2 suspect edges   suggested source n2 (correl -0.25)
-  n45: 2 suspect edges   suggested source n14 (correl 0.11)
-  n89: 2 suspect edges   suggested source n62 (correl 0.69)
 
-SUSPECT PAIRS (worst first):
-  n3 <-> n45: correl -0.654  skyΔ 58.0  expoΔ 22.3
-  n169 <-> n335: correl -0.291  skyΔ 74.3  expoΔ 23.0
-  n2 <-> n335: correl -0.252  skyΔ 73.5  expoΔ 17.9
-  n9 <-> n116: correl -0.212  skyΔ 217.5  expoΔ 101.2
-  n37 <-> n91: correl -0.138  skyΔ 23.5  expoΔ 11.2
-  n4 <-> n94: correl -0.129  skyΔ 49.0  expoΔ 0.1
-  n17 <-> n48: correl -0.124  skyΔ 47.8  expoΔ 38.0
-  n16 <-> n48: correl -0.117  skyΔ 52.0  expoΔ 35.4
-  n101 <-> n201: correl -0.112  skyΔ 92.0  expoΔ 17.6
-  n15 <-> n46: correl -0.105  skyΔ 51.3  expoΔ 12.6
-  n7 <-> n106: correl -0.095  skyΔ 61.4  expoΔ 3.4
-  n14 <-> n46: correl -0.093  skyΔ 48.7  expoΔ 34.3
-  n162 <-> n321: correl -0.084  skyΔ 83.5  expoΔ 25.5
-  n71 <-> n106: correl -0.074  skyΔ 13.4  expoΔ 1.1
-  n3 <-> n90: correl -0.070  skyΔ 54.8  expoΔ 20.1
-  n1 <-> n244: correl -0.054  skyΔ 74.2  expoΔ 7.9
-  n5 <-> n53: correl -0.051  skyΔ 34.1  expoΔ 13.4
-  n4 <-> n51: correl -0.021  skyΔ 30.2  expoΔ 0.4
-  n61 <-> n172: correl -0.019  skyΔ 6.2  expoΔ 13.5
-  n64 <-> n92: correl 0.001  skyΔ 3.4  expoΔ 11.6
-  n3 <-> n89: correl 0.002  skyΔ 57.3  expoΔ 0.3
-  n1 <-> n320: correl 0.009  skyΔ 82.2  expoΔ 21.2
-  n12 <-> n76: correl 0.028  skyΔ 11.6  expoΔ 0.7
-  n43 <-> n115: correl 0.035  skyΔ 4.9  expoΔ 7.7
-  n41 <-> n107: correl 0.044  skyΔ 112.9  expoΔ 41.2
-  n8 <-> n115: correl 0.044  skyΔ 31.0  expoΔ 3.1
-  n8 <-> n116: correl 0.049  skyΔ 32.9  expoΔ 2.2
-  n162 <-> n320: correl 0.061  skyΔ 80.1  expoΔ 18.8
-  n72 <-> n109: correl 0.083  skyΔ 18.8  expoΔ 12.6
-  n5 <-> n97: correl 0.087  skyΔ 43.6  expoΔ 8.5
-  n75 <-> n119: correl 0.088  skyΔ 203.1  expoΔ 71.7
-  n102 <-> n202: correl 0.110  skyΔ 38.9  expoΔ 4.2
-  n14 <-> n45: correl 0.110  skyΔ 8.7  expoΔ 7.5
-  n35 <-> n165: correl 0.117  skyΔ 41.3  expoΔ 12.0
-  n1 <-> n226: correl 0.121  skyΔ 78.3  expoΔ 21.9
-  n27 <-> n56: correl 0.125  skyΔ 101.3  expoΔ 55.8
-  n21 <-> n51: correl 0.127  skyΔ 42.9  expoΔ 9.6
-  n2 <-> n170: correl 0.128  skyΔ 55.2  expoΔ 17.5
-  n57 <-> n158: correl 0.145  skyΔ 36.4  expoΔ 10.7
-  n169 <-> n334: correl 0.149  skyΔ 90.5  expoΔ 49.8
+SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR = structure mismatch]
+  n9 <-> n116: correl -0.212  skyΔ 217.5  expoΔ 101.2  sift 5  driftΔ 80.8 STR
+  n244 <-> n486: correl -0.173  skyΔ 74.6  expoΔ 8.3  sift 59  driftΔ 39.4 MAT
+  n37 <-> n91: correl -0.138  skyΔ 23.5  expoΔ 11.2  sift 2  driftΔ 999.0 STR
+  n17 <-> n48: correl -0.124  skyΔ 47.8  expoΔ 38.0  sift 8  driftΔ 81.3 STR
+  n16 <-> n48: correl -0.117  skyΔ 52.0  expoΔ 35.4  sift 2  driftΔ 999.0 STR
+  n101 <-> n201: correl -0.112  skyΔ 92.0  expoΔ 17.6  sift 8  driftΔ 41.0 STR
+  n15 <-> n46: correl -0.105  skyΔ 51.3  expoΔ 12.6  sift 13  driftΔ 67.1 MAT
+  n7 <-> n106: correl -0.095  skyΔ 61.4  expoΔ 3.4  sift 2  driftΔ 999.0 STR
+  n14 <-> n46: correl -0.093  skyΔ 48.7  expoΔ 34.3  sift 4  driftΔ 14.6 STR
+  n226 <-> n448: correl -0.090  skyΔ 78.5  expoΔ 22.3  sift 40  driftΔ 27.4 MAT
+  n162 <-> n321: correl -0.084  skyΔ 83.5  expoΔ 25.5  sift 253  driftΔ 15.2 MAT
+  n65 <-> n94: correl -0.080  skyΔ 42.2  expoΔ 2.2  sift 19  driftΔ 23.6 MAT
+  n71 <-> n106: correl -0.074  skyΔ 13.4  expoΔ 1.1  sift 5  driftΔ 28.3 STR
+  n3 <-> n90: correl -0.070  skyΔ 54.8  expoΔ 20.1  sift 7  driftΔ 24.8 STR
+  n5 <-> n53: correl -0.051  skyΔ 34.1  expoΔ 13.4  sift 3  driftΔ 999.0 STR
+  n3 <-> n45: correl -0.038  skyΔ 67.4  expoΔ 32.1  sift 3  driftΔ 999.0 STR
+  n4 <-> n51: correl -0.021  skyΔ 30.2  expoΔ 0.4  sift 3  driftΔ 999.0 STR
+  n61 <-> n172: correl -0.019  skyΔ 6.2  expoΔ 13.5  sift 3  driftΔ 999.0 STR
+  n64 <-> n92: correl 0.001  skyΔ 3.4  expoΔ 11.6  sift 10  driftΔ 23.1 STR
+  n3 <-> n89: correl 0.002  skyΔ 57.3  expoΔ 0.3  sift 1  driftΔ 999.0 STR
+  n12 <-> n76: correl 0.028  skyΔ 11.6  expoΔ 0.7  sift 1  driftΔ 999.0 STR
+  n43 <-> n115: correl 0.035  skyΔ 4.9  expoΔ 7.7  sift 11  driftΔ 37.7 STR
+  n41 <-> n107: correl 0.044  skyΔ 112.9  expoΔ 41.2  sift 5  driftΔ 61.4 STR
+  n8 <-> n115: correl 0.044  skyΔ 31.0  expoΔ 3.1  sift 15  driftΔ 38.4 MAT
+  n8 <-> n116: correl 0.049  skyΔ 32.9  expoΔ 2.2  sift 10  driftΔ 27.0 STR
+  n72 <-> n109: correl 0.083  skyΔ 18.8  expoΔ 12.6  sift 13  driftΔ 36.2 MAT
+  n5 <-> n97: correl 0.087  skyΔ 43.6  expoΔ 8.5  sift 9  driftΔ 28.4 STR
+  n75 <-> n119: correl 0.088  skyΔ 203.1  expoΔ 71.7  sift 6  driftΔ 50.7 STR
+  n102 <-> n202: correl 0.110  skyΔ 38.9  expoΔ 4.2  sift 7  driftΔ 28.9 STR
+  n35 <-> n165: correl 0.117  skyΔ 41.3  expoΔ 12.0  sift 3  driftΔ 999.0 STR
+  n27 <-> n56: correl 0.125  skyΔ 101.3  expoΔ 55.8  sift 4  driftΔ 99.6 STR
+  n21 <-> n51: correl 0.127  skyΔ 42.9  expoΔ 9.6  sift 2  driftΔ 999.0 STR
+  n2 <-> n170: correl 0.128  skyΔ 55.2  expoΔ 17.5  sift 362  driftΔ 12.1
+  n57 <-> n158: correl 0.145  skyΔ 36.4  expoΔ 10.7  sift 2  driftΔ 999.0 STR
+  n169 <-> n334: correl 0.149  skyΔ 90.5  expoΔ 49.8  sift 9  driftΔ 24.2 STR
+  n30 <-> n109: correl 0.151  skyΔ 20.8  expoΔ 27.0  sift 4  driftΔ 30.5 STR
+  n39 <-> n99: correl 0.158  skyΔ 53.2  expoΔ 17.1  sift 5  driftΔ 22.1 STR
+  n2 <-> n510: correl 0.161  skyΔ 58.6  expoΔ 15.0  sift 17  driftΔ 21.7 MAT
+  n22 <-> n52: correl 0.171  skyΔ 2.7  expoΔ 2.5  sift 3  driftΔ 999.0 STR
+  n71 <-> n107: correl 0.185  skyΔ 8.7  expoΔ 5.7  sift 6  driftΔ 27.5 STR
