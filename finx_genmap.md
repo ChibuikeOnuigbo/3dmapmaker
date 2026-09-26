@@ -37,7 +37,16 @@ parallax. Same overcast daylight, no people, no text."
 | Iter | Anchor (point) | Branch | New frames (count) | New imgs | Chain verified |
 |------|----------------|--------|--------------------|----------|----------------|
 | 15 | point_correct_1 = n1 (willow_060, Willow Street 60 m) | S → n82; N → n114; W-A → West Bend chain | **7** | n162 (6.3 m S), n226 (7.5 m N), n244 (6.9 m W/A), n124 (6.9 m W ← n244), n245 (6.9 m E ← n44), n246 (6.9 m W ← n44), n247 (6.9 m E ← n13) | ✓ n244→n124 visual: same flint cottage/rose gate/spire, correct parallax |
+| 16 | ring cells around anchors n82/n59/n83/n35/n86/n36/n88 (streetside) + n246/n256/n312 (lane seams) | S chain ×7 + W seams ×2 + E seam ×1 | **10** | n125 (6.9 m W ← n246) — closes the n1–n13 seam; n130 (6.9 m W ← n256, Green Road); n158 (6.9 m E ← n312, Meadow Rise); n163 (6.3 m S ← n82), n164 (S ← n59), n165 (S ← n83), n166 (S ← n35), n171 (S ← n86), n174 (S ← n36), n175 (S ← n88) | ✓ n163←n82 visual: same willow, church tower, cottages. ⚠ n125 drifted to an open-meadow look — RE-CHECK against n246/n247 (regenerate if it offends) |
+
+## Ring optics (updated state)
+
+- Street S-chain holes closed this iter: n163–n166, n171, n174, n175.
+- n58's neighbors (n317/n318) are themselves missing → n58 unlocks when
+  the ring reaches them (they sort at ring imgs 317/318).
+- Remaining holes adjacent to existing frames: continue ring fill from
+  img order (ring scanner re-run each iteration).
 
 ## Cursor
 
-`anchor=point_correct_1(n1) · S ✓ N ✓ W-A chain: n1–n13 street-lane seam stitched except n125 (needs n246/n247 as sources — do FIRST next iteration) → then anchor=point_correct_2 (n2, green junction: north n169 ✓ / south n170 ✓ / west n256 ✓ already; continue its +x chains toward next existing frames)`
+`anchor=ring-cell n176 next (S ← n?) — resume the sorted ring scan in finx_genmap protocol step 4: rebuild ring list from the graph each iteration, take the first 10 missing-adjacent imgs, edit from their existing neighbor; after the ring closes around main street, re-run for church path, west bend, green road, hall/pond/school/forge/meadow/orchard/manor branches`
