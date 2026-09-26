@@ -74,6 +74,7 @@ const EDGES = [
 ];
 
 export const DENSE_MIN_M = 8;
+export const DENSE_STRIDE_M = 4;
 export const DENSE_FIRST_IMG = 35;
 
 /**
@@ -110,7 +111,10 @@ export function densify(minM = DENSE_MIN_M) {
     return finer;
   };
   let edges = EDGES.map((e) => [...e]);
-  const stages = [55, 35, minM].filter((v, i, a) => v >= minM && a.indexOf(v) === i);
+  // stages run largest-first; the 55/35/8 stages are byte-identical to the
+  // historical passes, so frames n35..n319 keep their positions FOREVER;
+  // the 4 m sub-stride stage only ever appends new waypoints (n320+)
+  const stages = [55, 35, minM].concat(minM > DENSE_STRIDE_M ? [DENSE_STRIDE_M] : []);
   for (const t of stages) {
     for (let pass = 0; pass < 8; pass++) {
       if (edges.every(([a, b]) => { const [ax, ay] = xy.get(a), [bx, by] = xy.get(b); return Math.hypot(bx - ax, by - ay) < t; })) break;

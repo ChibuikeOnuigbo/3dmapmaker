@@ -364,8 +364,8 @@ test('movement: rotate 90° then forward === strafe (plaza grid, all 8 direction
 test('willow parish: 34 spot village graph, real meter edges, one connected tree', async () => {
   const { buildWillowParish } = await import('../js/worlds/willow-parish.js');
   const w = buildWillowParish();
-  assert.equal(w.graph.nodes.size, 319, '34 named spots + 285 staged-recursive waypoints');
-  assert.equal(w.graph.edges.size, 318, 'tree: n-1 edges');
+  assert.equal(w.graph.nodes.size, 637, '34 named + 285 8 m waypoints + 318 4 m sub-strides');
+  assert.equal(w.graph.edges.size, 636, 'tree: n-1 edges');
   // one stride per hop: staged recursion keeps every edge under 8 m, so// map distance and panorama distance are the same thing
   for (const e of w.graph.edges.values()) {
     assert.ok(e.distM < 8, `edge ${e.a}..${e.b} is ${e.distM.toFixed(1)} m, expected one-stride hop`);
@@ -388,7 +388,7 @@ test('willow parish: 34 spot village graph, real meter edges, one connected tree
       if (!seen.has(o)) { seen.add(o); q.push(o); }
     }
   }
-  assert.equal(seen.size, 319, 'every spur and waypoint connects back to the church');
+  assert.equal(seen.size, 637, 'every spur and waypoint connects back to the church');
 });
 
 /* ---------------- willow movement crosscheck: WASD = one stride ------------ */
