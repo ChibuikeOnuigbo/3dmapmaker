@@ -7,8 +7,13 @@ how much the AI drifted between those two chained photos:
   1. HSV 3-D histogram correlation (palette match of the same street)
   2. Sky-band mean-luminance delta (top 12% rows — overcast vs sunny breaks)
   3. Exposure delta (global mean luminance)
+  4. SIFT keypoint persistence (structure — catches a hallucinated street)
+  5. LAB color drift at matched SIFT points (materials repainted: door color,
+     car color — geometry still matches, but matched patches changed color)
 
 A pair is SUSPECT when:  histCorrel < 0.72  or  skyDelta > 22  or  exposure > 18
+  or  (siftMatches < 12 while both frames are keypoint-rich)   [STR break]
+  or  (siftMatches >= 12 and median matched-patch LAB drift > 14)  [MAT break]
 A frame's suspicion score = how many suspect edges it participates in; the
 worst-scoring frames are the hallucination breaks to regenerate (as camera-
 shift edits of their best-correlated EXISTING neighbor).
@@ -29,7 +34,7 @@ MAX_EXPO_DELTA = 18.0
 
 
 def descriptor(img):
-    """Histogram (H,S,V 8x8x8) + sky luminance + global luminance."""
+    """Histogram (H,S,V 8x8x8) + sky luminance + global luminance + SIFT."""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     hist = cv2.calcHist([hsv], [0, 1, 2], None, [8, 8, 8], [0, 180, 0, 256, 0, 256])
     cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
@@ -37,7 +42,53 @@ def descriptor(img):
     sky = img[: max(8, h // 8)]
     skyL = float(np.mean(cv2.cvtColor(sky, cv2.COLOR_BGR2GRAY)))
     expo = float(np.mean(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
-    return hist, skyL, expo
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    kp, des = _SIFT.detectAndCompute(gray, None)
+    return hist, skyL, expo, kp, des, img
+
+
+_SIFT = cv2.SIFT_create(nfeatures=1600)
+_BF = cv2.BFMatcher(cv2.NORM_L2)
+
+
+def match_metrics(da, db):
+    """SIFT structure persistence + LAB color drift on matched points.
+
+    Same physical street photographed one stride away matches MANY SIFT
+    keypoints and their neighborhoods keep the SAME colors. When the AI
+    repaints a door/car/material, keypoints still match (geometry kept,
+    parallax small) but the LAB values at matched points drift — that is
+    exactly the 'door changed color' alarm.
+    """
+    kpA, desA = da[3], da[4]
+    kpB, desB = db[3], db[4]
+    if desA is None or desB is None or not kpA or not kpB:
+        return 0, 0.0, 999.0
+    matches = _BF.knnMatch(desA, desB, k=2)
+    good = []
+    for pair in matches:
+        m = pair[0]
+        if len(pair) == 2:
+            if m.distance < 0.72 * pair[1].distance:
+                good.append(m)
+        elif m.distance < 230:
+            good.append(m)
+    n = len(good)
+    if n < 4:
+        return n, 0.0, 999.0
+    labA = cv2.cvtColor(da[5], cv2.COLOR_BGR2LAB)
+    labB = cv2.cvtColor(db[5], cv2.COLOR_BGR2LAB)
+    hA, wA = labA.shape[:2]
+    diffs = []
+    for m in good[:200]:
+        xa, ya = int(round(kpA[m.queryIdx].pt[0])), int(round(kpA[m.queryIdx].pt[1]))
+        xb, yb = int(round(kpB[m.trainIdx].pt[0])), int(round(kpB[m.trainIdx].pt[1]))
+        if 2 <= xa < wA - 2 and 2 <= ya < hA - 2 and 2 <= xb < wA - 2 and 2 <= yb < hA - 2:
+            a = labA[ya - 2: ya + 3, xa - 2: xa + 3].reshape(-1, 3).mean(axis=0)
+            b = labB[yb - 2: yb + 3, xb - 2: xb + 3].reshape(-1, 3).mean(axis=0)
+            diffs.append(float(np.linalg.norm(a - b)))
+    drift = float(np.median(diffs)) if diffs else 999.0
+    return n, n / max(1, min(len(kpA), len(kpB))), drift
 
 
 def load_frames():
@@ -101,18 +152,24 @@ def main():
     for a, b in edges:
         if a not in frames or b not in frames:
             continue
-        ha, sa, ea = frames[a]
-        hb, sb, eb = frames[b]
-        corr = cv2.compareHist(ha, hb, cv2.HISTCMP_CORREL)
-        sky = abs(sa - sb)
-        expo = abs(ea - eb)
-        bad = corr < TOP_HIST_CORREL or sky > MAX_SKY_DELTA or expo > MAX_EXPO_DELTA
-        rows.append((a, b, corr, sky, expo, bad))
+        da, db = frames[a], frames[b]
+        corr = cv2.compareHist(da[0], db[0], cv2.HISTCMP_CORREL)
+        sky = abs(da[1] - db[1])
+        expo = abs(da[2] - db[2])
+        sift, rate, drift = match_metrics(da, db)
+        # suspect when: palette/sky/exposure broke (as before) OR the structure
+        # itself doesn't match (different street hallucinated while keypoints
+        # exist to compare) OR geometry matches but materials were repainted
+        # (door color/car — LAB drift on matched points)
+        structBad = sift < 12 and len(da[3] or []) > 200 and len(db[3] or []) > 200
+        matBad = sift >= 12 and drift > 14
+        bad = corr < TOP_HIST_CORREL or sky > MAX_SKY_DELTA or expo > MAX_EXPO_DELTA or structBad or matBad
+        rows.append((a, b, corr, sky, expo, sift, drift, structBad, matBad, bad))
         if bad:
             suspicion[a] = suspicion.get(a, 0) + 1
             suspicion[b] = suspicion.get(b, 0) + 1
 
-    worst_pairs = sorted([r for r in rows if r[5]], key=lambda r: (r[2], -r[3]))
+    worst_pairs = sorted([r for r in rows if r[-1]], key=lambda r: (r[2], -r[3]))
     worst_frames = sorted(suspicion.items(), key=lambda kv: -kv[1])
 
     lines = []
@@ -120,17 +177,17 @@ def main():
     lines.append("")
     lines.append("WORST FRAMES (regenerate as edits of their best neighbor):")
     for img, score in worst_frames[:top]:
-        # best-correlated existing neighbor as suggested source
         best = None
-        for a, b, corr, sky, expo, bad in rows:
+        for a, b, corr, sky, expo, sift, drift, sb, mb, bad in rows:
             for (x, y) in ((a, b), (b, a)):
                 if x == img and (best is None or corr > best[1]):
                     best = (y, corr)
         lines.append(f"  n{img}: {score} suspect edges   suggested source n{best[0]} (correl {best[1]:.2f})")
     lines.append("")
-    lines.append("SUSPECT PAIRS (worst first):")
-    for a, b, corr, sky, expo, bad in worst_pairs[:40]:
-        lines.append(f"  n{a} <-> n{b}: correl {corr:.3f}  skyΔ {sky:.1f}  expoΔ {expo:.1f}")
+    lines.append("SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR = structure mismatch]")
+    for a, b, corr, sky, expo, sift, drift, structBad, matBad, bad in worst_pairs[:40]:
+        tags = (" MAT" if matBad else "") + (" STR" if structBad else "")
+        lines.append(f"  n{a} <-> n{b}: correl {corr:.3f}  skyΔ {sky:.1f}  expoΔ {expo:.1f}  sift {sift}  driftΔ {drift:.1f}{tags}")
 
     report = "\n".join(lines)
     print(report)
