@@ -1,10 +1,10 @@
-chain audit: 244 walkable edges checked, 142 suspect breaks
+chain audit: 254 walkable edges checked, 142 suspect breaks
 
 WORST FRAMES (regenerate as edits of their best neighbor):
   n1: 3 suspect edges   suggested source n448 (correl 0.46)
   n2: 3 suspect edges   suggested source n335 (correl 0.54)
   n4: 3 suspect edges   suggested source n367 (correl 0.46)
-  n5: 3 suspect edges   suggested source n98 (correl 0.21)
+  n5: 3 suspect edges   suggested source n384 (correl 0.31)
 
 SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR = structure mismatch]
   n9 <-> n116: correl -0.212  skyΔ 217.5  expoΔ 101.2  sift 5  driftΔ 80.8 STR
@@ -12,6 +12,7 @@ SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR =
   n244 <-> n486: correl -0.173  skyΔ 74.6  expoΔ 8.3  sift 59  driftΔ 39.4 MAT
   n6 <-> n201: correl -0.117  skyΔ 52.5  expoΔ 6.0  sift 2  driftΔ 999.0 STR
   n162 <-> n321: correl -0.108  skyΔ 7.1  expoΔ 0.4  sift 143  driftΔ 37.3 MAT
+  n384 <-> n385: correl -0.103  skyΔ 38.3  expoΔ 17.9  sift 10  driftΔ 51.1 STR
   n7 <-> n106: correl -0.095  skyΔ 61.4  expoΔ 3.4  sift 2  driftΔ 999.0 STR
   n226 <-> n448: correl -0.090  skyΔ 78.5  expoΔ 22.3  sift 40  driftΔ 27.4 MAT
   n65 <-> n94: correl -0.080  skyΔ 42.2  expoΔ 2.2  sift 19  driftΔ 23.6 MAT
@@ -38,6 +39,7 @@ SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR =
   n27 <-> n56: correl 0.125  skyΔ 101.3  expoΔ 55.8  sift 4  driftΔ 99.6 STR
   n21 <-> n51: correl 0.127  skyΔ 42.9  expoΔ 9.6  sift 2  driftΔ 999.0 STR
   n61 <-> n340: correl 0.129  skyΔ 4.7  expoΔ 10.7  sift 7  driftΔ 13.6 STR
+  n190 <-> n377: correl 0.129  skyΔ 96.9  expoΔ 13.4  sift 3  driftΔ 999.0 STR
   n57 <-> n158: correl 0.145  skyΔ 36.4  expoΔ 10.7  sift 2  driftΔ 999.0 STR
   n354 <-> n355: correl 0.148  skyΔ 32.3  expoΔ 15.0  sift 9  driftΔ 11.8 STR
   n169 <-> n334: correl 0.149  skyΔ 90.5  expoΔ 49.8  sift 9  driftΔ 24.2 STR
@@ -45,5 +47,3 @@ SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR =
   n39 <-> n99: correl 0.158  skyΔ 53.2  expoΔ 17.1  sift 5  driftΔ 22.1 STR
   n2 <-> n510: correl 0.161  skyΔ 58.6  expoΔ 15.0  sift 17  driftΔ 21.7 MAT
   n22 <-> n52: correl 0.171  skyΔ 2.7  expoΔ 2.5  sift 3  driftΔ 999.0 STR
-  n6 <-> n312: correl 0.179  skyΔ 10.3  expoΔ 7.9  sift 31  driftΔ 21.5 MAT
-  n71 <-> n107: correl 0.185  skyΔ 8.7  expoΔ 5.7  sift 6  driftΔ 27.5 STR
