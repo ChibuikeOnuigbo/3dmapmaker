@@ -1,4 +1,4 @@
-chain audit: 263 walkable edges checked, 142 suspect breaks
+chain audit: 273 walkable edges checked, 143 suspect breaks
 
 WORST FRAMES (regenerate as edits of their best neighbor):
   n1: 3 suspect edges   suggested source n448 (correl 0.46)
@@ -33,6 +33,7 @@ SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR =
   n72 <-> n109: correl 0.083  skyΔ 18.8  expoΔ 12.6  sift 13  driftΔ 36.2 MAT
   n5 <-> n97: correl 0.087  skyΔ 43.6  expoΔ 8.5  sift 9  driftΔ 28.4 STR
   n75 <-> n119: correl 0.088  skyΔ 203.1  expoΔ 71.7  sift 6  driftΔ 50.7 STR
+  n40 <-> n406: correl 0.089  skyΔ 7.5  expoΔ 2.6  sift 3  driftΔ 999.0 STR
   n102 <-> n202: correl 0.110  skyΔ 38.9  expoΔ 4.2  sift 7  driftΔ 28.9 STR
   n35 <-> n165: correl 0.117  skyΔ 41.3  expoΔ 12.0  sift 3  driftΔ 999.0 STR
   n130 <-> n512: correl 0.125  skyΔ 39.7  expoΔ 0.5  sift 50  driftΔ 15.7 MAT
@@ -46,4 +47,3 @@ SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR =
   n30 <-> n109: correl 0.151  skyΔ 20.8  expoΔ 27.0  sift 4  driftΔ 30.5 STR
   n39 <-> n99: correl 0.158  skyΔ 53.2  expoΔ 17.1  sift 5  driftΔ 22.1 STR
   n2 <-> n510: correl 0.161  skyΔ 58.6  expoΔ 15.0  sift 17  driftΔ 21.7 MAT
-  n22 <-> n52: correl 0.171  skyΔ 2.7  expoΔ 2.5  sift 3  driftΔ 999.0 STR
