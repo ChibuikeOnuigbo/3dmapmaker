@@ -5,6 +5,10 @@ WORST FRAMES (regenerate as edits of their best neighbor):
   n2: 3 suspect edges   suggested source n335 (correl 0.54)
   n4: 3 suspect edges   suggested source n367 (correl 0.46)
   n5: 3 suspect edges   suggested source n384 (correl 0.23)
+  n7: 3 suspect edges   suggested source n415 (correl 0.56)
+  n8: 3 suspect edges   suggested source n458 (correl 0.98)
+  n320: 2 suspect edges   suggested source n1 (correl 0.45)
+  n448: 2 suspect edges   suggested source n1 (correl 0.46)
 
 SUSPECT PAIRS (worst first):  [MAT = materials repainted (door/car drift), STR = structure mismatch]
   n9 <-> n116: correl -0.212  skyΔ 217.5  expoΔ 101.2  sift 5  driftΔ 80.8 STR
