@@ -21,6 +21,7 @@ import { rgbHist, histIntersect, expectedMinSimilarity } from './gen/util.js';
 import { MapRenderer } from './map/map-renderer.js';
 import { SimpleEditor } from './editors/simple-editor.js';
 import { AdvancedEditor } from './editors/advanced-editor.js';
+import { ScriptStudio } from './editors/script-editor.js';
 import { Landing } from './ui/landing.js';
 import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsSvc } from './io/storage.js';
 
@@ -85,6 +86,7 @@ class App {
 
     this.simpleEditor = new SimpleEditor(this);
     this.advancedEditor = new AdvancedEditor(this);
+    this.scriptStudio = new ScriptStudio(this);
 
     this._bindChrome();
     this._bindKeyboard();
@@ -637,30 +639,37 @@ class App {
     pop.style.right = `${Math.min(Math.max(8, vw - r.right), Math.max(8, vw - popW - 8))}px`;
   }
 
-  /* ---------- studio (simple / advanced) ---------- */
-  get studio() { return this.prefs.studio === 'advanced' ? 'advanced' : 'simple'; }
+  /* ---------- studio (simple / advanced / script) ---------- */
+  get studio() {
+    const v = this.prefs.studio;
+    return v === 'advanced' || v === 'script' ? v : 'simple';
+  }
   setStudio(kind, { open = true } = {}) {
+    if (!['simple', 'advanced', 'script'].includes(kind)) kind = 'simple';
     this.prefs.studio = kind;
     prefsSvc.save({ studio: kind });
     this._syncStudioBtn();
-    if (open) this.togglePanel(kind === 'advanced' ? 'adv' : 'simple');
+    if (open) this.togglePanel(kind === 'simple' ? 'simple' : kind);
+  }
+  _studioIsOpen(kind) {
+    return kind === 'advanced' ? this.advancedEditor.isOpen
+      : kind === 'script' ? this.scriptStudio.isOpen
+      : this.simpleEditor.isOpen;
   }
   _studioClicked() {
+    const order = ['simple', 'advanced', 'script'];
     const cur = this.studio;
-    const openId = cur === 'advanced' ? this.advancedEditor.isOpen : this.simpleEditor.isOpen;
-    const otherOpen = cur === 'advanced' ? this.simpleEditor.isOpen : this.advancedEditor.isOpen;
-    if (otherOpen) { this.setStudio(cur === 'advanced' ? 'simple' : 'advanced', { open: true }); return; }
-    if (!openId) { this.togglePanel(cur === 'advanced' ? 'adv' : 'simple'); return; }
-    this.closePanels();
+    if (!this._studioIsOpen(cur)) { this.togglePanel(cur); return; }
+    this.setStudio(order[(order.indexOf(cur) + 1) % order.length], { open: true });
   }
   _syncStudioBtn() {
     const b = $('#studioBtn');
     if (!b) return;
-    const adv = this.studio === 'advanced';
-    b.querySelector('use')?.setAttribute('href', adv ? '#i-sliders' : '#i-edit');
-    const t = b.querySelector('.tb-txt'); if (t) t.textContent = adv ? 'Advanced' : 'Simple';
-    b.title = `Studio: ${adv ? 'Advanced' : 'Simple'} · tap to open or switch`;
-    b.classList.toggle('active', this.simpleEditor?.isOpen || this.advancedEditor?.isOpen);
+    const meta = { simple: ['#i-edit', 'Simple'], advanced: ['#i-sliders', 'Advanced'], script: ['#i-link', 'Scripting'] }[this.studio];
+    b.querySelector('use')?.setAttribute('href', meta[0]);
+    const t = b.querySelector('.tb-txt'); if (t) t.textContent = meta[1];
+    b.title = `Studio: ${meta[1]} · tap to open or switch (Simple → Advanced → Scripting)`;
+    b.classList.toggle('active', this.simpleEditor?.isOpen || this.advancedEditor?.isOpen || this.scriptStudio?.isOpen);
   }
 
   /* ---------- AutoComplete ---------- */
@@ -866,16 +875,19 @@ class App {
 
   togglePanel(which) {
     const simple = which === 'simple' ? !this.simpleEditor.isOpen : false;
-    const adv = which === 'adv' ? !this.advancedEditor.isOpen : false;
+    const adv = (which === 'adv' || which === 'advanced') ? !this.advancedEditor.isOpen : false;
+    const script = which === 'script' ? !this.scriptStudio.isOpen : false;
     this.closePanels();
     if (simple) this.simpleEditor.open();
     if (adv) this.advancedEditor.open();
+    if (script) this.scriptStudio.open();
     this._syncStudioBtn();
   }
 
   closePanels() {
     this.simpleEditor.close();
     this.advancedEditor.close();
+    this.scriptStudio.close();
     this._syncStudioBtn();
   }
 
@@ -1202,6 +1214,8 @@ class App {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
       if (e.key === 'Escape') { this.closePanels(); document.querySelectorAll('.pop.open').forEach(el => el.classList.remove('open')); return; }
       if (e.key === 'Enter' && this.simpleEditor.isOpen) { this.simpleEditor.onEnterKey(); return; }
+      // Scripting studio is a full-screen work surface: walking keys stay off
+      if (this.scriptStudio?.isOpen) return;
 
       const dir = KEY_DIRS[e.code];
       if (dir) {

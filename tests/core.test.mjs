@@ -15,6 +15,7 @@ import { aHash16, hammingHex, luminanceGrid16, rgbHist, histIntersect, expectedM
 import { crc32, writeZip, readZip, safeZipPath } from '../js/io/zipex.js';
 import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
+import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset } from '../js/editors/script-editor.js';
 
 let passed = 0, failed = 0;
 const tests = [];
@@ -514,6 +515,77 @@ test('walk steps: recursive 5 m strides, stable schedule, never a jump', async (
   assert.equal(strideEase(1, 6), 1);
   // head bob is periodic, bounded, and zero at t=0 (arrival offset removed by caller scaling)
   assert.ok(Math.abs(walkBobDeg(0.25, 3, 1)) <= 1.1 + 1e-9);
+});
+
+/* -------------- script studio helpers (DOM-free OOP layer) -------------- */
+test('dirSocket maps bearings into W/A/S/D sectors', () => {
+  assert.equal(dirSocket(0), 'W');   // dead ahead
+  assert.equal(dirSocket(30), 'W');  // within ±45° of forward
+  assert.equal(dirSocket(60), 'D');  // right sector
+  assert.equal(dirSocket(120), 'D');
+  assert.equal(dirSocket(-60), 'A'); // left sector
+  assert.equal(dirSocket(150), 'S'); // back sector
+  assert.equal(dirSocket(-150), 'S');
+  assert.equal(dirSocket(179), 'S');
+  assert.equal(dirSocket(-180), 'S');
+});
+
+test('socketWorldBearing normalizes heading+socket', () => {
+  assert.equal(socketWorldBearing('W', 30), 30);
+  assert.equal(socketWorldBearing('D', 30), 120);
+  assert.equal(socketWorldBearing('S', 10), 190);
+  assert.equal(socketWorldBearing('A', 350), 260);
+  assert.equal(socketWorldBearing('W', 720), 0);
+  assert.throws(() => socketWorldBearing('X', 0), /unknown socket/);
+});
+
+test('socketAssign slots graph edges into per-node direction sockets', () => {
+  const g = new WorldGraph(new MapScale({ pixelsPerMeter: 1 }));
+  g.addNode({ id: 'c', x: 0, y: 0, headingDeg: 0 });
+  g.addNode({ id: 'north', x: 0, y: -100 });
+  g.addNode({ id: 'east', x: 100, y: 0 });
+  g.addNode({ id: 'south', x: 0, y: 100 });
+  g.connect('c', 'north'); g.connect('c', 'east'); g.connect('c', 'south');
+  const slots = socketAssign(g, 'c');
+  assert.equal(slots.W.b, 'north');
+  assert.equal(slots.D.b, 'east');
+  assert.equal(slots.S.b, 'south');
+  assert.equal(slots.A, null);
+  // heading 90° (east): the old east edge becomes the W (forward) socket
+  g.getNode('c').headingDeg = 90;
+  const slots2 = socketAssign(g, 'c');
+  assert.equal(g.otherEnd(slots2.W, 'c'), 'east');
+  assert.equal(g.otherEnd(slots2.A, 'c'), 'north');
+});
+
+test('serializeGraphSubset + applyGraphSubset round-trip and diff-apply', () => {
+  const g = new WorldGraph(new MapScale({ pixelsPerMeter: 2 }));
+  g.addNode({ id: 'a', x: 0, y: 0, name: 'A' });
+  g.addNode({ id: 'b', x: 10, y: 0, name: 'B' });
+  g.addNode({ id: 'c', x: 20, y: 0, name: 'C' });
+  g.connect('a', 'b'); g.connect('b', 'c');
+  const data = JSON.parse(JSON.stringify(serializeGraphSubset(g)));
+  assert.deepEqual(data.nodes.length, 3);
+  assert.deepEqual(data.edges.length, 2);
+  // edit in "code mode": move b, delete c, add d + link, rename a
+  data.nodes[1].x = 40;                       // b.x 10 → 40
+  data.nodes = data.nodes.filter((n) => n.id !== 'c');
+  data.nodes.push({ id: 'd', x: 50, y: 0, name: 'D' });
+  data.edges = data.edges.filter((e) => e.b !== 'c');   // validator demands: removing a node means removing its links
+  data.edges.push({ a: 'b', b: 'd' });
+  data.nodes[0].name = 'Alpha';
+  const sum = applyGraphSubset(g, data);
+  assert.equal(sum.moved, 1);
+  assert.equal(sum.removed, 1);
+  assert.equal(sum.added, 1);
+  assert.equal(sum.renamed, 1);
+  assert.equal(sum.connected, 1);
+  assert.equal(sum.disconnected, 1);          // b-c died with node c (a-b survives)
+  assert.equal(g.nodes.size, 3);
+  assert.equal(g.getNode('b').x, 40);
+  assert.equal(g.getNode('a').name, 'Alpha');
+  assert.ok(g.edges.size === 2, 'a-b and b-d remain');
+  assert.throws(() => applyGraphSubset(g, { nodes: data.nodes, edges: [{ a: 'a', b: 'ghost' }] }), /unknown node/);
 });
 
 /* ---------------- runner ---------------- */
