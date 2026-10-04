@@ -419,26 +419,58 @@ class GraphCanvas {
 
   _bind() {
     const host = this.host;
+    // multi-pointer gestures: 1 finger = pan, 2 fingers = pinch-to-zoom
+    // (mobile graph navigation — the wheel is desktop-only)
+    const pts = new Map();               // pointerId -> {x, y}
+    let pan = null, pinch = null;
+    const setFromPitch = () => {
+      const [p1, p2] = [...pts.values()];
+      const r = host.getBoundingClientRect();
+      const mx = (p1.x + p2.x) / 2 - r.left, my = (p1.y + p2.y) / 2 - r.top;
+      pinch = { d0: Math.max(20, Math.hypot(p2.x - p1.x, p2.y - p1.y)), scale0: this.scale,
+                wx: (mx - this.tx) / this.scale, wy: (my - this.ty) / this.scale };
+    };
     host.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom')) return;
+      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom') || e.target.closest('.sg-minimap')) return;
       if (this.addArmed) {
         const w = this.toWorld(e.clientX, e.clientY);
         this.studio.placeNode(w);
         this.addArmed = false; host.classList.remove('armed');
         return;
       }
-      this._pan = { sx: e.clientX, sy: e.clientY, tx: this.tx, ty: this.ty };
-      const move = (e2) => {
-        if (!this._pan) return;
-        this.tx = this._pan.tx + (e2.clientX - this._pan.sx);
-        this.ty = this._pan.ty + (e2.clientY - this._pan.sy);
-        this._apply();
-      };
-      const up = () => { this._pan = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
       host.setPointerCapture?.(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) { pan = null; setFromPitch(); }
+      else if (pts.size === 1) pan = { sx: e.clientX, sy: e.clientY, tx: this.tx, ty: this.ty };
     });
+    host.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2 && pinch) {
+        const [p1, p2] = [...pts.values()];
+        const r = host.getBoundingClientRect();
+        const mx = (p1.x + p2.x) / 2 - r.left, my = (p1.y + p2.y) / 2 - r.top;
+        const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        this.scale = Math.min(2.2, Math.max(0.08, pinch.scale0 * (d / pinch.d0)));
+        this.tx = mx - pinch.wx * this.scale;
+        this.ty = my - pinch.wy * this.scale;
+        this._apply();
+      } else if (pts.size === 1 && pan) {
+        this.tx = pan.tx + (e.clientX - pan.sx);
+        this.ty = pan.ty + (e.clientY - pan.sy);
+        this._apply();
+      }
+    });
+    const end = (e) => {
+      if (!pts.delete(e.pointerId)) return;
+      if (pts.size === 1) {   // pinch ended: resume a jump-free pan on the remaining finger
+        const p = [...pts.values()][0];
+        pan = { sx: p.x, sy: p.y, tx: this.tx, ty: this.ty };
+        pinch = null;
+      } else if (pts.size === 0) { pan = null; pinch = null; }
+    };
+    host.addEventListener('pointerup', end);
+    host.addEventListener('pointercancel', end);
     host.addEventListener('wheel', (e) => {
       e.preventDefault();
       const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
