@@ -126,8 +126,9 @@ export function applyGraphSubset(graph, data) {
   for (const nd of data.nodes) {
     const cur = graph.getNode(nd.id);
     if (!cur) {
-      const ref = graph.nodes.values().next().value;
-      graph.addNode({ id: nd.id, x: nd.x, y: nd.y, name: nd.name || nd.id, pano: ref?.pano ? { ...ref.pano } : { kind: 'generated' } });
+      // code-added nodes always start as generated-on-demand — never borrow
+      // another node's image paths (a borrowed urlset lies about files)
+      graph.addNode({ id: nd.id, x: nd.x, y: nd.y, name: nd.name || nd.id, pano: { kind: 'generated' } });
       summary.added++;
       continue;
     }
@@ -142,10 +143,9 @@ export function applyGraphSubset(graph, data) {
   const want = new Map();
   for (const e of data.edges) want.set(pairKey(e.a, e.b), e);
   for (const e of [...graph.edges.values()]) {
-    if (!want.has(pairKey(e.a, e.b))) {
-      graph.disconnect(e.a, e.b); summary.disconnected++;
-      want.delete(pairKey(e.a, e.b));
-    } else want.delete(pairKey(e.a, e.b));
+    const key = pairKey(e.a, e.b);
+    if (!want.has(key)) { graph.disconnect(e.a, e.b); summary.disconnected++; }
+    else want.delete(key);
   }
   for (const e of want.values()) {
     if (!graph.connect(e.a, e.b)) continue;
@@ -164,14 +164,20 @@ function h(tag, cls, text) {
   if (text != null) el.textContent = text;
   return el;
 }
-const THUMB_STATE = new Map();   // nodeId -> 'ok' | 'missing' | 'loading'
+const THUMB_STATE = new Map();   // 'nodeId:variant' -> 'ok' | 'missing' | 'loading'
 
-function dayUrlOf(node) {
+/** Image URL for a node in the chosen scene variant (day / rain / night). */
+function variantUrlOf(node, variant = 'day') {
   const p = node.pano;
-  if (!p) return null;
-  if (p.kind === 'urlset' && p.variants?.day) return p.variants.day;
-  return null;
+  if (!p || p.kind !== 'urlset' || !p.variants) return null;
+  return p.variants[variant] || p.variants.day || null;
 }
+
+export const VARIANTS = [
+  { key: 'day',   label: 'Day',   icon: '#i-sun'  },
+  { key: 'rain',  label: 'Rain',  icon: '#i-rain' },
+  { key: 'night', label: 'Night', icon: '#i-moon' },
+];
 
 /* ================================================================== */
 /* NodeCardView — one WorldGraph node as a blueprint-style card        */
@@ -250,7 +256,7 @@ class NodeCardView {
   }
 
   _thumb(state) {
-    THUMB_STATE.set(this.node.id, state);
+    THUMB_STATE.set(`${this.node.id}:${this.owner.studio.variant}`, state);
     this.thumbStateEl.textContent = state === 'ok' ? '' : (state === 'missing' ? 'no image' : '…');
     this.el.classList.toggle('missing', state === 'missing');
     this.owner.studio.onThumbState();
@@ -263,7 +269,7 @@ class NodeCardView {
     this.head.firstChild.textContent = n.name;
     this.el.style.left = `${n.x}px`;
     this.el.style.top = `${n.y}px`;
-    const url = dayUrlOf(n);
+    const url = variantUrlOf(n, this.owner.studio.variant);
     const prev = this.img.dataset.src || '';
     if (url && url !== prev) { this.img.dataset.src = url; this._thumb('loading'); this.img.src = url; }
     else if (!url) { this.img.removeAttribute('src'); this.img.dataset.src = ''; this._thumb(n.pano?.kind === 'asset' ? 'ok' : 'missing'); if (n.pano?.kind === 'asset') this.thumbStateEl.textContent = 'asset ✓'; }
@@ -304,7 +310,6 @@ class WireLayer {
 
   refresh() {
     const g = this.studio.app.graph;
-    const scale = 1;
     this.svg.innerHTML = '';
     const frag = document.createDocumentFragment();
     for (const e of g.edges.values()) {
@@ -327,7 +332,6 @@ class WireLayer {
     }
     if (this.drag) frag.append(this.drag.path);
     this.svg.append(frag);
-    void scale;
   }
 
   _path(a, b) {
@@ -549,8 +553,8 @@ class DetailsPanel {
       const g = this.studio.app.graph;
       const n = g.getNode(this._nodeId);
       if (!n) return;
-      if (e.target.matches('[data-name]')) { n.name = e.target.value; this.studio.mutated('Renamed'); }
-      if (e.target.matches('[data-head]')) { n.headingDeg = ((Number(e.target.value) || 0) % 360 + 360) % 360; this.studio.mutated('Heading set'); }
+      if (e.target.matches('[data-name]')) { n.name = e.target.value; this.studio.mutated('Renamed', { keepDetails: true }); }
+      if (e.target.matches('[data-head]')) { n.headingDeg = ((Number(e.target.value) || 0) % 360 + 360) % 360; this.studio.mutated('Heading set', { keepDetails: true }); }
     });
     this.el.addEventListener('click', (e) => {
       const g = this.studio.app.graph;
@@ -591,13 +595,13 @@ class DetailsPanel {
         ${to ? '<button class="sg-x" data-unlink title="Unlink in this direction">×</button>' : '<button class="sg-p" data-arm title="Arm: click a card to link here">＋</button>'}
       </div>`;
     }).join('');
-    const url = dayUrlOf(n);
+    const url = variantUrlOf(n, this.studio.variant);
     this.el.innerHTML = `
       <div class="sg-dhead"><h4>${escTxt(n.name)}</h4><button class="iconbtn" data-x><svg><use href="#i-close"/></svg></button></div>
       <label class="sg-field"><span>Name</span><input data-name value="${escTxt(n.name)}"></label>
       <label class="sg-field"><span>Heading (auto from map, editable)</span><input data-head type="number" step="5" value="${Math.round(n.headingDeg ?? 0)}"></label>
       <div class="sg-kv"><span>Map position</span><b>${(n.x / ppm).toFixed(1)} m E · ${(n.y / ppm).toFixed(1)} m N</b><small>auto from map px</small></div>
-      <div class="sg-kv"><span>Image (day)</span><b class="${THUMB_STATE.get(n.id) === 'missing' ? 'bad' : ''}">${url ? (THUMB_STATE.get(n.id) === 'missing' ? 'missing file' : escTxt(shortUrl(url))) : (n.pano?.kind === 'asset' ? 'project asset ✓' : 'generated on demand')}</b></div>
+      <div class="sg-kv"><span>Image (${this.studio.variant})</span><b class="${THUMB_STATE.get(`${n.id}:${this.studio.variant}`) === 'missing' ? 'bad' : ''}">${url ? (THUMB_STATE.get(`${n.id}:${this.studio.variant}`) === 'missing' ? 'missing file' : escTxt(shortUrl(url))) : (n.pano?.kind === 'asset' ? 'project asset ✓' : 'generated on demand')}</b></div>
       <button class="btn ghost block" data-img>Set / replace day image…</button>
       <div class="sg-sub">Links (W/A/S/D sockets)</div>
       ${links}
@@ -697,11 +701,11 @@ class PreviewModal {
     const g = this.studio.app.graph;
     const n = g.getNode(nodeId);
     this.el.querySelector('.sg-pv-name').textContent = n?.name ?? nodeId;
-    this.el.querySelector('.sg-pv-id').textContent = nodeId;
+    this.el.querySelector('.sg-pv-id').textContent = `${nodeId} · ${this.studio.variant}`;
     this.view = { yawDeg: n?.headingDeg ?? 0, pitchDeg: 0, fovDeg: 80 };
     this._chips(nodeId);
     const msg = this.el.querySelector('.sg-pv-msg'); msg.hidden = true;
-    const url = dayUrlOf(n);
+    const url = variantUrlOf(n, this.studio.variant);
     if (!url) {
       msg.hidden = false; msg.textContent = n?.pano?.kind === 'asset' ? 'Project asset — open the walk view to render it.' : 'No image file yet — assign one with the 🖼 button on the card.';
       this._draw();
@@ -740,6 +744,7 @@ export class ScriptStudio {
   constructor(app) {
     this.app = app;
     this.mode = 'visual';
+    this.variant = 'day';
     this.selectedId = null;
     this.socketArm = null;
     this._open = false;
@@ -757,6 +762,9 @@ export class ScriptStudio {
         <div class="sg-switch" role="tablist" aria-label="Studio mode">
           <button class="on" data-mode="visual" role="tab">Visual scripting</button>
           <button data-mode="code" role="tab">Code editor</button>
+        </div>
+        <div class="sg-switch sg-variant" role="tablist" aria-label="Scene variant — properties toggle">
+          ${VARIANTS.map((v, i) => `<button class="${i === 0 ? 'on' : ''}" data-var="${v.key}" role="tab" title="Switch images & previews to the ${v.label} variant"><svg class="ic"><use href="${v.icon}"/></svg>${v.label}</button>`).join('')}
         </div>
         <span class="sg-stat" data-stat="nodes"></span>
         <span class="sg-stat" data-stat="edges"></span>
@@ -785,6 +793,7 @@ export class ScriptStudio {
 
     const q = (sel) => this.el.querySelector(sel);
     this.el.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => this.setMode(b.dataset.mode)));
+    this.el.querySelectorAll('[data-var]').forEach(b => b.addEventListener('click', () => this.setVariant(b.dataset.var)));
     q('[data-close]').addEventListener('click', () => this.app.closePanels());
     q('[data-fit]').addEventListener('click', () => this.canvas.fit());
     q('[data-add]').addEventListener('click', () => {
@@ -798,6 +807,8 @@ export class ScriptStudio {
     document.addEventListener('keydown', (e) => {
       if (!this._open || e.key !== 'Escape') return;
       e.stopImmediatePropagation();
+      // Esc peels the topmost layer first: preview modal, then the studio.
+      if (this.preview?.el && !this.preview.el.hidden) { this.preview.el.hidden = true; return; }
       this.app.closePanels();
     }, true);
     // armed socket: click on a card completes the link
@@ -825,6 +836,21 @@ export class ScriptStudio {
     else this.code.reload();
   }
 
+  /** Scene-variant properties toggle (Day / Rain / Night) — drives every
+      thumbnail, the missing-image counter, details and the preview. */
+  setVariant(v) {
+    if (!VARIANTS.some(x => x.key === v)) v = 'day';
+    if (this.variant === v) return;
+    this.variant = v;
+    this.el.querySelectorAll('[data-var]').forEach(b => b.classList.toggle('on', b.dataset.var === v));
+    // force thumbnails to re-probe the new variant files
+    for (const c of this.canvas.cards.values()) { c.img.dataset.src = ''; }
+    this.canvas.sync();
+    this.onThumbState();
+    if (this.selectedId) this.details.render(this.selectedId);
+    if (this.preview?.el && !this.preview.el.hidden) this.preview._load(this.preview.nodeId);
+  }
+
   open() {
     if (!this._built) this._build();
     this._open = true;
@@ -833,8 +859,11 @@ export class ScriptStudio {
     this.setMode(this.mode);
     this.onThumbState();
     // GraphCanvas must lay out AFTER the studio is visible (hidden element
-    // has zero layout — the constructor-time fit() computes against 0×0)
-    requestAnimationFrame(() => setTimeout(() => this.canvas.fit(), 0));
+    // has zero layout). Fit once per world-load — later opens keep the view.
+    if (!this._didFit) {
+      this._didFit = true;
+      requestAnimationFrame(() => setTimeout(() => this.canvas.fit(), 0));
+    }
   }
 
   close() { this._open = false; if (this.el) this.el.hidden = true; }
@@ -865,12 +894,14 @@ export class ScriptStudio {
     this.mutated(`Added ${n.name}${near && near.id !== id ? ` + linked to ${near.name}` : ''}`);
   }
 
-  /** Any graph mutation: persist (autosave via app) + refresh everything. */
-  mutated(msg) {
+  /** Any graph mutation: persist (autosave via app) + refresh everything.
+      keepDetails: skip the details re-render (avoids stealing focus from an
+      input the user is typing in — cards still refresh via canvas.sync). */
+  mutated(msg, { keepDetails = false } = {}) {
     this.app.notifyMapChanged?.();
     this.app.dirty = true;
     this.canvas.sync();
-    if (this.selectedId) this.details.render(this.selectedId);
+    if (this.selectedId && !keepDetails) this.details.render(this.selectedId);
     if (this.mode === 'code') this.code.reload();
     if (msg) this.toast(msg, 'ok');
     this.onThumbState();
@@ -880,10 +911,10 @@ export class ScriptStudio {
     if (!this._built) return;
     const g = this.app.graph;
     let missing = 0;
-    for (const n of g.nodes.values()) if (dayUrlOf(n) && THUMB_STATE.get(n.id) === 'missing') missing++;
+    for (const n of g.nodes.values()) if (variantUrlOf(n, this.variant) && THUMB_STATE.get(`${n.id}:${this.variant}`) === 'missing') missing++;
     this.el.querySelector('[data-stat="nodes"]').textContent = `${g.nodes.size} nodes`;
     this.el.querySelector('[data-stat="edges"]').textContent = `${g.edges.size} links`;
-    this.el.querySelector('[data-stat="missing"]').textContent = missing ? `${missing} missing img` : 'images ok';
+    this.el.querySelector('[data-stat="missing"]').textContent = missing ? `${missing} missing ${this.variant} img` : `${this.variant} images ok`;
   }
 
   _fillList(q = '') {

@@ -150,16 +150,27 @@ export class Landing {
   /* ---------------- studio choice popup ---------------- */
   _choice({ what, def = null }) {
     const host = this.el.querySelector('#landPopHost');
+    const sub = (t) => `<small style="display:block;opacity:.72;font-weight:400;margin-top:2px">${t}</small>`;
+    const opt = (go, icon, title, desc, cls = '') =>
+      `<button class="lp-opt ${cls}" data-go="${go}"><span class="li"><svg><use href="#${icon}"/></svg></span><span class="lt">${title}${sub(desc)}</span></button>`;
+    const scriptRows =
+      opt('script-visual', 'i-link', 'Visual scripting', 'Node cards with W A S D sockets — drag wires to connect points, per-node preview, details auto-calculated.', 'primary') +
+      opt('script-code', 'i-panels', 'Code editor', 'The world as JSON nodes + edges — type freely, Apply validates and diffs the change live.');
+    const mapRows =
+      opt('simple', 'i-edit', 'Simple map studio', 'Drag, move, edit and add locations on the 2D map — tap two points to connect them.') +
+      opt('advanced', 'i-sliders', 'Advanced map studio', 'The full 2D map toolkit with snapping and precision tools.');
+    // NEW blank worlds go straight to the modern scripting studios; the
+    // classic map studios unlock once the world exists ("world done").
+    const rows = what === 'create' ? scriptRows : scriptRows + mapRows;
     host.innerHTML = `
       <div class="land-pop-backdrop" data-x="1">
         <div class="land-pop" role="dialog" aria-modal="true" aria-label="Choose how to open">
           <div class="lp-head">
             <h3>${what === 'create' ? 'New blank world' : esc(def?.name || 'Demo world')}</h3>
-            <p>${what === 'create' ? 'Pick a studio to start building in.' : 'Open it in the studio that fits the job.'}</p>
+            <p>${what === 'create' ? 'Set it up with scripting — Visual node-wiring or the JSON code editor.' : 'Open it in the studio that fits the job — you can swap modes inside Scripting anytime.'}</p>
           </div>
           <div class="lp-stack">
-            <button class="lp-opt" data-go="simple"><span class="li"><svg><use href="#i-edit"/></svg></span><span class="lt">Simple studio</span></button>
-            <button class="lp-opt primary" data-go="advanced"><span class="li"><svg><use href="#i-sliders"/></svg></span><span class="lt">Advanced studio</span></button>
+            ${rows}
           </div>
           <div class="lp-foot"><button class="lp-cancel" data-go="cancel">Cancel</button></div>
         </div>
@@ -169,7 +180,12 @@ export class Landing {
       host.innerHTML = '';
       if (go === 'cancel') return;
       this.hide();
-      if (what === 'create') {
+      if (go.startsWith('script')) {
+        this.app.setStudio('script', { open: false });
+        this.app.scriptStudio.mode = go.endsWith('code') ? 'code' : 'visual';
+        if (what === 'create') this.app.createEmptyWorld({ openEditor: 'script' });
+        else { await this.app.loadDemoWorld(def); this.app.togglePanel('script'); }
+      } else if (what === 'create') {
         this.app.setStudio(go, { open: false });
         this.app.createEmptyWorld({ openEditor: go });
       } else {

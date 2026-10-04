@@ -23,6 +23,9 @@
   padding: 7px 14px; border-radius: 6px; cursor: pointer;
 }
 .sg-switch button.on { background: #2e6fe4; color: #fff; }
+.sg-switch button .ic { width: 12px; height: 12px; margin-right: 5px; vertical-align: -2px; }
+.sg-variant { margin-left: 6px; }
+.sg-variant button { padding: 7px 10px; }
 .sg-stat { font-size: 11px; color: #93a0b4; background: #10131a; border: 1px solid #2a3140; padding: 4px 8px; border-radius: 999px; }
 .sg-stat.warn { color: #ffb469; }
 .sg-top .grow { flex: 1; }

@@ -588,6 +588,24 @@ test('serializeGraphSubset + applyGraphSubset round-trip and diff-apply', () => 
   assert.throws(() => applyGraphSubset(g, { nodes: data.nodes, edges: [{ a: 'a', b: 'ghost' }] }), /unknown node/);
 });
 
+test('applyGraphSubset: a code-added node never borrows another node\'s image paths', () => {
+  const g = new WorldGraph(new MapScale({ pixelsPerMeter: 2 }));
+  g.addNode({ id: 'pano_a', x: 0, y: 0, name: 'A', pano: { kind: 'urlset', variants: { day: 'a_day.webp' } } });
+  g.addNode({ id: 'pano_b', x: 10, y: 0, name: 'B', pano: { kind: 'urlset', variants: { day: 'b_day.webp' } } });
+  g.connect('pano_a', 'pano_b');
+  const data = JSON.parse(JSON.stringify(serializeGraphSubset(g)));
+  data.nodes.push({ id: 'fresh', x: 20, y: 0, name: 'Fresh' });
+  data.edges.push({ a: 'pano_b', b: 'fresh' });
+  const sum = applyGraphSubset(g, data);
+  assert.equal(sum.added, 1);
+  const fresh = g.getNode('fresh');
+  assert.equal(fresh.pano.kind, 'generated', 'never a borrowed urlset (a borrowed pano would lie about files that belong to another node)');
+  // idempotent no-op reapply: same subset again must change nothing
+  const sum2 = applyGraphSubset(g, JSON.parse(JSON.stringify(serializeGraphSubset(g))));
+  assert.deepEqual(sum2, { added: 0, removed: 0, moved: 0, renamed: 0, connected: 0, disconnected: 0 },
+    're-applying the serialized live graph is a strict no-op (no duplicate toggle of links)');
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — core test suite');

@@ -508,6 +508,8 @@ class App {
     });
     document.addEventListener('click', (e) => {
       if (!mm.contains(e.target) && !$('#menuBtn').contains(e.target)) mm.classList.remove('open');
+      const sp = $('#studioPop');
+      if (sp && !sp.contains(e.target) && !$('#studioBtn').contains(e.target)) sp.classList.remove('open');
     });
 
     // display modes (worlds with scene variants)
@@ -656,11 +658,48 @@ class App {
       : kind === 'script' ? this.scriptStudio.isOpen
       : this.simpleEditor.isOpen;
   }
+  /** Blank custom worlds open ONLY in the scripting studios until set up. */
+  _isCustomWorld() {
+    const g = this.graph;
+    return !!g && (g.description === 'Custom world' || /^world_/.test(g.id || ''));
+  }
+  /** Studio chooser popup: descriptive mode rows (drag/move/edit/add etc). */
+  _buildStudioChooser() {
+    const pop = $('#studioPop');
+    if (!pop) return;
+    const custom = this._isCustomWorld();
+    const opt = (kind, icon, title, desc) =>
+      `<button class="mi" role="menuitem" data-studio-kind="${kind}"><svg class="ic"><use href="${icon}"/></svg><span class="grow">${title}<small>${desc}</small></span></button>`;
+    let rows = '';
+    if (!custom) {
+      rows += opt('simple', '#i-edit', 'Simple map studio', 'Drag, move, edit and add locations on the 2D map — tap two points to connect them.');
+      rows += opt('advanced', '#i-sliders', 'Advanced map studio', 'The full 2D map toolkit with snapping and precision tools.');
+      rows += `<div class="lab">Scripting</div>`;
+    } else {
+      rows += `<div class="lab">Set up this new world with scripting</div>`;
+    }
+    rows += opt('script-visual', '#i-link', 'Visual scripting', 'Node cards with W A S D sockets — drag wires between points to connect them; thumbnails, previews, details.');
+    rows += opt('script-code', '#i-panels', 'Code editor', 'The whole world as JSON nodes + edges — Apply validates and diffs changes onto the live graph.');
+    if (custom) rows += `<div class="lab" style="opacity:.6">Map studios unlock once the world is set up.</div>`;
+    pop.innerHTML = rows;
+    pop.querySelectorAll('[data-studio-kind]').forEach((b) => b.addEventListener('click', () => {
+      pop.classList.remove('open');
+      const k = b.dataset.studioKind;
+      if (k && k.startsWith('script')) {
+        this.scriptStudio.mode = k.endsWith('code') ? 'code' : 'visual';
+        this.setStudio('script', { open: true });
+      } else if (k) {
+        this.setStudio(k, { open: true });
+      }
+    }));
+  }
   _studioClicked() {
-    const order = ['simple', 'advanced', 'script'];
-    const cur = this.studio;
-    if (!this._studioIsOpen(cur)) { this.togglePanel(cur); return; }
-    this.setStudio(order[(order.indexOf(cur) + 1) % order.length], { open: true });
+    const pop = $('#studioPop');
+    if (!pop) return;
+    if (pop.classList.contains('open')) { pop.classList.remove('open'); return; }
+    this._buildStudioChooser();
+    this._placePop(pop, '#studioBtn');
+    pop.classList.add('open');
   }
   _syncStudioBtn() {
     const b = $('#studioBtn');
@@ -668,7 +707,7 @@ class App {
     const meta = { simple: ['#i-edit', 'Simple'], advanced: ['#i-sliders', 'Advanced'], script: ['#i-link', 'Scripting'] }[this.studio];
     b.querySelector('use')?.setAttribute('href', meta[0]);
     const t = b.querySelector('.tb-txt'); if (t) t.textContent = meta[1];
-    b.title = `Studio: ${meta[1]} · tap to open or switch (Simple → Advanced → Scripting)`;
+    b.title = `Studio: ${meta[1]} · tap to choose a mode`;
     b.classList.toggle('active', this.simpleEditor?.isOpen || this.advancedEditor?.isOpen || this.scriptStudio?.isOpen);
   }
 
@@ -901,6 +940,7 @@ class App {
     this.loadWorldJson({ ...graph.toJSON(), startNodeId: center.id }, { name });
     if (openEditor === 'simple') setTimeout(() => { if (!this.simpleEditor.isOpen) this.togglePanel('simple'); }, 60);
     if (openEditor === 'advanced') setTimeout(() => { if (!this.advancedEditor.isOpen) this.togglePanel('adv'); }, 60);
+    if (openEditor === 'script') setTimeout(() => { if (!this.scriptStudio.isOpen) this.togglePanel('script'); }, 60);
   }
 
   _buildSearchIndex() {
