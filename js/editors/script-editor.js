@@ -832,6 +832,9 @@ export class ScriptStudio {
     this.canvas.rebuild();
     this.setMode(this.mode);
     this.onThumbState();
+    // GraphCanvas must lay out AFTER the studio is visible (hidden element
+    // has zero layout — the constructor-time fit() computes against 0×0)
+    requestAnimationFrame(() => setTimeout(() => this.canvas.fit(), 0));
   }
 
   close() { this._open = false; if (this.el) this.el.hidden = true; }
