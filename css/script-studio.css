@@ -96,6 +96,8 @@
   pointer-events: stroke; cursor: pointer;
 }
 .sg-wire.blocked { stroke: #8a3a3a; stroke-dasharray: 6 4; }
+/* distance-sanity rule: walk hops > 20 m flagged amber */
+.sg-wire.long { stroke: #d9a05a; stroke-dasharray: 9 5; opacity: .95; }
 .sg-wire.pending { stroke: #59b0ff; stroke-dasharray: 5 5; pointer-events: none; }
 
 /* on-surface zoom cluster — visible controls are a graph-UX essential */
@@ -132,6 +134,8 @@
 
 /* dock toggle pressed-state dim */
 .sg-acts [data-dock][aria-pressed="false"] { opacity: .55; }
+/* history buttons dimmed when their stack is empty */
+.sg-acts .iconbtn.off { opacity: .35; pointer-events: none; }
 
 /* ---------- node cards ---------- */
 .sg-card {
@@ -141,6 +145,8 @@
   cursor: default; user-select: none;
 }
 .sg-card.selected { border-color: var(--sg-accent-2); box-shadow: 0 0 0 3px rgba(79,141,255,.4), 0 8px 22px rgba(0,0,0,.48); }
+/* isolation rule: degree-0 nodes are unreachable — dashed amber outline */
+.sg-card.isolated { border-style: dashed; border-color: var(--sg-warn); }
 .sg-card-head {
   display: flex; flex-direction: column; gap: 2px;
   padding: 9px 12px; background: linear-gradient(180deg, #2a4a86, #233c6d);

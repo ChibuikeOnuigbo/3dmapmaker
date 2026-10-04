@@ -284,6 +284,7 @@ class NodeCardView {
     const deg = g.edges.values();
     let count = 0; for (const e of deg) if (e.a === n.id || e.b === n.id) count++;
     this.el.classList.toggle('selected', this.owner.studio.selectedId === n.id);
+    this.el.classList.toggle('isolated', count === 0);   // isolation rule visual
     this.el.querySelector('.sg-card-id').textContent = `${n.id} · ${count} link${count === 1 ? '' : 's'}`;
   }
 }
@@ -318,7 +319,9 @@ class WireLayer {
       const p = this._path(a, b);
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', p);
-      path.setAttribute('class', 'sg-wire' + (e.blocked ? ' blocked' : ''));
+      // distance-sanity rule: walk links are meant to be short hops;
+      // anything over 20 m is flagged amber instead of silently accepted
+      path.setAttribute('class', 'sg-wire' + (e.blocked ? ' blocked' : '') + (e.distM > 20 ? ' long' : ''));
       path.dataset.a = e.a; path.dataset.b = e.b;
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${e.a} — ${e.b} · ${e.distM.toFixed(1)} m · click to unlink`;
@@ -359,8 +362,15 @@ class WireLayer {
       const drag = this.drag; this.drag = null;
       if (cardEl && cardEl.dataset.id !== drag.fromId) {
         const g = this.studio.app.graph;
-        const existed = g.connect(drag.fromId, cardEl.dataset.id);
-        this.studio.mutated(`Linked ${g.getNode(drag.fromId).name} → ${g.getNode(cardEl.dataset.id).name} (${existed.distM.toFixed(1)} m, auto)`);
+        const a = drag.fromId, b = cardEl.dataset.id;
+        // duplicate-link rule: the pair may exist — connecting again is a no-op
+        let exists = false;
+        for (const e of g.edges.values()) if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) { exists = true; break; }
+        if (exists) this.studio.toast(`${g.getNode(a).name} and ${g.getNode(b).name} are already linked`, 'err');
+        else {
+          const edge = g.connect(a, b);
+          this.studio.mutated(`Linked ${g.getNode(a).name} → ${g.getNode(b).name} (${edge.distM.toFixed(1)} m, auto)`);
+        }
       }
       this.refresh();
     };
@@ -391,6 +401,8 @@ class GraphCanvas {
     this.zoomPct = hostEl.querySelector('[data-zoompct]');
     this._bind();
     this._bindMini();
+    // window/responsive resize re-runs the containment clamp
+    new ResizeObserver(() => this._apply()).observe(hostEl);
     this.rebuild();
     requestAnimationFrame(() => this.fit());
   }
@@ -485,6 +497,23 @@ class GraphCanvas {
   }
 
   _apply() {
+    // VIEW CONTAINMENT RULE: the graph can never fully leave the screen.
+    // Scale floor ties to the graph's fit-scale, then pan is clamped so the
+    // graph bounding box always overlaps the viewport by a safe margin.
+    const r = this.host.getBoundingClientRect();
+    if (r.width > 10 && r.height > 10) {
+      const b = this._worldBounds();
+      const fit = Math.min(r.width / (b.x1 - b.x0), r.height / (b.y1 - b.y0));
+      const sMin = Math.min(0.5, Math.max(0.02, (isFinite(fit) ? fit : 0.5) * 0.5));
+      this.scale = Math.min(2.2, Math.max(Math.min(sMin, 2.2), this.scale));
+      const mx = Math.min(140, r.width * 0.15), my = Math.min(140, r.height * 0.15);
+      const x0 = this.tx + b.x0 * this.scale, x1 = this.tx + b.x1 * this.scale;
+      const y0 = this.ty + b.y0 * this.scale, y1 = this.ty + b.y1 * this.scale;
+      if (x1 < mx) this.tx += mx - x1;
+      else if (x0 > r.width - mx) this.tx -= x0 - (r.width - mx);
+      if (y1 < my) this.ty += my - y1;
+      else if (y0 > r.height - my) this.ty -= y0 - (r.height - my);
+    }
     this.world.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`;
     this.world.style.setProperty('--s', this.scale);
     this.gridLayer.style.backgroundSize = `${80 * this.scale}px ${80 * this.scale}px`;
@@ -631,14 +660,17 @@ class GraphCanvas {
     const g = this.studio.app.graph;
     const start = this.toWorld(e.clientX, e.clientY);
     const orig = { x: card.node.x, y: card.node.y };
+    const clampW = (v) => Math.min(20000, Math.max(-20000, v));   // work-area rule
     const move = (e2) => {
       const w = this.toWorld(e2.clientX, e2.clientY);
-      g.moveNode(card.node.id, orig.x + (w.x - start.x), orig.y + (w.y - start.y));
+      g.moveNode(card.node.id, clampW(orig.x + (w.x - start.x)), clampW(orig.y + (w.y - start.y)));
       card.el.style.left = `${card.node.x}px`; card.el.style.top = `${card.node.y}px`;
       this.wires.refresh();
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      // tidy rule: drop lands on a 5 px grid (positions stay arrangeable)
+      g.moveNode(card.node.id, Math.round(card.node.x / 5) * 5, Math.round(card.node.y / 5) * 5);
       this.studio.mutated(`Moved ${card.node.name}`);
     };
     window.addEventListener('pointermove', move);
@@ -662,6 +694,7 @@ class GraphCanvas {
   deleteNode(id) {
     const g = this.studio.app.graph;
     const n = g.getNode(id); if (!n) return;
+    if (g.nodes.size <= 1) { this.studio.toast('Rule: the world needs at least one node — not deleting the last one', 'err', 4000); return; }
     if (!window.confirm(`Delete node "${n.name}" and its links?`)) return;
     g.removeNode(id);
     this.rebuild();
@@ -899,6 +932,8 @@ export class ScriptStudio {
     this.selectedId = null;
     this.dockHidden = false;
     this.socketArm = null;
+    this._histLast = null;                    // serialized snapshot after the last mutation
+    this._undo = []; this._redo = [];         // structural undo/redo stacks (cap 30)
     this._open = false;
     this._built = false;
   }
@@ -924,6 +959,8 @@ export class ScriptStudio {
         <span class="sg-stat warn" data-stat="missing" title="Panorama image status for the active variant"></span>
         <span class="sg-sep"></span>
         <div class="sg-acts">
+          <button class="iconbtn" data-undo title="Undo (Ctrl+Z)" aria-label="Undo"><svg><use href="#i-back"/></svg></button>
+          <button class="iconbtn" data-redo title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg><use href="#i-right"/></svg></button>
           <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)"><svg class="ic"><use href="#i-panels"/></svg>Details</button>
           <button class="btn ghost" data-add title="Add a node — then click empty graph space"><svg class="ic"><use href="#i-plus"/></svg>Node</button>
           <button class="btn ghost" data-list title="Find a node by name or id"><svg class="ic"><use href="#i-search"/></svg>Find</button>
@@ -961,6 +998,8 @@ export class ScriptStudio {
     q('[data-close]').addEventListener('click', () => this.app.closePanels());
     q('[data-fit]').addEventListener('click', () => this.canvas.fit());
     q('[data-dock]').addEventListener('click', (e) => this.toggleDock(e.currentTarget));
+    q('[data-undo]').addEventListener('click', () => this.undo());
+    q('[data-redo]').addEventListener('click', () => this.redo());
     const zoom = this.el.querySelector('.sg-zoom');
     zoom.querySelector('[data-zi]').addEventListener('click', () => this.canvas.zoomBy(1.3));
     zoom.querySelector('[data-zo]').addEventListener('click', () => this.canvas.zoomBy(1 / 1.3));
@@ -974,7 +1013,15 @@ export class ScriptStudio {
     q('[data-list]').addEventListener('click', () => { pop.hidden = !pop.hidden; if (!pop.hidden) this._fillList(); });
     pop.querySelector('input').addEventListener('input', () => this._fillList(pop.querySelector('input').value));
     document.addEventListener('keydown', (e) => {
-      if (!this._open || e.key !== 'Escape') return;
+      if (!this._open) return;
+      // structural undo/redo — but never steal native text undo from inputs
+      if ((e.ctrlKey || e.metaKey) && !e.target.closest?.('input, textarea')) {
+        const k = e.key.toLowerCase();
+        if (k === 'z' && e.shiftKey) { e.preventDefault(); this.redo(); return; }
+        if (k === 'z') { e.preventDefault(); this.undo(); return; }
+        if (k === 'y') { e.preventDefault(); this.redo(); return; }
+      }
+      if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
       // Esc peels the topmost layer first: preview modal, then the studio.
       if (this.preview?.el && !this.preview.el.hidden) { this.preview.el.hidden = true; return; }
@@ -1037,6 +1084,10 @@ export class ScriptStudio {
     this.canvas.rebuild();
     this.setMode(this.mode);
     this.onThumbState();
+    // fresh editing session: reset the undo history to this graph state
+    this._histLast = this._snapshot();
+    this._undo = []; this._redo = [];
+    this._histSync();
     // GraphCanvas must lay out AFTER the studio is visible (hidden element
     // has zero layout). Fit once per world-load — later opens keep the view.
     if (!this._didFit) {
@@ -1087,7 +1138,50 @@ export class ScriptStudio {
     if (this.selectedId && !keepDetails) this.details.render(this.selectedId);
     if (this.mode === 'code') this.code.reload();
     if (msg) this.toast(msg, 'ok');
+    this._histPush();
     this.onThumbState();
+  }
+
+  /* ---------- structural undo / redo ---------- */
+  _snapshot() { return JSON.parse(JSON.stringify(serializeGraphSubset(this.app.graph))); }
+  _histPush() {
+    if (!this._histLast) { this._histLast = this._snapshot(); return; }   // first mutation after open
+    this._undo.push(this._histLast);
+    if (this._undo.length > 30) this._undo.shift();
+    this._redo.length = 0;
+    this._histLast = this._snapshot();
+    this._histSync();
+  }
+  _histSync() {
+    const u = this.el?.querySelector('[data-undo]'), r = this.el?.querySelector('[data-redo]');
+    u?.toggleAttribute('disabled', !this._undo.length);
+    r?.toggleAttribute('disabled', !this._redo.length);
+    u?.classList.toggle('off', !this._undo.length);
+    r?.classList.toggle('off', !this._redo.length);
+  }
+  _histRestore(snap, label) {
+    applyGraphSubset(this.app.graph, JSON.parse(JSON.stringify(snap)));   // diff-apply keeps live objects
+    this.canvas.rebuild();
+    if (this.selectedId && !this.app.graph.getNode(this.selectedId)) this.selectedId = null;
+    if (this.mode === 'visual') this.details.render(this.selectedId);
+    if (this.mode === 'code') this.code.reload();
+    this.app.notifyMapChanged?.();
+    this.app.dirty = true;
+    this.onThumbState();
+    this.toast(label);
+    this._histSync();
+  }
+  undo() {
+    if (!this._undo.length) { this.toast('Nothing to undo'); return; }
+    this._redo.push(this._histLast);
+    this._histLast = this._undo.pop();
+    this._histRestore(this._histLast, 'Undone');
+  }
+  redo() {
+    if (!this._redo.length) { this.toast('Nothing to redo'); return; }
+    this._undo.push(this._histLast);
+    this._histLast = this._redo.pop();
+    this._histRestore(this._histLast, 'Redone');
   }
 
   onThumbState() {
@@ -1095,8 +1189,15 @@ export class ScriptStudio {
     const g = this.app.graph;
     let missing = 0;
     for (const n of g.nodes.values()) if (variantUrlOf(n, this.variant) && THUMB_STATE.get(`${n.id}:${this.variant}`) === 'missing') missing++;
+    // isolation rule readout: degree-0 nodes are unreachable in the walk view
+    let isolated = 0;
+    for (const n of g.nodes.values()) {
+      let deg = 0;
+      for (const e of g.edges.values()) if (e.a === n.id || e.b === n.id) { deg = 1; break; }
+      if (!deg) isolated++;
+    }
     this.el.querySelector('[data-stat="nodes"]').textContent = `${g.nodes.size} nodes`;
-    this.el.querySelector('[data-stat="edges"]').textContent = `${g.edges.size} links`;
+    this.el.querySelector('[data-stat="edges"]').textContent = `${g.edges.size} links${isolated ? ` · ${isolated} isolated` : ''}`;
     this.el.querySelector('[data-stat="missing"]').textContent = missing ? `${missing} missing ${this.variant} img` : `${this.variant} images ok`;
   }
 
