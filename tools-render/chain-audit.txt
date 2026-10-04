@@ -1,4 +1,4 @@
-chain audit: 386 walkable edges checked, 165 suspect breaks
+chain audit: 396 walkable edges checked, 167 suspect breaks
 
 WORST FRAMES (regenerate as edits of their best neighbor):
   n1: 3 suspect edges   suggested source n448 (correl 0.46)
