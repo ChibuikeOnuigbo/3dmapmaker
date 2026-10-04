@@ -417,7 +417,7 @@ class GraphCanvas {
   _bind() {
     const host = this.host;
     host.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock')) return;
+      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom')) return;
       if (this.addArmed) {
         const w = this.toWorld(e.clientX, e.clientY);
         this.studio.placeNode(w);
@@ -480,6 +480,18 @@ class GraphCanvas {
     this.scale = Math.min(1.2, Math.max(0.08, Math.min(r.width / w, r.height / hh)));
     this.tx = r.width / 2 - (minX - 160 + (w) / 2) * this.scale;
     this.ty = r.height / 2 - (minY - 120 + (hh) / 2) * this.scale;
+    this._apply();
+  }
+
+  /** Button-zoom: same math as the wheel, but anchored to the viewport
+      center (used by the on-surface ＋/− controls — visible zoom controls). */
+  zoomBy(k) {
+    const r = this.host.getBoundingClientRect();
+    const mx = r.width / 2, my = r.height / 2;
+    const wx = (mx - this.tx) / this.scale, wy = (my - this.ty) / this.scale;
+    this.scale = Math.min(2.2, Math.max(0.08, this.scale * k));
+    this.tx = mx - wx * this.scale;
+    this.ty = my - wy * this.scale;
     this._apply();
   }
 
@@ -770,13 +782,21 @@ export class ScriptStudio {
         <span class="sg-stat" data-stat="edges"></span>
         <span class="sg-stat warn" data-stat="missing"></span>
         <span class="grow"></span>
-        <button class="btn ghost" data-add>＋ Node</button>
-        <button class="btn ghost" data-fit>Fit</button>
-        <button class="btn ghost" data-list>Nodes ▾</button>
-        <button class="iconbtn" data-close title="Close studio (Esc)"><svg><use href="#i-close"/></svg></button>
+        <div class="sg-acts">
+          <button class="btn ghost" data-add>＋ Node</button>
+          <button class="btn ghost" data-fit>Fit</button>
+          <button class="btn ghost" data-list>Nodes ▾</button>
+          <button class="iconbtn" data-close title="Close studio (Esc)" aria-label="Close studio"><svg><use href="#i-close"/></svg></button>
+        </div>
       </header>
       <div class="sg-middle">
-        <div class="sg-surface" data-surface></div>
+        <div class="sg-surface" data-surface>
+          <div class="sg-zoom" role="toolbar" aria-label="Graph zoom">
+            <button data-zi title="Zoom in" aria-label="Zoom in">＋</button>
+            <button data-zo title="Zoom out" aria-label="Zoom out">−</button>
+            <button data-zf title="Fit the whole graph" aria-label="Fit the whole graph">Fit</button>
+          </div>
+        </div>
         <div class="sg-dock"></div>
       </div>
       <div class="sg-listpop" hidden><input type="search" placeholder="Find node…"><div class="sg-list"></div></div>`;
@@ -796,6 +816,10 @@ export class ScriptStudio {
     this.el.querySelectorAll('[data-var]').forEach(b => b.addEventListener('click', () => this.setVariant(b.dataset.var)));
     q('[data-close]').addEventListener('click', () => this.app.closePanels());
     q('[data-fit]').addEventListener('click', () => this.canvas.fit());
+    const zoom = this.el.querySelector('.sg-zoom');
+    zoom.querySelector('[data-zi]').addEventListener('click', () => this.canvas.zoomBy(1.3));
+    zoom.querySelector('[data-zo]').addEventListener('click', () => this.canvas.zoomBy(1 / 1.3));
+    zoom.querySelector('[data-zf]').addEventListener('click', () => this.canvas.fit());
     q('[data-add]').addEventListener('click', () => {
       this.canvas.addArmed = !this.canvas.addArmed;
       this.surfaceHost.classList.toggle('armed', this.canvas.addArmed);
