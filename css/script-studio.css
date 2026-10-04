@@ -107,6 +107,24 @@
 }
 .sg-zoom button[data-zf] { font: 700 15px/1 system-ui; }
 .sg-zoom button:hover { background: #2a3140; color: #fff; }
+.sg-zoompct {
+  display: flex; align-items: center; justify-content: center;
+  font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--sg-mut); padding: 3px 0; user-select: none;
+}
+
+/* mini-map — whole-graph overview with live viewport (hidden on phones) */
+.sg-minimap {
+  position: absolute; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 4;
+  width: 220px; height: 140px;
+  border: 1px solid var(--sg-line); border-radius: 12px;
+  background: rgba(16,19,26,.88);
+  box-shadow: 0 10px 26px rgba(0,0,0,.45);
+  cursor: crosshair; touch-action: none;
+}
+
+/* dock toggle pressed-state dim */
+.sg-acts [data-dock][aria-pressed="false"] { opacity: .55; }
 
 /* ---------- node cards ---------- */
 .sg-card {
@@ -307,6 +325,7 @@
   .sg-top { padding: 8px 10px; gap: 8px; }
   .sg-listpop { left: 10px; right: 10px; width: auto; top: 112px; max-height: 58vh; }
   .sg-zoom { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .sg-minimap { display: none; }             /* pocket screens: every px for the graph */
   .sg-code-bar { gap: 8px; padding: 8px 10px; }
   .sg-code-bar .btn { flex: 1; }
   .sg-code textarea { font-size: 13.5px; padding: 14px; }

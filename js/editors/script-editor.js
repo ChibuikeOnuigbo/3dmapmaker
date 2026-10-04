@@ -387,7 +387,10 @@ class GraphCanvas {
     this.cards = new Map();               // id -> NodeCardView
     this.addArmed = false;
     this._dragging = false;
+    this.mini = hostEl.querySelector('.sg-minimap');
+    this.zoomPct = hostEl.querySelector('[data-zoompct]');
     this._bind();
+    this._bindMini();
     this.rebuild();
     requestAnimationFrame(() => this.fit());
   }
@@ -454,7 +457,92 @@ class GraphCanvas {
     this.world.style.setProperty('--s', this.scale);
     this.gridLayer.style.backgroundSize = `${80 * this.scale}px ${80 * this.scale}px`;
     this.host.classList.toggle('compact', this.scale < 0.34);   // far out: dots, near: cards
+    if (this.zoomPct) this.zoomPct.textContent = `${Math.round(this.scale * 100)}%`;
     this._cull();
+    this._miniDraw();
+  }
+
+  _worldBounds() {
+    const g = this.studio.app.graph;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of g.nodes.values()) {
+      if (n.x < x0) x0 = n.x; if (n.x > x1) x1 = n.x;
+      if (n.y < y0) y0 = n.y; if (n.y > y1) y1 = n.y;
+    }
+    if (!isFinite(x0)) return { x0: 0, y0: 0, x1: 1, y1: 1 };
+    const pad = 140;
+    return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
+  }
+
+  _bindMini() {
+    if (!this.mini) return;
+    const goto = (e) => {
+      const b = this._worldBounds();
+      const r = this.mini.getBoundingClientRect();
+      const kx = (b.x1 - b.x0) / r.width, ky = (b.y1 - b.y0) / r.height;
+      const k = Math.max(kx, ky);
+      const ox = (r.width - (b.x1 - b.x0) / k) / 2, oy = (r.height - (b.y1 - b.y0) / k) / 2;
+      const wx = b.x0 + (e.clientX - r.left - ox) * k;
+      const wy = b.y0 + (e.clientY - r.top - oy) * k;
+      const hr = this.host.getBoundingClientRect();
+      this.tx = hr.width / 2 - wx * this.scale;
+      this.ty = hr.height / 2 - wy * this.scale;
+      this._apply();
+    };
+    this.mini.addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      this.mini.setPointerCapture?.(e.pointerId);
+      goto(e);
+      const move = (e2) => goto(e2);
+      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    });
+  }
+
+  /** Whole-graph overview in the corner: edges as hairlines, nodes as
+      dots, the live viewport as a rectangle (graph-UX navigation aid). */
+  _miniDraw() {
+    if (!this.mini || this._miniQueued) return;
+    this._miniQueued = true;
+    requestAnimationFrame(() => {
+      this._miniQueued = false;
+      const mm = this.mini;
+      if (!mm.clientWidth || !mm.clientHeight) return;      // hidden
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const W = mm.clientWidth, H = mm.clientHeight;
+      if (mm.width !== Math.round(W * dpr)) { mm.width = Math.round(W * dpr); mm.height = Math.round(H * dpr); }
+      const ctx = mm.getContext('2d');
+      const g = this.studio.app.graph;
+      const b = this._worldBounds();
+      const k = Math.max((b.x1 - b.x0) / W, (b.y1 - b.y0) / H);
+      const ox = (W - (b.x1 - b.x0) / k) / 2, oy = (H - (b.y1 - b.y0) / k) / 2;
+      const px = (n) => [ox + (n.x - b.x0) / k, oy + (n.y - b.y0) / k];
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = '#3a4a63'; ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      for (const e of g.edges.values()) {
+        const a = g.getNode(e.a), c = g.getNode(e.b);
+        if (!a || !c) continue;
+        const [ax, ay] = px(a), [cx, cy] = px(c);
+        ctx.moveTo(ax, ay); ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#59b0ff';
+      for (const n of g.nodes.values()) { const [x, y] = px(n); ctx.fillRect(x - 1.1, y - 1.1, 2.2, 2.2); }
+      const sel = g.getNode(this.studio.selectedId);
+      if (sel) { const [x, y] = px(sel); ctx.fillStyle = '#ffb469'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill(); }
+      // live viewport rectangle
+      const hr = this.host.getBoundingClientRect();
+      const vx0 = (-this.tx) / this.scale, vy0 = (-this.ty) / this.scale;
+      const vx1 = (hr.width - this.tx) / this.scale, vy1 = (hr.height - this.ty) / this.scale;
+      const rx = ox + (vx0 - b.x0) / k, ry = oy + (vy0 - b.y0) / k;
+      const rw = (vx1 - vx0) / k, rh = (vy1 - vy0) / k;
+      ctx.fillStyle = 'rgba(79,141,255,.10)';
+      ctx.strokeStyle = 'rgba(79,141,255,.85)'; ctx.lineWidth = 1.2;
+      ctx.fillRect(rx, ry, rw, rh); ctx.strokeRect(rx, ry, rw, rh);
+    });
   }
 
   /** Viewport culling — 637 nodes stay smooth ("all panoramas visible no matter how much"). */
@@ -592,7 +680,7 @@ class DetailsPanel {
     this._nodeId = nodeId;
     const g = this.studio.app.graph;
     const n = g.getNode(nodeId);
-    this.el.hidden = !n;
+    this.el.hidden = !n || !!this.studio.dockHidden;
     if (!n) return;
     const ppm = g.scale.pixelsPerMeter;
     const slots = socketAssign(g, nodeId);
@@ -636,6 +724,8 @@ class CodeView {
     this.el.innerHTML = `
       <div class="sg-code-bar">
         <span class="sg-note">World graph as data — full OOP structure = nodes + edges + heading. Distances and bearings are auto-calculated on Apply.</span>
+        <button class="btn ghost" data-format>Format</button>
+        <button class="btn ghost" data-copy>Copy</button>
         <button class="btn ghost" data-reload>Reload from graph</button>
         <button class="btn" data-apply>Apply changes</button>
       </div>
@@ -643,6 +733,15 @@ class CodeView {
     this.ta = this.el.querySelector('textarea');
     this.el.querySelector('[data-reload]').addEventListener('click', () => this.reload());
     this.el.querySelector('[data-apply]').addEventListener('click', () => this.apply());
+    this.el.querySelector('[data-format]').addEventListener('click', () => {
+      try { this.ta.value = JSON.stringify(JSON.parse(this.ta.value), null, 2); this.studio.toast('Formatted'); }
+      catch (err) { this.studio.toast(`JSON error: ${err.message}`, 'err', 4000); }
+    });
+    this.el.querySelector('[data-copy]').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(this.ta.value); }
+      catch { this.ta.select(); document.execCommand('copy'); }
+      this.studio.toast('Copied to clipboard');
+    });
     this.reload();
   }
   reload() { this.ta.value = JSON.stringify(serializeGraphSubset(this.studio.app.graph), null, 2); }
@@ -758,6 +857,7 @@ export class ScriptStudio {
     this.mode = 'visual';
     this.variant = 'day';
     this.selectedId = null;
+    this.dockHidden = false;
     this.socketArm = null;
     this._open = false;
     this._built = false;
@@ -783,6 +883,7 @@ export class ScriptStudio {
         <span class="sg-stat warn" data-stat="missing"></span>
         <span class="grow"></span>
         <div class="sg-acts">
+          <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)">Panel</button>
           <button class="btn ghost" data-add>＋ Node</button>
           <button class="btn ghost" data-fit>Fit</button>
           <button class="btn ghost" data-list>Nodes ▾</button>
@@ -793,9 +894,11 @@ export class ScriptStudio {
         <div class="sg-surface" data-surface>
           <div class="sg-zoom" role="toolbar" aria-label="Graph zoom">
             <button data-zi title="Zoom in" aria-label="Zoom in">＋</button>
+            <span class="sg-zoompct" data-zoompct>50%</span>
             <button data-zo title="Zoom out" aria-label="Zoom out">−</button>
             <button data-zf title="Fit the whole graph" aria-label="Fit the whole graph">Fit</button>
           </div>
+          <canvas class="sg-minimap" width="220" height="140" title="Mini-map — click or drag to move the view"></canvas>
         </div>
         <div class="sg-dock"></div>
       </div>
@@ -816,6 +919,7 @@ export class ScriptStudio {
     this.el.querySelectorAll('[data-var]').forEach(b => b.addEventListener('click', () => this.setVariant(b.dataset.var)));
     q('[data-close]').addEventListener('click', () => this.app.closePanels());
     q('[data-fit]').addEventListener('click', () => this.canvas.fit());
+    q('[data-dock]').addEventListener('click', (e) => this.toggleDock(e.currentTarget));
     const zoom = this.el.querySelector('.sg-zoom');
     zoom.querySelector('[data-zi]').addEventListener('click', () => this.canvas.zoomBy(1.3));
     zoom.querySelector('[data-zo]').addEventListener('click', () => this.canvas.zoomBy(1 / 1.3));
@@ -854,10 +958,20 @@ export class ScriptStudio {
     this.el.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
     const visual = m === 'visual';
     this.surfaceHost.hidden = !visual;
-    this.details.el.hidden = !visual || !this.selectedId;
+    this.details.el.hidden = !visual || !this.selectedId || this.dockHidden;
     this.code.el.hidden = visual;
     if (visual) this.canvas.sync();
     else this.code.reload();
+  }
+
+  /** Panel toggle: clear the dock away when the user wants pure graph
+      space; selecting any card brings it back automatically. */
+  toggleDock(btn) {
+    this.dockHidden = !this.dockHidden;
+    if (!this.dockHidden && !this.selectedId) this.dockHidden = true;  // nothing to show
+    btn?.setAttribute('aria-pressed', String(!this.dockHidden));
+    this.details.render(this.selectedId);
+    this.toast(this.dockHidden ? 'Details panel hidden — click a card to reopen' : 'Details panel shown');
   }
 
   /** Scene-variant properties toggle (Day / Rain / Night) — drives every
@@ -894,6 +1008,10 @@ export class ScriptStudio {
 
   select(id) {
     this.selectedId = id;
+    if (id && this.dockHidden) {   // a deliberate selection reopens the dock
+      this.dockHidden = false;
+      this.el?.querySelector('[data-dock]')?.setAttribute('aria-pressed', 'true');
+    }
     if (this.mode === 'visual') this.details.render(id);
     this.canvas.sync();
   }
