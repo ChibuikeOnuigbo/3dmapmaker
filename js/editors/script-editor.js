@@ -224,10 +224,10 @@ class NodeCardView {
     }
 
     this.footRow = b('div', 'sg-card-foot');
-    this.btnPrev = b('button', 'sg-mini', '▶'); this.btnPrev.title = 'Preview this panorama (fullscreen)';
-    this.btnImg = b('button', 'sg-mini', '🖼'); this.btnImg.title = 'Assign / replace day image';
-    this.btnChild = b('button', 'sg-mini', '✚'); this.btnChild.title = 'Add child node in the heading direction';
-    this.btnDel = b('button', 'sg-mini danger', '×'); this.btnDel.title = 'Delete node';
+    this.btnPrev = b('button', 'sg-mini'); this.btnPrev.innerHTML = '<svg><use href="#i-play"/></svg>'; this.btnPrev.title = 'Preview this panorama (fullscreen)'; this.btnPrev.setAttribute('aria-label', 'Preview panorama');
+    this.btnImg = b('button', 'sg-mini'); this.btnImg.innerHTML = '<svg><use href="#i-image"/></svg>'; this.btnImg.title = 'Assign / replace day image'; this.btnImg.setAttribute('aria-label', 'Assign image');
+    this.btnChild = b('button', 'sg-mini'); this.btnChild.innerHTML = '<svg><use href="#i-plus"/></svg>'; this.btnChild.title = 'Add child node in the heading direction'; this.btnChild.setAttribute('aria-label', 'Add child node');
+    this.btnDel = b('button', 'sg-mini danger'); this.btnDel.innerHTML = '<svg><use href="#i-trash"/></svg>'; this.btnDel.title = 'Delete node'; this.btnDel.setAttribute('aria-label', 'Delete node');
     this.footRow.append(this.btnPrev, this.btnImg, this.btnChild, this.btnDel);
 
     this.el.append(this.head, this.thumbWrap, this.sockRow, this.footRow);
@@ -687,6 +687,8 @@ class DetailsPanel {
       if (!n) return;
       if (e.target.matches('[data-name]')) { n.name = e.target.value; this.studio.mutated('Renamed', { keepDetails: true }); }
       if (e.target.matches('[data-head]')) { n.headingDeg = ((Number(e.target.value) || 0) % 360 + 360) % 360; this.studio.mutated('Heading set', { keepDetails: true }); }
+      // cheap live feedback that survives keepDetails (no full re-render):
+      if (e.target.matches('[data-head]')) { const c = this.el.querySelector('[data-comp]'); if (c) c.textContent = compassOf(n.headingDeg); }
     });
     this.el.addEventListener('click', (e) => {
       const g = this.studio.app.graph;
@@ -729,21 +731,27 @@ class DetailsPanel {
     }).join('');
     const url = variantUrlOf(n, this.studio.variant);
     this.el.innerHTML = `
-      <div class="sg-dhead"><h4>${escTxt(n.name)}</h4><button class="iconbtn" data-x><svg><use href="#i-close"/></svg></button></div>
+      <div class="sg-dhead"><h4>${escTxt(n.name)}</h4><button class="iconbtn" data-x aria-label="Close details"><svg><use href="#i-close"/></svg></button></div>
       <label class="sg-field"><span>Name</span><input data-name value="${escTxt(n.name)}"></label>
-      <label class="sg-field"><span>Heading (auto from map, editable)</span><input data-head type="number" step="5" value="${Math.round(n.headingDeg ?? 0)}"></label>
+      <label class="sg-field"><span>Heading ° <b class="sg-comp" data-comp>${compassOf(n.headingDeg ?? 0)}</b></span><input data-head type="number" step="5" value="${Math.round(n.headingDeg ?? 0)}"></label>
+      <div class="sg-sub">Position &amp; image</div>
       <div class="sg-kv"><span>Map position</span><b>${(n.x / ppm).toFixed(1)} m E · ${(n.y / ppm).toFixed(1)} m N</b><small>auto from map px</small></div>
       <div class="sg-kv"><span>Image (${this.studio.variant})</span><b class="${THUMB_STATE.get(`${n.id}:${this.studio.variant}`) === 'missing' ? 'bad' : ''}">${url ? (THUMB_STATE.get(`${n.id}:${this.studio.variant}`) === 'missing' ? 'missing file' : escTxt(shortUrl(url))) : (n.pano?.kind === 'asset' ? 'project asset ✓' : 'generated on demand')}</b></div>
-      <button class="btn ghost block" data-img>Set / replace day image…</button>
+      <button class="btn ghost block" data-img><svg class="ic"><use href="#i-image"/></svg>Set / replace day image…</button>
       <div class="sg-sub">Links (W/A/S/D sockets)</div>
       ${links}
       <div class="sg-sube">Unslotted neighbours: ${slots.unslotted.length ? slots.unslotted.map(e => escTxt(oldName(g, e, n.id))).join(', ') : '—'}</div>
-      <button class="btn block" data-prev>Open preview ▶</button>`;
+      <button class="btn block" data-prev><svg class="ic"><use href="#i-play"/></svg>Open preview</button>`;
   }
 }
 
 function escTxt(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
 function shortUrl(u) { return u.length > 30 ? '…' + u.slice(-28) : u; }
+/** 0° → N, 90° → E … — human-readable heading next to the number. */
+function compassOf(deg) {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
 
 /* ================================================================== */
 /* CodeView — plain-text graph editing (nodes/edges JSON)              */
@@ -809,8 +817,8 @@ class PreviewModal {
     this.el.innerHTML = `
       <canvas class="sg-pv-canvas"></canvas>
       <div class="sg-pv-top"><b class="sg-pv-name"></b><span class="sg-pv-id"></span><span class="grow"></span>
-        <button class="sg-mini" data-fs title="Fullscreen">⛶</button>
-        <button class="sg-mini" data-x title="Close preview (Esc)">×</button></div>
+        <button class="sg-mini" data-fs title="Fullscreen" aria-label="Fullscreen"><svg><use href="#i-max"/></svg></button>
+        <button class="sg-mini" data-x title="Close preview (Esc)" aria-label="Close preview"><svg><use href="#i-close"/></svg></button></div>
       <div class="sg-pv-chips"></div>
       <div class="sg-pv-msg" hidden></div>`;
     document.body.append(this.el);
@@ -910,25 +918,26 @@ export class ScriptStudio {
         <div class="sg-switch sg-variant" role="tablist" aria-label="Scene variant — properties toggle">
           ${VARIANTS.map((v, i) => `<button class="${i === 0 ? 'on' : ''}" data-var="${v.key}" role="tab" title="Switch images & previews to the ${v.label} variant"><svg class="ic"><use href="${v.icon}"/></svg>${v.label}</button>`).join('')}
         </div>
-        <span class="sg-stat" data-stat="nodes"></span>
-        <span class="sg-stat" data-stat="edges"></span>
-        <span class="sg-stat warn" data-stat="missing"></span>
         <span class="grow"></span>
+        <span class="sg-stat" data-stat="nodes" title="Nodes in the world graph"></span>
+        <span class="sg-stat" data-stat="edges" title="Links between nodes"></span>
+        <span class="sg-stat warn" data-stat="missing" title="Panorama image status for the active variant"></span>
+        <span class="sg-sep"></span>
         <div class="sg-acts">
-          <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)">Panel</button>
-          <button class="btn ghost" data-add>＋ Node</button>
-          <button class="btn ghost" data-fit>Fit</button>
-          <button class="btn ghost" data-list>Nodes ▾</button>
+          <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)"><svg class="ic"><use href="#i-panels"/></svg>Details</button>
+          <button class="btn ghost" data-add title="Add a node — then click empty graph space"><svg class="ic"><use href="#i-plus"/></svg>Node</button>
+          <button class="btn ghost" data-list title="Find a node by name or id"><svg class="ic"><use href="#i-search"/></svg>Find</button>
+          <button class="btn ghost" data-fit title="Fit the whole graph"><svg class="ic"><use href="#i-fit"/></svg>Fit</button>
           <button class="iconbtn" data-close title="Close studio (Esc)" aria-label="Close studio"><svg><use href="#i-close"/></svg></button>
         </div>
       </header>
       <div class="sg-middle">
         <div class="sg-surface" data-surface>
           <div class="sg-zoom" role="toolbar" aria-label="Graph zoom">
-            <button data-zi title="Zoom in" aria-label="Zoom in">＋</button>
+            <button data-zi title="Zoom in" aria-label="Zoom in"><svg><use href="#i-zoomin"/></svg></button>
             <span class="sg-zoompct" data-zoompct>50%</span>
-            <button data-zo title="Zoom out" aria-label="Zoom out">−</button>
-            <button data-zf title="Fit the whole graph" aria-label="Fit the whole graph">Fit</button>
+            <button data-zo title="Zoom out" aria-label="Zoom out"><svg><use href="#i-zoomout"/></svg></button>
+            <button data-zf title="Fit the whole graph" aria-label="Fit the whole graph"><svg><use href="#i-fit"/></svg></button>
           </div>
           <canvas class="sg-minimap" width="220" height="140" title="Mini-map — click or drag to move the view"></canvas>
         </div>
