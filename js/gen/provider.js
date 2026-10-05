@@ -37,6 +37,7 @@ const SKY_PRESETS = {
   golden: { top: '#6f7ab8', horizon: '#f0c99a', sun: '#ffdf9e', groundFog: '#e3c9ab' },
   dusk:   { top: '#3d4470', horizon: '#c98a6d', sun: '#ffb98a', groundFog: '#a88f88' },
   overcast: { top: '#8b98a3', horizon: '#c8ced2', sun: '#e8ecee', groundFog: '#c2c9cd' },
+  night:  { top: '#0b1026', horizon: '#22304d', sun: '#e8ecff', groundFog: '#171f31' },
 };
 const ROAD_COLORS = { asphalt: [74, 77, 82], stone: [146, 140, 128], dirt: [139, 119, 92] };
 
@@ -279,7 +280,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
   _paintStructures(ctx, node, world, ppm, sky, weatherFog) {
     const W = this.W, H = this.H;
     const camH = 1.7;
-    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower'].includes(f.type));
+    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower', 'sheep', 'hedge'].includes(f.type));
     const items = [];
     for (const f of feats) {
       const dx = (f.x - node.x) / ppm, dy = (node.y - f.y) / ppm;
@@ -302,6 +303,8 @@ export class ProceduralWorldProvider extends GenerationProvider {
       const xC = ((bearing / Math.PI + 1) / 2) * W;
       const radiusM = f.type === 'building' ? Math.max(f.w, f.d) / ppm / 2
         : f.type === 'car' ? (f.rM ?? 1.1)
+        : f.type === 'sheep' ? (f.rM ?? 0.7)
+        : f.type === 'hedge' ? (f.halfLenM ?? 3)
         : (f.rM ?? 1.6);
       // true angular size; floor at ~1.5 screen px so far things stay SMALL
       // (the old 0.35 rad minimum fused every far object into a wall)
@@ -316,6 +319,8 @@ export class ProceduralWorldProvider extends GenerationProvider {
         else if (f.type === 'car') this._drawCar(ctx, f, x, halfWpx, topYFor(1.5, dist), botY, fogT, fogC, dist);
         else if (f.type === 'sign') this._drawSign(ctx, f, x, halfWpx, topYFor(3, dist), botY, fogT, fogC);
         else if (f.type === 'tower') this._drawTower(ctx, f, x, halfWpx, topYFor(f.hM ?? 20, dist), botY, fogT, fogC);
+        else if (f.type === 'sheep') this._drawSheep(ctx, f, x, halfWpx, topYFor(0.85, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'hedge') this._drawHedge(ctx, f, x, halfWpx, topYFor(f.hM ?? 1.1, dist), botY, fogT, fogC, dist);
       }, xC);
     }
   }
@@ -432,6 +437,43 @@ export class ProceduralWorldProvider extends GenerationProvider {
     ctx.fillRect(xC - bw / 2, topY + h * 0.08, bw, bh);
   }
 
+  /** Grazing sheep — small wool billboard, stable per-feature (powered by the
+      same seeded rng as cars) so the flock never jumps between neighbours. */
+  _drawSheep(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 55) return;                       // beyond ~55 m a sheep is a speck — save the paint
+    const rng = rngFor(f.id);
+    const h = botY - topY, w = halfW * 2 * 1.35, x = xC - w / 2;
+    ctx.fillStyle = 'rgba(30,32,36,0.28)';
+    ctx.beginPath(); ctx.ellipse(xC, botY, w * 0.5, Math.max(1.4, h * 0.08), 0, 0, Math.PI * 2); ctx.fill();
+    const wool = [216, 210, 198];
+    ctx.fillStyle = this._shade(mix(wool, [184, 178, 166], rng() * 0.5), fogT, fogC);
+    ctx.beginPath(); ctx.ellipse(xC, botY - h * 0.46, w * 0.46, h * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+    const headR = Math.max(1.2, h * 0.13);
+    const hx = xC + (rng() < 0.5 ? -1 : 1) * w * 0.42;   // facing baked in by seed — never flickers
+    ctx.fillStyle = this._shade([52, 46, 42], fogT, fogC);
+    ctx.beginPath(); ctx.ellipse(hx, botY - h * 0.5, headR, headR * 1.15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(xC - w * 0.3, botY - h * 0.18, Math.max(1, w * 0.06), h * 0.18);
+    ctx.fillRect(xC + w * 0.24, botY - h * 0.18, Math.max(1, w * 0.06), h * 0.18);
+  }
+
+  /** Rural hedgerow — low, wide, bumpy dark-green band used to line lanes and
+      field edges; adds depth layering the plain grass ground never could. */
+  _drawHedge(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 130) return;
+    const rng = rngFor(f.id);
+    const h = botY - topY, w = halfW * 2;
+    ctx.fillStyle = 'rgba(30,36,28,0.30)';
+    ctx.beginPath(); ctx.ellipse(xC, botY, w * 0.55, Math.max(1.5, h * 0.09), 0, 0, Math.PI * 2); ctx.fill();
+    const g0 = [54, 84, 44];
+    const bumps = 3;
+    for (let i = 0; i < bumps; i++) {
+      const bx = xC - w * 0.33 + (w / bumps) * i + (rng() - 0.5) * w * 0.06;
+      const r = w / bumps * (0.66 + rng() * 0.1);
+      ctx.fillStyle = this._shade(mix(g0, [74, 104, 56], rng() * 0.7), fogT, fogC);
+      ctx.beginPath(); ctx.ellipse(bx, botY - h * (0.34 + rng() * 0.1), r, h * 0.52, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   _drawTower(ctx, f, xC, halfW, topY, botY, fogT, fogC) {
     const w = Math.max(halfW * 1.4, 6);
     const h = botY - topY;
@@ -458,21 +500,43 @@ export class ProceduralWorldProvider extends GenerationProvider {
 
   _paintSun(ctx, W, H, sky, env) {
     if (env.weather === 'overcast' || env.weather === 'rain') return;
+    const night = env.timeOfDay === 'night';
+    if (night) this._paintStars(ctx, W, H, env);
     const az = ((env.sunAzimuthDeg % 360) + 360) % 360;
     const el = env.sunElevationDeg;
     const x = ((az + 180) % 360) / 360 * W;
     const y = (0.5 - el / 180) * H;
-    const r = H * 0.045;
+    const r = H * (night ? 0.026 : 0.045);
     const g = ctx.createRadialGradient(x, y, 1, x, y, r * 5);
     g.addColorStop(0, sky.sun);
     g.addColorStop(0.25, sky.sun + '');
-    g.addColorStop(1, 'rgba(255,244,214,0)');
+    g.addColorStop(1, night ? 'rgba(232,236,255,0)' : 'rgba(255,244,214,0)');
     ctx.save();
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = night ? 0.55 : 0.9;
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(x, y, r * 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = sky.sun;
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    if (night) {   // soft moon shading: darker disc offset for a crescent feel
+      ctx.fillStyle = 'rgba(11,16,38,0.55)';
+      ctx.beginPath(); ctx.arc(x - r * 0.38, y - r * 0.22, r * 0.86, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Deterministic star field for clear nights — fixed seed per resolution,
+      so regenerating the same node repaints the same sky (perfect sync). */
+  _paintStars(ctx, W, H, env) {
+    if (env.weather === 'overcast' || env.weather === 'rain') return;
+    const rng = rngFor(`stars_${W}x${H}`);
+    ctx.save();
+    for (let i = 0; i < 260; i++) {
+      const x = rng() * W, y = rng() * H * 0.46;
+      const a = (0.25 + rng() * 0.6) * (1 - y / (H * 0.5));
+      const s = rng() < 0.12 ? 1.6 : (rng() < 0.4 ? 1.1 : 0.6);
+      ctx.fillStyle = `rgba(226,234,255,${a.toFixed(2)})`;
+      ctx.fillRect(x, y, s, s);
+    }
     ctx.restore();
   }
 }

@@ -298,14 +298,22 @@ class App {
     }
   }
 
-  /* ---------- display modes (day / rain / night, when the world ships them) ---------- */
+  /* ---------- display modes (day / rain / night) ----------
+     Asset-pack worlds ship fixed photo variants (urlset) — modes swap files.
+     Coded (procedural) worlds render from the shared world model, so the same
+     three modes become ENVIRONMENT presets: rain flips weather → the drizzle
+     overlay, fog and wet light all come along for free (Spec §17, one switch). */
   _syncModeGroup() {
     const group = $('#modeGroup');
     let modes = null;
+    this._urlsetModes = null;
     if (this.graph) {
+      let generated = false;
       for (const n of this.graph.nodes.values()) {
-        if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); break; }
+        if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); this._urlsetModes = modes; break; }
+        if (n.pano?.kind === 'generated') generated = true;
       }
+      if (!modes && generated) modes = ['day', 'rain', 'night'];
     }
     if (!modes) { group.hidden = true; return; }
     if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
@@ -320,6 +328,19 @@ class App {
     if (mode === this.displayMode) return;
     this.displayMode = mode;
     const id = this.movement?.currentNodeId;
+    if (!this._urlsetModes && id && this.graph?.environment) {
+      /* Coded world: mode ⇒ environment patch, then ONE regeneration pass.
+         Sun rez raised at night so the crescent reads crisp in a dark sky. */
+      const ENV = {
+        day:   { timeOfDay: 'day', weather: 'clear' },
+        rain:  { timeOfDay: 'overcast', weather: 'rain' },
+        night: { timeOfDay: 'night', weather: 'clear', sunElevationDeg: 38 },
+      };
+      this.setEnvironment(ENV[mode] ?? ENV.day);
+      this._syncModeGroup();
+      this.toast(`Environment: ${mode}`, 'ok', 1600);
+      return;
+    }
     if (!id) return;
     // mode keys are part of the cache key (`node@mode`), so every variant stays
     // cached independently — flipping modes is free, nothing to drop, and the
@@ -434,6 +455,9 @@ class App {
   async _enterNode(nodeId, { fromId = null, teleport = false, relativeDir = null, initial = false, distM = 0 } = {}) {
     const node = this.graph.getNode(nodeId);
     if (!node) return;
+    // coded worlds declare ambient life in the model (`environment.animals`) —
+    // the viewer's seeded flock follows the world, not the screen (§17)
+    this.viewer.immersion.birds = !!(this.graph.environment?.animals || []).includes('birds');
     this.bus.emit('debug:node', nodeId);
     this.mapRenderer.setCurrent(nodeId, this.viewer.view.yawDeg);
 

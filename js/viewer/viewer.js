@@ -9,6 +9,7 @@
 import { PanoRenderer } from './pano-renderer.js';
 import { softClampPitch } from './completion.js';
 import { walkSchedule, strideEase, walkBobDeg } from './walk-steps.js';
+import { rngFor } from '../gen/util.js';
 
 export class PanoramaViewer {
   /**
@@ -31,7 +32,7 @@ export class PanoramaViewer {
     this.pitchOverdrag = 0;
     this._rawPitch = 0;
 
-    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, transitionMs: 420 };
+    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, transitionMs: 420 };
     // movement feel: morph style + strength come from the Motion settings
     // popup (prefs) — style 'morph' | 'fade' | 'snap', amount 0..1 scales the
     // dolly zoom of the morph
@@ -230,16 +231,24 @@ export class PanoramaViewer {
       hasB: this.view.hasB,
       zoom: this.view.zoom,
     });
-    this._renderRain(now, dt);
+    this._renderFx(now, dt);
     this.onFrameRendered?.();   // post-processing hook (sharpen pass schedules here)
   }
 
-  _renderRain(now, dt) {
+  /** Overlay effects — cleared once per frame, then each enabled layer draws.
+      Everything here is visual-only (Spec §17/§58): it never touches world
+      coordinates, and it paces itself off the same clock as the walk. */
+  _renderFx(now, dt) {
     if (!this.fx) return;
     const cvs = this.fx.canvas;
     this.fx.clearRect(0, 0, cvs.width, cvs.height);
-    if (!this.immersion.rain) { this._rainDrops.length = 0; return; }
     if (cvs.width !== cvs.clientWidth || cvs.height !== cvs.clientHeight) { cvs.width = cvs.clientWidth; cvs.height = cvs.clientHeight; }
+    this._renderRain(now, dt, cvs);
+    this._renderBirds(now, dt, cvs);
+  }
+
+  _renderRain(now, dt, cvs) {
+    if (!this.immersion.rain) { this._rainDrops.length = 0; return; }
     if (this._rainDrops.length === 0) {
       for (let i = 0; i < 90; i++) this._rainDrops.push({ x: Math.random() * cvs.width, y: Math.random() * cvs.height, v: 480 + Math.random() * 360, l: 8 + Math.random() * 14 });
     }
@@ -252,6 +261,54 @@ export class PanoramaViewer {
       this.fx.moveTo(d.x, d.y); this.fx.lineTo(d.x - 1.5, d.y + d.l);
     }
     this.fx.stroke();
+  }
+
+  /** Animated birds — a fixed seeded flock drifting around WORLD azimuth, so
+      panning the view sweeps past the flock exactly the way panning pans past
+      a painted farm: continuous with the coded world, never screen-locked,
+      and identical for every visitor (seeded, no Math.random). Birds roost in
+      the rain, so rain mode hides them — one more weather cue. */
+  _birdFlock() {
+    if (this._flock) return this._flock;
+    const rng = rngFor('viewer_bird_flock_v1');
+    this._flock = [];
+    for (let i = 0; i < 8; i++) {
+      this._flock.push({
+        az: rng() * 360,                                  // world azimuth it currently circles at
+        speed: (0.55 + rng() * 0.5) * (rng() < 0.5 ? 1 : -1),  // deg/sec drift — slow like a lazy glide
+        span: 9 + rng() * 8,                              // wingspan px at this "distance"
+        elev: 0.10 + rng() * 0.20,                        // base height: fraction of viewport from top
+        phase: rng() * Math.PI * 2,                       // flap offset
+        flap: 4.5 + rng() * 3,                            // flap frequency rad/s
+        bob: 5 + rng() * 5,                               // vertical bob amplitude px
+      });
+    }
+    return this._flock;
+  }
+
+  _renderBirds(now, dt, cvs) {
+    if (!this.immersion.birds || this.immersion.rain) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg;
+    ctx.strokeStyle = 'rgba(30,34,42,0.82)';
+    ctx.lineCap = 'round';
+    for (const b of this._birdFlock()) {
+      b.az = ((b.az + b.speed * dt / 1000) % 360 + 360) % 360;
+      const rel = ((b.az - yaw + 540) % 360) - 180;       // signed offset from view center
+      const half = fov / 2 + 12;
+      if (Math.abs(rel) > half) continue;
+      const x = (rel + fov / 2) / fov * w;
+      const y = b.elev * h + Math.sin(t * 0.9 + b.phase * 3) * b.bob;
+      const wingAmp = b.span * 0.46 * Math.sin(t * b.flap + b.phase);
+      const s = b.span;
+      ctx.lineWidth = Math.max(1.2, s * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(x - s, y - wingAmp * 0.4);
+      ctx.quadraticCurveTo(x - s * 0.45, y - wingAmp, x, y);
+      ctx.quadraticCurveTo(x + s * 0.45, y - wingAmp, x + s, y - wingAmp * 0.4);
+      ctx.stroke();
+    }
   }
 
   _emitView() { this.bus.emit('view:changed', { yawDeg: this.view.yawDeg, pitchDeg: this.view.pitchDeg, fovDeg: this.view.fovDeg }); }

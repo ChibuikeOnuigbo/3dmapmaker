@@ -201,6 +201,55 @@ export function buildChapelLane() {
 
   region(g, 'field', { shape: 'rect', x: -120 * PXM, y: 60 * PXM, w: 90 * PXM, h: 180 * PXM });
 
+  /* ===== WORLD EXPANSION — three new areas off the processional way =====
+     All chains START and END on existing way nodes (roadChain merges the
+     first point within 0.75×spacing; nodeAt dedupes endpoints) so every new
+     area is stitched into the SAME graph — map, panoramas and movement all
+     read one world model (perfect sync, Spec §12). */
+
+  // --- Village Green loop with its pond (west of the way at ~200 m) -----
+  const GREEN = [[0, 200], [-20, 200], [-20, 236], [-64, 236], [-64, 190], [-24, 190], [-24, 210], [0, 210]];
+  road(g, 'Green Walk', GREEN.map(([x, y]) => [x * PXM, y * PXM]), 3, 'dirt');
+  roadChain(g, GREEN.map(([x, y]) => [x * PXM, y * PXM]), 10 * PXM, (i) => `Green Walk · #${i + 1}`);
+  region(g, 'water', { shape: 'circle', cx: -46 * PXM, cy: 216 * PXM, radiusPx: 8 * PXM });   // the village pond
+  [[-30, 224], [-42, 206], [-58, 226]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'green_tree_' + i, type: 'tree', x: xm * PXM, y: ym * PXM, hM: 8 + i, rM: 2.1 }));
+  building(g, 'house', -50 * PXM, 248 * PXM, 8, 7, 5.5, 'Green Cottage', '#d9c39b');
+  g.addLandmark({ id: 'lm_pond', type: 'water', name: 'Village Pond', x: -46 * PXM, y: 216 * PXM, importance: 0.8 });
+
+  // --- Woodland Walk to the Old Oak (off the east end of Chapel Lane) ---
+  const WOODS = [[90, 320], [114, 320], [136, 308], [154, 314], [170, 300]];
+  road(g, 'Woodland Walk', WOODS.map(([x, y]) => [x * PXM, y * PXM]), 3, 'dirt');
+  roadChain(g, WOODS.map(([x, y]) => [x * PXM, y * PXM]), 10 * PXM, (i) => `Woodland Walk · #${i + 1}`);
+  region(g, 'field', { shape: 'rect', x: 96 * PXM, y: 284 * PXM, w: 80 * PXM, h: 50 * PXM });   // Hazel Copse floor
+  const wtRng = rngFor('chapel_copse');
+  for (let i = 0; i < 12; i++) {
+    const xm = 98 + wtRng() * 76, ym = 286 + wtRng() * 46;
+    if (Math.abs(ym - 320) < 4 && xm < 150) continue;      // keep the path clear
+    feature(g, { id: 'copse_tree_' + i, type: 'tree', x: xm * PXM, y: ym * PXM, hM: 8 + wtRng() * 4, rM: 2.2 + wtRng() });
+  }
+  feature(g, { id: 'old_oak', type: 'tree', x: 158 * PXM, y: 297 * PXM, hM: 13, rM: 3.2 });
+  g.addLandmark({ id: 'lm_oak', type: 'tree', name: 'Old Oak', x: 158 * PXM, y: 297 * PXM, importance: 0.85 });
+
+  // --- Home Farm & pasture (off the way at 470 m, south end) ------------
+  const FARM = [[0, 470], [26, 470], [44, 484]];
+  road(g, 'Farm Track', FARM.map(([x, y]) => [x * PXM, y * PXM]), 3.5, 'dirt');
+  roadChain(g, FARM.map(([x, y]) => [x * PXM, y * PXM]), 10 * PXM, (i) => `Farm Track · #${i + 1}`);
+  building(g, 'barn', 30 * PXM, 492 * PXM, 14, 8, 7, 'Home Farm Barn', '#9c6b4f');
+  building(g, 'house', 52 * PXM, 476 * PXM, 9, 7, 5.5, 'Home Farmhouse', '#caa06a');
+  region(g, 'field', { shape: 'rect', x: 18 * PXM, y: 500 * PXM, w: 66 * PXM, h: 46 * PXM });   // pasture
+  [[24, 504], [34, 512], [28, 522], [46, 508], [54, 518], [40, 530]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'farm_sheep_' + i, type: 'sheep', x: xm * PXM, y: ym * PXM, rM: 0.7 }));
+  feature(g, { id: 'sign_farm', type: 'sign', x: 4 * PXM, y: 473 * PXM, text: 'Home Farm' });
+  g.addLandmark({ id: 'lm_farm', type: 'farm', name: 'Home Farm', x: 36 * PXM, y: 488 * PXM, importance: 0.75 });
+
+  // --- hedgerows lining the processional way ------------------------------
+  [[9, 80], [-9, 140], [9, 180], [-9, 240], [9, 340], [-9, 380], [9, 440]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'way_hedge_' + i, type: 'hedge', x: xm * PXM, y: ym * PXM, halfLenM: 5, hM: 1.1 }));
+
+  g.environment.animals = ['birds'];   // ambient seeded flock — viewer animates it
+  g.environment.description = 'A rural parish: a stone church at the north end of a 520 m processional way, an 8×8 plaza grid (king-move demo), a side lane of cottages, a village-green loop with its pond, a woodland walk to the Old Oak, and Home Farm with its sheep pasture.';
+
   // two deliberately incomplete panoramas → AutoComplete Panorama showcase
   g.getNode('plaza_2_5').pano.incomplete = { top: 8, bottom: 0 };
   g.getNode('way_140m').pano.incomplete = { top: 6, bottom: 5 };
@@ -212,7 +261,7 @@ export function buildChapelLane() {
     tests: {
       church: { zoneId: 'zone_church_vicinity', boundaryMeters: 500, streetPrefix: 'way_' },
     },
-    blurb: 'Small parish world. Ten-metre steps along the 520 m processional way — the church grows as you approach and stays the same church. Plaza uses 8-direction movement.',
+    blurb: 'Small parish world of coded areas: the 520 m processional way, an 8×8 plaza, a cottage lane, a village-green loop with a pond, a woodland walk to the Old Oak and Home Farm with grazing sheep. Day / Rain / Night re-render live from the model, with birds drifting overhead.',
   };
 }
 
@@ -226,7 +275,7 @@ export function buildMillbrook() {
   g.environment = {
     ...g.environment,
     timeOfDay: 'golden', weather: 'clear', sunAzimuthDeg: 262, sunElevationDeg: 14,
-    groundBase: '#8a9d6b',
+    groundBase: '#8a9d6b', animals: ['birds'],
     description: 'A riverside market town: Main Street, Church Avenue, Market Square, Mill Road and a residential loop.',
     features: [],
   };
@@ -311,7 +360,7 @@ export function buildGreatVale() {
   g.environment = {
     ...g.environment,
     timeOfDay: 'day', weather: 'clear', sunAzimuthDeg: 130, sunElevationDeg: 45,
-    groundBase: '#83a06d',
+    groundBase: '#83a06d', animals: ['birds'],
     description: 'A large vale town: an 8×6 block street grid with a perimeter boulevard and a diagonal avenue. 1,000+ panorama nodes with lazy loading and spatial indexing.',
     features: [],
   };
