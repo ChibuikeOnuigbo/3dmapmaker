@@ -139,11 +139,15 @@
 
 /* ---------- node cards ---------- */
 .sg-card {
-  position: absolute; width: 232px; margin: -116px 0 0 -116px;
+  position: absolute; width: 232px; margin: 0; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column;          /* cards stay centered on their node, whatever their size */
   background: var(--sg-card); border: 1px solid var(--sg-line-2); border-radius: 12px;
   box-shadow: 0 8px 22px rgba(0,0,0,.48);
   cursor: default; user-select: none;
 }
+.sg-card > .sg-card-head, .sg-card > .sg-sockets, .sg-card > .sg-card-foot { flex: 0 0 auto; }
+/* resized cards: the preview strip flexes to fill the extra room */
+.sg-card.sized .sg-thumb { flex: 1 1 56px; }
 .sg-card.selected { border-color: var(--sg-accent-2); box-shadow: 0 0 0 3px rgba(79,141,255,.4), 0 8px 22px rgba(0,0,0,.48); }
 /* isolation rule: degree-0 nodes are unreachable — dashed amber outline */
 .sg-card.isolated { border-style: dashed; border-color: var(--sg-warn); }
@@ -154,7 +158,7 @@
 }
 .sg-card-name { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-card-id { font-size: 11px; color: #b6c4dd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sg-thumb { position: relative; height: 104px; background: var(--sg-elev); overflow: hidden; }
+.sg-thumb { position: relative; flex: 0 0 104px; min-height: 56px; height: auto; background: var(--sg-elev); overflow: hidden; }
 .sg-card.mini .sg-thumb { display: none; }
 .sg-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sg-thumb-state {
@@ -185,11 +189,23 @@
 .sg-mini svg { width: 15px; height: 15px; }
 .sg-mini.danger { font-weight: 700; }
 
+/* corner grip: user-controlled card size within the min/max rule */
+.sg-resize {
+  position: absolute; right: 2px; bottom: 2px; width: 20px; height: 20px;
+  cursor: nwse-resize; border-radius: 0 0 10px 0; opacity: .45;
+  background:
+    linear-gradient(135deg, transparent 0 55%, rgba(190,205,235,.9) 55% 62%, transparent 62% 72%, rgba(190,205,235,.9) 72% 79%, transparent 79%);
+  touch-action: none; z-index: 3;
+}
+.sg-resize:hover { opacity: 1; }
+@media (pointer: coarse) { .sg-resize { width: 24px; height: 24px; } }
+
 /* compact zoom mode: cards become dots with a label */
 .sg-surface.compact .sg-card {
-  width: auto; margin: 0; padding: 2px 8px;
+  width: auto !important; height: auto !important; margin: 0; padding: 2px 8px;
   border-radius: 999px; box-shadow: none;
 }
+.sg-surface.compact .sg-card .sg-resize { display: none; }
 .sg-surface.compact .sg-thumb,
 .sg-surface.compact .sg-sockets,
 .sg-surface.compact .sg-card-foot,

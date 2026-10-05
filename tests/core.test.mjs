@@ -15,7 +15,7 @@ import { aHash16, hammingHex, luminanceGrid16, rgbHist, histIntersect, expectedM
 import { crc32, writeZip, readZip, safeZipPath } from '../js/io/zipex.js';
 import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
-import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset } from '../js/editors/script-editor.js';
+import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset, CARD_MIN, CARD_MAX } from '../js/editors/script-editor.js';
 
 let passed = 0, failed = 0;
 const tests = [];
@@ -602,8 +602,22 @@ test('applyGraphSubset: a code-added node never borrows another node\'s image pa
   assert.equal(fresh.pano.kind, 'generated', 'never a borrowed urlset (a borrowed pano would lie about files that belong to another node)');
   // idempotent no-op reapply: same subset again must change nothing
   const sum2 = applyGraphSubset(g, JSON.parse(JSON.stringify(serializeGraphSubset(g))));
-  assert.deepEqual(sum2, { added: 0, removed: 0, moved: 0, renamed: 0, connected: 0, disconnected: 0 },
+  assert.deepEqual(sum2, { added: 0, removed: 0, moved: 0, renamed: 0, resized: 0, connected: 0, disconnected: 0 },
     're-applying the serialized live graph is a strict no-op (no duplicate toggle of links)');
+
+  // card sizes: survive a serialize round-trip, respect the min/max rule,
+  // and can be edited from the Code view like any other field
+  const id0 = [...g.nodes.keys()][0];
+  g.getNode(id0).card = { w: 320, h: 400 };
+  const serCard = serializeGraphSubset(g).nodes.find(n => n.id === id0).card;
+  assert.deepEqual(serCard, { w: 320, h: 400 }, 'card size serializes with the subset');
+  const snap = serializeGraphSubset(g);
+  snap.nodes.find(n => n.id === id0).card = { w: 10, h: 99999 };
+  applyGraphSubset(g, JSON.parse(JSON.stringify(snap)));
+  assert.deepEqual(g.getNode(id0).card, { w: CARD_MIN.w, h: CARD_MAX.h }, 'out-of-bounds card sizes clamp to the editor rule');
+  delete snap.nodes.find(n => n.id === id0).card;
+  applyGraphSubset(g, JSON.parse(JSON.stringify(snap)));
+  assert.equal(g.getNode(id0).card, undefined, 'a node without a card field resets to the default card size');
 });
 
 /* ---------------- runner ---------------- */

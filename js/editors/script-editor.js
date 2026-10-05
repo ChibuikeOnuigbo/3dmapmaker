@@ -35,6 +35,15 @@
  */
 import { angleDelta, generateId } from '../core/world-graph.js';
 import { validateWorldJson } from '../io/storage.js';
+
+/* Node-card size rules: every card lives between these bounds; the user can
+   resize within them via the corner grip (world px, scaled by the view).
+   Defaults match the long-standing 232-wide card; height defaults to the
+   card's natural content height. */
+export const CARD_W_DEF = 232;
+export const CARD_MIN = { w: 220, h: 200 };
+export const CARD_MAX = { w: 560, h: 600 };
+export function clampCard(v, lo, hi) { return Math.min(hi, Math.max(lo, Math.round(v))); }
 // PanoRenderer is dynamically imported by PreviewModal (browser-only),
 // so this module stays importable from Node in the unit tests.
 
@@ -99,6 +108,7 @@ export function serializeGraphSubset(graph) {
     .map(n => ({
       id: n.id, x: Math.round(n.x * 100) / 100, y: Math.round(n.y * 100) / 100,
       name: n.name, ...(n.headingDeg ? { headingDeg: n.headingDeg } : {}),
+      ...(n.card ? { card: { w: Math.round(n.card.w), h: Math.round(n.card.h) } } : {}),
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
   const edges = [...graph.edges.values()]
@@ -114,7 +124,7 @@ export function serializeGraphSubset(graph) {
 export function applyGraphSubset(graph, data) {
   validateWorldJson(data);                    // structural guard first
   const seen = new Set(data.nodes.map(n => n.id));
-  const summary = { added: 0, removed: 0, moved: 0, renamed: 0, connected: 0, disconnected: 0 };
+  const summary = { added: 0, removed: 0, moved: 0, renamed: 0, resized: 0, connected: 0, disconnected: 0 };
 
   // remove vanished nodes; their edges cascade — count those as disconnects
   for (const id of [...graph.nodes.keys()]) {
@@ -137,6 +147,11 @@ export function applyGraphSubset(graph, data) {
     }
     if (nd.name && cur.name !== nd.name) { cur.name = nd.name; summary.renamed++; }
     if (typeof nd.headingDeg === 'number' && cur.headingDeg !== nd.headingDeg) cur.headingDeg = nd.headingDeg;
+    // card display size: apply, clamp, or drop (reset to default)
+    if (nd.card && Number.isFinite(nd.card.w) && Number.isFinite(nd.card.h)) {
+      const w = clampCard(nd.card.w, CARD_MIN.w, CARD_MAX.w), h = clampCard(nd.card.h, CARD_MIN.h, CARD_MAX.h);
+      if (!cur.card || cur.card.w !== w || cur.card.h !== h) { cur.card = { w, h }; summary.resized++; }
+    } else if (cur.card) { delete cur.card; summary.resized++; }
   }
   // edges: connect missing, disconnect extras
   const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -230,8 +245,38 @@ class NodeCardView {
     this.btnDel = b('button', 'sg-mini danger'); this.btnDel.innerHTML = '<svg><use href="#i-trash"/></svg>'; this.btnDel.title = 'Delete node'; this.btnDel.setAttribute('aria-label', 'Delete node');
     this.footRow.append(this.btnPrev, this.btnImg, this.btnChild, this.btnDel);
 
-    this.el.append(this.head, this.thumbWrap, this.sockRow, this.footRow);
+    // resize grip — user-controlled card size within the min/max rule
+    this.grip = b('div', 'sg-resize');
+    this.grip.title = `Drag: resize card (${CARD_MIN.w}×${CARD_MIN.h} … ${CARD_MAX.w}×${CARD_MAX.h}) · double-click: reset size`;
+    this.grip.setAttribute('aria-label', 'Resize card');
+
+    this.el.append(this.head, this.thumbWrap, this.sockRow, this.footRow, this.grip);
     this._bind();
+  }
+
+  /** Current display size of this card (custom within bounds, else defaults). */
+  sizeOf() {
+    const c = this.node.card;
+    if (c && Number.isFinite(c.w) && Number.isFinite(c.h)) {
+      return { w: clampCard(c.w, CARD_MIN.w, CARD_MAX.w), h: clampCard(c.h, CARD_MIN.h, CARD_MAX.h) };
+    }
+    return { w: CARD_W_DEF, h: this.el.offsetHeight || 250 };
+  }
+
+  /** Apply a size to the element immediately (during drag, before commit). */
+  applySize(w, h, persist = false) {
+    w = clampCard(w, CARD_MIN.w, CARD_MAX.w); h = clampCard(h, CARD_MIN.h, CARD_MAX.h);
+    this.el.style.width = `${w}px`;
+    this.el.style.height = `${h}px`;
+    this.el.classList.add('sized');
+    if (persist) this.node.card = { w, h };
+  }
+
+  clearSize() {
+    delete this.node.card;
+    this.el.classList.remove('sized');
+    this.el.style.width = '';
+    this.el.style.height = '';
   }
 
   _bind() {
@@ -253,6 +298,9 @@ class NodeCardView {
     this.btnDel.addEventListener('click', (e) => { e.stopPropagation(); this.owner.deleteNode(n.id); });
     this.img.addEventListener('error', () => this._thumb('missing'));
     this.img.addEventListener('load', () => this._thumb(this.img.naturalWidth > 2 ? 'ok' : 'missing'));
+    this.grip.addEventListener('pointerdown', (e) => this.owner.startCardResize(this, e));
+    this.grip.addEventListener('dblclick', (e) => { e.stopPropagation(); this.owner.resetCardSize(this); });
+    this.grip.addEventListener('click', (e) => e.stopPropagation());
   }
 
   _thumb(state) {
@@ -269,6 +317,8 @@ class NodeCardView {
     this.head.firstChild.textContent = n.name;
     this.el.style.left = `${n.x}px`;
     this.el.style.top = `${n.y}px`;
+    if (n.card && Number.isFinite(n.card.w) && Number.isFinite(n.card.h)) this.applySize(n.card.w, n.card.h);
+    else { this.el.classList.remove('sized'); this.el.style.width = ''; this.el.style.height = ''; }
     const url = variantUrlOf(n, this.owner.studio.variant);
     const prev = this.img.dataset.src || '';
     if (url && url !== prev) { this.img.dataset.src = url; this._thumb('loading'); this.img.src = url; }
@@ -677,6 +727,38 @@ class GraphCanvas {
     window.addEventListener('pointerup', up);
   }
 
+  /** Corner-grip resize of a node card, clamped to the min/max size rule.
+      Preview applies live (wires follow), commit happens on release with a
+      5 px snap — one history entry per resize gesture. */
+  startCardResize(card, e) {
+    e.preventDefault(); e.stopPropagation();
+    const start = this.toWorld(e.clientX, e.clientY);
+    const orig = card.sizeOf();
+    let dw = 0, dh = 0;
+    const move = (e2) => {
+      const w = this.toWorld(e2.clientX, e2.clientY);
+      dw = w.x - start.x; dh = w.y - start.y;
+      card.applySize(orig.w + dw, orig.h + dh);
+      this.wires.refresh();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      const w = Math.round((orig.w + dw) / 5) * 5, h = Math.round((orig.h + dh) / 5) * 5;
+      card.applySize(w, h, true);
+      this.wires.refresh();
+      this.studio.mutated(`Resized ${card.node.name} to ${clampCard(w, CARD_MIN.w, CARD_MAX.w)}×${clampCard(h, CARD_MIN.h, CARD_MAX.h)}`);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  /** Double-click on the grip: back to the default card size (rule-consistent). */
+  resetCardSize(card) {
+    card.clearSize();
+    this.wires.refresh();
+    this.studio.mutated(`Reset ${card.node.name} size`);
+  }
+
   addChildNode(fromId) {
     const g = this.studio.app.graph;
     const from = g.getNode(fromId);
@@ -824,7 +906,7 @@ class CodeView {
     catch (err) { this.studio.toast(`JSON error: ${err.message}`, 'err', 5000); return; }
     try {
       const sum = applyGraphSubset(this.studio.app.graph, data);
-      this.studio.mutated(`Applied: +${sum.added} −${sum.removed} nodes, ${sum.moved} moved, +${sum.connected} −${sum.disconnected} links`);
+      this.studio.mutated(`Applied: +${sum.added} −${sum.removed} nodes, ${sum.moved} moved, ${sum.resized || 0} resized, +${sum.connected} −${sum.disconnected} links`);
       this.reload();
     } catch (err) { this.studio.toast(`Invalid graph: ${err.message}`, 'err', 6000); }
   }
