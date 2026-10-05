@@ -247,7 +247,33 @@ export function buildChapelLane() {
   [[9, 80], [-9, 140], [9, 180], [-9, 240], [9, 340], [-9, 380], [9, 440]].forEach(([xm, ym], i) =>
     feature(g, { id: 'way_hedge_' + i, type: 'hedge', x: xm * PXM, y: ym * PXM, halfLenM: 5, hM: 1.1 }));
 
+  // --- fine detail pass: fences, benches, bushes, wildflowers --------------
+  // paddock fences ringing the pasture + flanking the farm track
+  [[18, 500], [40, 500], [18, 524], [8, 474], [26, 474]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'fence_pasture_' + i, type: 'fence', x: xm * PXM, y: ym * PXM, halfLenM: 6, hM: 1.0 }));
+  // green walk fence on the west side
+  [[-64, 208], [-64, 226]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'fence_green_' + i, type: 'fence', x: xm * PXM, y: ym * PXM, halfLenM: 5, hM: 1.0 }));
+  // benches: two facing the pond, one under the Old Oak
+  [[-38, 206], [-54, 222]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'bench_green_' + i, type: 'bench', x: xm * PXM, y: ym * PXM, rM: 0.9, hM: 0.9 }));
+  feature(g, { id: 'bench_oak', type: 'bench', x: 156 * PXM, y: 301 * PXM, rM: 0.9, hM: 0.9 });
+  // cottage-garden bushes along Chapel Lane
+  [[58, 316], [68, 318], [78, 320], [86, 322]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'bush_lane_' + i, type: 'bush', x: xm * PXM, y: ym * PXM, rM: 1.0, hM: 1.6 }));
+  // wildflower patches: village green + pasture
+  [[-34, 214], [-48, 200], [-58, 214], [30, 508], [46, 520]].forEach(([xm, ym], i) =>
+    feature(g, { id: 'flowers_' + i, type: 'flowers', x: xm * PXM, y: ym * PXM, rM: 1.2 }));
+
   g.environment.animals = ['birds'];   // ambient seeded flock — viewer animates it
+
+  // animated walkers — world-anchored routes in meters; the viewer projects
+  // them into the live view every frame (ping-pong loop, seeded offsets)
+  g.environment.actors = [
+    { id: 'walker_way', kind: 'walker', x0: 2, y0: 140, x1: -2, y1: 182, speedMps: 1.15, phase: 0, tint: '#6b4a34', name: 'Walker on the way' },
+    { id: 'walker_lane', kind: 'walker', x0: 8, y0: 318, x1: 70, y1: 322, speedMps: 1.05, phase: 12, tint: '#3a5468', name: 'Walker down the lane' },
+    { id: 'walker_green', kind: 'walker', x0: -22, y0: 206, x1: -56, y1: 230, speedMps: 0.8, phase: 27, tint: '#5c5c50', name: 'Stroller by the pond' },
+  ];
   g.environment.description = 'A rural parish: a stone church at the north end of a 520 m processional way, an 8×8 plaza grid (king-move demo), a side lane of cottages, a village-green loop with its pond, a woodland walk to the Old Oak, and Home Farm with its sheep pasture.';
 
   // two deliberately incomplete panoramas → AutoComplete Panorama showcase
@@ -365,7 +391,7 @@ export function buildGreatVale() {
     features: [],
   };
   const PXM = 2;
-  const BX = 8, BY = 6, BLOCK = 100 * PXM;         // 50 m blocks
+  const BX = 12, BY = 8, BLOCK = 100 * PXM;         // 50 m blocks — the big-world stress case
   const W = BX * BLOCK, H = BY * BLOCK;
 
   g.zones.add({ id: 'zone_parish', name: 'Parish Quarter (500 m)', shape: 'circle', cx: W * 0.5, cy: -60 * PXM, radiusPx: 500 * PXM, color: 'rgba(214,158,64,0.08)', meta: { kind: 'church_vicinity', boundaryMeters: 500 } });
@@ -433,6 +459,6 @@ export function buildGreatVale() {
 export const DEMO_WORLDS = [
   { id: 'demo_chapel_lane', name: 'Chapel Lane', tag: 'Small', build: buildChapelLane },
   { id: 'demo_millbrook', name: 'Millbrook', tag: 'Medium', build: buildMillbrook },
-  { id: 'demo_great_vale', name: 'Great Vale', tag: 'Large · 1,000+ nodes', build: buildGreatVale },
+  { id: 'demo_great_vale', name: 'Great Vale', tag: 'Large · 2,100+ nodes', build: buildGreatVale },
   { id: 'demo_willow_parish', name: 'Willow Parish', tag: 'Real · AI photos', kind: 'real', modes: ['day', 'rain', 'night'], thumb: 'assets/willow/day/n3.jpg', build: buildWillowParish },
 ];

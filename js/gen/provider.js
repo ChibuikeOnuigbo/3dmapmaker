@@ -68,14 +68,18 @@ export class ProceduralWorldProvider extends GenerationProvider {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     const env = world.environment;
-    const sky = SKY_PRESETS[env.timeOfDay] || SKY_PRESETS.day;
+    // clone the preset — weather must never mutate SKY_PRESETS, or the next
+    // regeneration (mode flip) would inherit stale overcast colors
+    const sky = { ...(SKY_PRESETS[env.timeOfDay] || SKY_PRESETS.day) };
     if (env.weather === 'overcast' || env.weather === 'rain') Object.assign(sky, SKY_PRESETS.overcast);
     const weatherFog = env.weather === 'rain' ? 0.75 : env.weather === 'overcast' ? 0.6 : 0.5;
+    this._envNow = env;                     // painters read sun/shadow/window state from here
 
     this._paintSky(ctx, W, H, sky, env);
     this._paintGround(ctx, canvas, node, world, ppm, sky, weatherFog, opts.groundResolution ?? 1);
     this._paintStructures(ctx, node, world, ppm, sky, weatherFog);
     this._paintSun(ctx, W, H, sky, env);
+    this._paintGodRays(ctx, W, H, sky, env);
 
     // Simulated incomplete panorama for AutoComplete testing (explicitly authored)
     const inc = node.pano?.incomplete;
@@ -146,13 +150,17 @@ export class ProceduralWorldProvider extends GenerationProvider {
       const pitch = ((j + 0.5) / gh) * 90 * DEG;           // 0..90 below horizon
       rowDist[j] = Math.min(maxD, camH / Math.tan(Math.max(pitch, 0.35 * DEG)));
     }
-    const colSin = new Float32Array(gw), colCos = new Float32Array(gw);
+    const colSin = new Float32Array(gw), colCos = new Float32Array(gw), colB = new Float32Array(gw);
     for (let i = 0; i < gw; i++) {
       const b = ((i + 0.5) / gw * 360 - 180) * DEG;
-      colSin[i] = Math.sin(b); colCos[i] = Math.cos(b);
+      colSin[i] = Math.sin(b); colCos[i] = Math.cos(b); colB[i] = b;
     }
 
     const ground = this._groundSampler(world, ppm);
+    const env = world.environment;
+    const sunAz = ((env.sunAzimuthDeg % 360) + 360) % 360 * DEG;
+    const glintC = env.timeOfDay === 'night' ? [214, 224, 250] : [255, 244, 214];
+    const canGlint = env.weather === 'clear';
     for (let j = 0; j < gh; j++) {
       const dM = rowDist[j];
       const dPx = dM * ppm;
@@ -161,6 +169,12 @@ export class ProceduralWorldProvider extends GenerationProvider {
         const wx = node.x + colSin[i] * dPx;
         const wy = node.y - colCos[i] * dPx;
         let c = ground.at(wx, wy, seedG);
+        // sun path sparkle across open water — specular streak toward the sun
+        // azimuth (the "ray-traced" tell: it shifts believably as you turn)
+        if (canGlint && ground.groundKind() === 'water') {
+          const rel = Math.cos(colB[i] - sunAz);
+          if (rel > 0) c = mix(c, glintC, Math.pow(rel, 26) * (env.timeOfDay === 'night' ? 0.4 : 0.55));
+        }
         if (fogT > 0) c = mix(c, horizonFog, fogT);
         const o = (j * gw + i) * 4;
         data[o] = c[0]; data[o + 1] = c[1]; data[o + 2] = c[2]; data[o + 3] = 255;
@@ -207,6 +221,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
 
     const noise = (wx, wy, s) => cellHash(Math.floor(wx / (2 * ppm)), Math.floor(wy / (2 * ppm)), s);
     const vary = (c, n, amt) => [c[0] + (n - 0.5) * amt, c[1] + (n - 0.5) * amt, c[2] + (n - 0.5) * amt * 0.7];
+    const lastKind = { v: null };
 
     const distToSeg = (px, py, x1, y1, x2, y2) => {
       const dx = x2 - x1, dy = y2 - y1;
@@ -218,7 +233,9 @@ export class ProceduralWorldProvider extends GenerationProvider {
     };
 
     return {
+      groundKind: () => lastKind.v,
       at: (wx, wy, seed) => {
+        lastKind.v = null;
         let c = vary(base, noise(wx, wy, seed), 26);   // world-anchored grass/ground variation
         const k = key(Math.floor(wx / CELL), Math.floor(wy / CELL));
         const near = [
@@ -244,6 +261,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
               inside = ins;
             }
             if (inside) {
+              lastKind.v = f.kind;
               if (f.kind === 'plaza') c = vary([168, 162, 150], noise(wx, wy, seed + 7), 14);
               else if (f.kind === 'water') c = mix([58, 96, 130], [72, 112, 146], noise(wx, wy, seed + 11));
               else if (f.kind === 'field') c = vary([129, 148, 82], noise(wx, wy, seed + 13), 34);
@@ -280,7 +298,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
   _paintStructures(ctx, node, world, ppm, sky, weatherFog) {
     const W = this.W, H = this.H;
     const camH = 1.7;
-    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower', 'sheep', 'hedge'].includes(f.type));
+    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower', 'sheep', 'hedge', 'fence', 'bench', 'bush', 'flowers'].includes(f.type));
     const items = [];
     for (const f of feats) {
       const dx = (f.x - node.x) / ppm, dy = (node.y - f.y) / ppm;
@@ -304,7 +322,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
       const radiusM = f.type === 'building' ? Math.max(f.w, f.d) / ppm / 2
         : f.type === 'car' ? (f.rM ?? 1.1)
         : f.type === 'sheep' ? (f.rM ?? 0.7)
-        : f.type === 'hedge' ? (f.halfLenM ?? 3)
+        : f.type === 'hedge' || f.type === 'fence' ? (f.halfLenM ?? 3)
         : (f.rM ?? 1.6);
       // true angular size; floor at ~1.5 screen px so far things stay SMALL
       // (the old 0.35 rad minimum fused every far object into a wall)
@@ -313,7 +331,17 @@ export class ProceduralWorldProvider extends GenerationProvider {
       const topYFor = (hM, dM) => (0.5 - (Math.atan((hM - camH) / dM) / Math.PI)) * H;
       const botY = (0.5 - (Math.atan(-camH / dist) / Math.PI)) * H;
 
+      // approximate height per type — feeds top-Y AND the shadow length
+      const hM = f.type === 'building' ? f.h
+        : f.type === 'tree' ? (f.hM ?? 7)
+        : f.type === 'tower' ? (f.hM ?? 20)
+        : f.type === 'sign' ? 3
+        : f.type === 'sheep' ? 0.85
+        : f.type === 'flowers' ? 0.35
+        : (f.hM ?? 1.2);
+
       drawWrapped((x) => {
+        this._castShadow(ctx, x, botY, halfWpx, radiusM, hM, bearing, dist, fogT);
         if (f.type === 'building') this._drawBuilding(ctx, f, x, halfWpx, topYFor(f.h, Math.max(1.5, dist)), botY, fogT, fogC, dist);
         else if (f.type === 'tree') this._drawTree(ctx, f, x, halfWpx, topYFor(f.hM ?? 7, dist), botY, fogT, fogC);
         else if (f.type === 'car') this._drawCar(ctx, f, x, halfWpx, topYFor(1.5, dist), botY, fogT, fogC, dist);
@@ -321,6 +349,10 @@ export class ProceduralWorldProvider extends GenerationProvider {
         else if (f.type === 'tower') this._drawTower(ctx, f, x, halfWpx, topYFor(f.hM ?? 20, dist), botY, fogT, fogC);
         else if (f.type === 'sheep') this._drawSheep(ctx, f, x, halfWpx, topYFor(0.85, dist), botY, fogT, fogC, dist);
         else if (f.type === 'hedge') this._drawHedge(ctx, f, x, halfWpx, topYFor(f.hM ?? 1.1, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'fence') this._drawFence(ctx, f, x, halfWpx, topYFor(f.hM ?? 1.0, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'bench') this._drawBench(ctx, f, x, halfWpx, topYFor(f.hM ?? 0.9, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'bush') this._drawBush(ctx, f, x, halfWpx, topYFor(f.hM ?? 1.6, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'flowers') this._drawFlowers(ctx, f, x, halfWpx, topYFor(0.35, dist), botY, fogT, fogC, dist);
       }, xC);
     }
   }
@@ -383,6 +415,22 @@ export class ProceduralWorldProvider extends GenerationProvider {
         // door
         ctx.fillStyle = this._shade([78, 60, 46], fogT, fogC);
         ctx.fillRect(xC - w * 0.05, botY - h * 0.3, w * 0.1, h * 0.3);
+        // NIGHT: warm lamps come on — seeded per-building so the SAME windows
+        // glow from every node and every rerender (neighbourhood consistency)
+        if (this._envNow?.timeOfDay === 'night') {
+          const rngW = rngFor(f.id + '|win');
+          for (let cxi = 0; cxi < cols; cxi++) for (let ryi = 0; ryi < rows; ryi++) {
+            if (rngW() < 0.45) continue;
+            const wx = x + w * 0.19 + cxi * (w * 0.62 / cols), wy = topY + h * 0.22 + ryi * (h * 0.5 / rows);
+            ctx.fillStyle = 'rgba(255,196,102,0.95)';
+            ctx.fillRect(wx, wy, ww * 0.62, wh * 0.66);
+            const g = ctx.createRadialGradient(wx + ww * 0.3, wy + wh * 0.3, 1, wx + ww * 0.3, wy + wh * 0.3, ww * 1.4);
+            g.addColorStop(0, 'rgba(255,190,96,0.30)');
+            g.addColorStop(1, 'rgba(255,190,96,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(wx + ww * 0.3, wy + wh * 0.3, ww * 1.4, 0, Math.PI * 2); ctx.fill();
+          }
+        }
       }
     }
   }
@@ -474,6 +522,103 @@ export class ProceduralWorldProvider extends GenerationProvider {
     }
   }
 
+  /** Post-and-rail paddock fence — the rural workhorse detail object:
+      culls past 80 m where rails would alias. */
+  _drawFence(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 80) return;
+    const rng = rngFor(f.id);
+    const h = botY - topY, w = halfW * 2, x = xC - halfW;
+    const wood = this._shade(mix([122, 92, 62], [96, 72, 50], rng() * 0.5), fogT, fogC);
+    const postW = Math.max(1.2, w * 0.03);
+    const posts = Math.max(2, Math.round(w / Math.max(6, h * 0.55)));
+    ctx.fillStyle = wood;
+    for (let i = 0; i <= posts; i++) {
+      ctx.fillRect(x + (w * i) / posts - postW / 2, topY, postW, h);
+    }
+    const railH = Math.max(1, h * 0.12);
+    ctx.fillRect(x, topY + h * 0.12, w, railH);
+    ctx.fillRect(x, topY + h * 0.52, w, railH);
+  }
+
+  /** Park bench for the village green — seat slab, back slab, two legs. */
+  _drawBench(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 45) return;
+    const rng = rngFor(f.id);
+    const h = botY - topY, w = halfW * 2, x = xC - halfW;
+    ctx.fillStyle = 'rgba(30,32,36,0.30)';
+    ctx.beginPath(); ctx.ellipse(xC, botY, w * 0.52, Math.max(1.3, h * 0.08), 0, 0, Math.PI * 2); ctx.fill();
+    const wood = this._shade(mix([140, 104, 60], [112, 82, 48], rng() * 0.5), fogT, fogC);
+    const iron = this._shade([48, 50, 54], fogT, fogC);
+    ctx.fillStyle = iron;
+    ctx.fillRect(x + w * 0.14, botY - h * 0.5, Math.max(1.2, w * 0.05), h * 0.5);
+    ctx.fillRect(x + w * 0.8, botY - h * 0.5, Math.max(1.2, w * 0.05), h * 0.5);
+    ctx.fillStyle = wood;
+    ctx.fillRect(x, botY - h * 0.56, w, h * 0.14);          // seat
+    ctx.fillRect(x, topY, w, h * 0.16);                     // back rail
+  }
+
+  /** Single round bush — cottage garden filler. */
+  _drawBush(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 130) return;
+    const rng = rngFor(f.id);
+    const h = botY - topY;
+    ctx.fillStyle = 'rgba(30,36,28,0.28)';
+    ctx.beginPath(); ctx.ellipse(xC, botY, halfW, Math.max(1.5, h * 0.09), 0, 0, Math.PI * 2); ctx.fill();
+    const g0 = mix([62, 92, 50], [84, 112, 60], rng());
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = this._shade(mix(g0, [52, 82, 44], i * 0.3), fogT, fogC);
+      ctx.beginPath();
+      ctx.ellipse(xC + (rng() - 0.5) * halfW * 0.4, topY + h * (0.28 + i * 0.22), halfW * (0.95 - i * 0.2), h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /** Wildflower patch — tiny seeded colour specks on short stems. */
+  _drawFlowers(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    if (dist > 35) return;
+    const rng = rngFor(f.id);
+    const h = botY - topY, w = halfW * 2, x = xC - halfW;
+    const petal = [[214, 74, 74], [232, 208, 92], [236, 234, 224], [150, 96, 190], [240, 150, 120]];
+    ctx.lineWidth = Math.max(0.8, h * 0.05);
+    for (let i = 0; i < 14; i++) {
+      const fx = x + rng() * w, fy = botY - rng() * h * 0.85;
+      ctx.strokeStyle = this._shade([74, 110, 52], fogT, fogC);
+      ctx.beginPath(); ctx.moveTo(fx, botY); ctx.lineTo(fx, fy); ctx.stroke();
+      const c = petal[(rng() * petal.length) | 0];
+      ctx.fillStyle = this._shade(c, fogT * 0.7, fogC);
+      const r = Math.max(1.1, h * (0.09 + rng() * 0.07));
+      ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** Unified ground shadow — EVERY structure gets one. Under sun it leans
+      away from the light and stretches with height·cot(elevation) (the
+      ray-traced look); under rain/night it collapses to a soft contact pool.
+      Pure screen-space transform, alpha capped so it never reads as a smear. */
+  _castShadow(ctx, xC, botY, halfW, radiusM, hM, bearingRad, distM, fogT) {
+    const env = this._envNow || {};
+    const strength = env.weather === 'rain' ? 0
+      : env.weather === 'overcast' ? 0.05
+      : env.timeOfDay === 'night' ? 0.06
+      : 0.20;
+    if (strength <= 0.01 || distM > 90) return;
+    const el = Math.max(0.18, (env.sunElevationDeg || 35) * DEG);
+    const lenM = Math.min(hM / Math.tan(el), 26);            // shadow run, metres
+    const shadowAz = ((env.sunAzimuthDeg || 0) + 180) * DEG; // falls away from the sun
+    const rel = shadowAz - bearingRad;                       // vs. viewer direction
+    const pxPerM = halfW / Math.max(0.3, radiusM);
+    const dxPx = lenM * pxPerM * Math.sin(rel) * 0.55;
+    const stretch = 1 + Math.min(2.2, lenM * 0.16 * (0.35 + Math.abs(Math.cos(rel))));
+    ctx.save();
+    ctx.translate(xC + dxPx * 0.5, botY);
+    ctx.rotate(Math.max(-0.5, Math.min(0.5, -Math.sin(rel) * 0.5)));
+    ctx.scale(stretch, 0.24);
+    ctx.globalAlpha = Math.min(strength, strength * (1.1 - fogT));
+    ctx.fillStyle = 'rgb(26,30,24)';
+    ctx.beginPath(); ctx.ellipse(0, 0, halfW * 0.95, halfW * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   _drawTower(ctx, f, xC, halfW, topY, botY, fogT, fogC) {
     const w = Math.max(halfW * 1.4, 6);
     const h = botY - topY;
@@ -538,6 +683,36 @@ export class ProceduralWorldProvider extends GenerationProvider {
       ctx.fillRect(x, y, s, s);
     }
     ctx.restore();
+  }
+
+  /** Volumetric light shafts fanning down from the sun ("ray-traced" read):
+      a seeded fan of additive wedges — same sky every redraw, hidden in rain,
+      overcast and at night. */
+  _paintGodRays(ctx, W, H, sky, env) {
+    if (env.weather === 'overcast' || env.weather === 'rain' || env.timeOfDay === 'night') return;
+    const az = ((env.sunAzimuthDeg % 360) + 360) % 360;
+    const x = ((az + 180) % 360) / 360 * W;
+    const y = (0.5 - env.sunElevationDeg / 180) * H;
+    const rng = rngFor(`rays_${env.sunAzimuthDeg}_${env.sunElevationDeg}`);
+    const sunC = hex(sky.sun);
+    for (const off of [-W, 0, W]) {
+      for (let i = 0; i < 9; i++) {
+        const ang = (i - 4) * 0.085 + (rng() - 0.5) * 0.04;
+        const len = H * (0.34 + rng() * 0.34);
+        const wpx = 8 + rng() * 30;
+        ctx.save();
+        ctx.translate(x + off, y);
+        ctx.rotate(ang);
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = 0.045 + rng() * 0.05;
+        const g = ctx.createLinearGradient(0, 0, 0, len);
+        g.addColorStop(0, css(sunC));
+        g.addColorStop(1, css([sunC[0], sunC[1], sunC[2]]).replace('rgb', 'rgba').replace(')', ',0)'));
+        ctx.fillStyle = g;
+        ctx.fillRect(-wpx / 2, 10, wpx, len);
+        ctx.restore();
+      }
+    }
   }
 }
 
