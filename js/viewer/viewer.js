@@ -32,7 +32,10 @@ export class PanoramaViewer {
     this.pitchOverdrag = 0;
     this._rawPitch = 0;
 
-    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, transitionMs: 420 };
+    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, transitionMs: 420 };
+    // world anchors for animated actors — set by the app on every node entry:
+    // { xM, yM (node position in meters), headingDeg, actors:[{kind:'walker',...}] }
+    this.anchors = null;
     // movement feel: morph style + strength come from the Motion settings
     // popup (prefs) — style 'morph' | 'fade' | 'snap', amount 0..1 scales the
     // dolly zoom of the morph
@@ -243,8 +246,142 @@ export class PanoramaViewer {
     const cvs = this.fx.canvas;
     this.fx.clearRect(0, 0, cvs.width, cvs.height);
     if (cvs.width !== cvs.clientWidth || cvs.height !== cvs.clientHeight) { cvs.width = cvs.clientWidth; cvs.height = cvs.clientHeight; }
-    this._renderRain(now, dt, cvs);
+    this._renderClouds(now, dt, cvs);
     this._renderBirds(now, dt, cvs);
+    this._renderActors(now, dt, cvs);
+    this._renderRain(now, dt, cvs);
+  }
+
+  /* ---------------- animated world layers ---------------- */
+
+  /** Exact inverse of the WebGL view-ray construction: a world direction
+      (bearing+elevation from the camera) lands on NDC → canvas px. Using the
+      same math as the shader keeps animated actors glued to the painted
+      world through pan, pitch, FOV zoom and transition dolly (Spec §58). */
+  _projectWorld(xM, yM, hM = 0, aspect = 1) {
+    const a = this.anchors;
+    if (!a) return null;
+    const dx = xM - a.xM, dn = -(yM - a.yM);            // world +y is south; dn = northward
+    const distH = Math.hypot(dx, dn);
+    if (distH > 90) return null;
+    const elev = Math.atan2(hM - 1.7, Math.max(0.2, distH));
+    const brg = Math.atan2(dx, dn) - (a.headingDeg || 0) * Math.PI / 180;
+    const cb = Math.cos(elev), sb = Math.sin(elev);
+    const D = [Math.sin(brg) * cb, sb, -Math.cos(brg) * cb];  // X east, Y up, Z south
+    const yaw = this.view.yawDeg * Math.PI / 180, pit = this.view.pitchDeg * Math.PI / 180;
+    const cp = Math.cos(pit), sp = Math.sin(pit);
+    const right = [Math.cos(yaw), 0, Math.sin(yaw)];
+    const fwdH = [Math.sin(yaw), 0, -Math.cos(yaw)];
+    const fwd = [fwdH[0] * cp, sp, fwdH[2] * cp];
+    const upv = [-fwdH[0] * sp, cp, -fwdH[2] * sp];
+    const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    const df = dot(D, fwd);
+    if (df < 0.02) return null;                          // behind the camera
+    const t = Math.tan(this.view.fovDeg * Math.PI / 360) * (this.view.zoom || 1);
+    const nx = dot(D, right) / (df * t * aspect);
+    const ny = dot(D, upv) / (df * t);
+    if (Math.abs(nx) > 1.25 || Math.abs(ny) > 1.25) return null;
+    return { nx, ny, distM: distH };
+  }
+
+  /** Animated villagers walking coded routes (environment.actors): ping-pong
+      loops between two world points, projected every frame — body, head,
+      bobbing gait, swinging legs and a contact shadow. Within ~70 m they are
+      crisp silhouettes, then they fade like everything else does. */
+  _renderActors(now, dt, cvs) {
+    if (!this.fx || !this.anchors?.actors?.length) return;
+    const ctx = this.fx, W = cvs.width, H = cvs.height;
+    const aspect = W / Math.max(1, H);
+    const t = (now - this._t0) / 1000;
+    for (const act of this.anchors.actors) {
+      if (act.kind !== 'walker') continue;
+      const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
+      const lenM = Math.max(0.5, Math.hypot(ax, ay));
+      const P = lenM / Math.max(0.2, act.speedMps || 1);          // one-way seconds
+      const s = (((t + (act.phase || 0)) / P) % 2 + 2) % 2;
+      const k = s < 1 ? s : 2 - s;                                 // ping-pong
+      const feetX = act.x0 + ax * k, feetY = act.y0 + ay * k;
+      const feet = this._projectWorld(feetX, feetY, 0, aspect);
+      const head = this._projectWorld(feetX, feetY, 1.72, aspect);
+      if (!feet || !head) continue;                                // behind / off-frame / too far
+      const sx = (feet.nx * 0.5 + 0.5) * W;
+      const syF = (1 - (feet.ny * 0.5 + 0.5)) * H;
+      const syH = (1 - (head.ny * 0.5 + 0.5)) * H;
+      const bh = Math.max(3, syF - syH);                           // body height in px
+      if (bh > H) continue;                                        // standing on the camera
+      const stepPh = t * (2 * Math.PI / 0.72) + (act.phase || 0) * 3;
+      const bob = Math.abs(Math.sin(stepPh)) * bh * 0.03;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(0.92, 1.25 - feet.distM / 60));
+      if (ctx.globalAlpha <= 0.02) { ctx.restore(); continue; }
+      const bw = Math.max(1.6, bh * 0.30);
+      // contact shadow
+      ctx.fillStyle = 'rgba(22,26,22,0.35)';
+      ctx.beginPath(); ctx.ellipse(sx, syF, bh * 0.26, Math.max(1.2, bh * 0.06), 0, 0, Math.PI * 2); ctx.fill();
+      // swinging legs
+      const legA = Math.sin(stepPh) * bw * 0.5;
+      ctx.strokeStyle = 'rgba(32,30,28,0.9)';
+      ctx.lineWidth = Math.max(1.2, bw * 0.30);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx, syF - bh * 0.34 - bob); ctx.lineTo(sx + legA, syF);
+      ctx.moveTo(sx, syF - bh * 0.34 - bob); ctx.lineTo(sx - legA, syF);
+      ctx.stroke();
+      // coat
+      ctx.strokeStyle = act.tint || '#5a4a3a';
+      ctx.lineWidth = bw;
+      ctx.beginPath();
+      ctx.moveTo(sx, syF - bh * 0.36 - bob);
+      ctx.lineTo(sx, syH + bh * 0.16 - bob);
+      ctx.stroke();
+      // head
+      ctx.fillStyle = '#d9b48f';
+      ctx.beginPath(); ctx.arc(sx, syH + bh * 0.06 - bob, Math.max(1.6, bh * 0.115), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /** Drifting clouds — world-anchored like the birds: seeded, slow azimuth
+      drift, hidden by rain & night. Puffs pan with the view instead of the
+      screen, so the sky feels continuous as you turn. */
+  _cloudLayer() {
+    if (this._clouds) return this._clouds;
+    const rng = rngFor('viewer_cloud_layer_v1');
+    this._clouds = [];
+    for (let i = 0; i < 6; i++) {
+      this._clouds.push({
+        az: rng() * 360,
+        spd: (0.18 + rng() * 0.22) * (rng() < 0.5 ? 1 : -1),
+        elev: 0.05 + rng() * 0.11,
+        size: 90 + rng() * 120,
+        a: 0.10 + rng() * 0.10,
+        phase: rng() * Math.PI * 2,
+      });
+    }
+    return this._clouds;
+  }
+
+  _renderClouds(now, dt, cvs) {
+    if (!this.fx || !this.immersion.clouds || this.immersion.rain) return;
+    const ctx = this.fx, W = cvs.width, H = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg;
+    const t = (now - this._t0) / 1000;
+    for (const c of this._cloudLayer()) {
+      c.az = ((c.az + c.spd * dt / 1000) % 360 + 360) % 360;
+      const rel = ((c.az - yaw + 540) % 360) - 180;
+      const half = fov / 2 + (c.size / fov) * 30;
+      if (Math.abs(rel) > half) continue;
+      const x = (rel + fov / 2) / fov * W;
+      const y = (c.elev + Math.sin(t * 0.05 + c.phase) * 0.004) * H;
+      const s = c.size / (this.view.fovDeg / 75);
+      ctx.save();
+      ctx.globalAlpha = c.a;
+      ctx.fillStyle = '#ffffff';
+      for (const [ox, oy, r] of [[0, 0, 1], [-0.55, 0.14, 0.62], [0.5, 0.1, 0.72]]) {
+        ctx.beginPath(); ctx.ellipse(x + ox * s, y + oy * s * 0.5, s * 0.5 * r, s * 0.17 * r, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
   }
 
   _renderRain(now, dt, cvs) {

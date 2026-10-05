@@ -457,7 +457,17 @@ class App {
     if (!node) return;
     // coded worlds declare ambient life in the model (`environment.animals`) —
     // the viewer's seeded flock follows the world, not the screen (§17)
-    this.viewer.immersion.birds = !!(this.graph.environment?.animals || []).includes('birds');
+    const envW = this.graph.environment || {};
+    this.viewer.immersion.birds = !!(envW.animals || []).includes('birds');
+    this.viewer.immersion.clouds = (envW.weather ?? 'clear') === 'clear' && envW.timeOfDay !== 'night';
+    // animated actors: hand the viewer this node's position (meters) so it can
+    // project the coded walkers of environment.actors into the live view
+    const ppmA = this.graph.scale?.pixelsPerMeter ?? 2;
+    this.viewer.anchors = {
+      xM: node.x / ppmA, yM: node.y / ppmA,
+      headingDeg: node.headingDeg ?? 0,
+      actors: envW.actors ?? [],
+    };
     this.bus.emit('debug:node', nodeId);
     this.mapRenderer.setCurrent(nodeId, this.viewer.view.yawDeg);
 

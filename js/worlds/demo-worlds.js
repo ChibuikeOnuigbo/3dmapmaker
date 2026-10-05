@@ -287,7 +287,7 @@ export function buildChapelLane() {
     tests: {
       church: { zoneId: 'zone_church_vicinity', boundaryMeters: 500, streetPrefix: 'way_' },
     },
-    blurb: 'Small parish world of coded areas: the 520 m processional way, an 8×8 plaza, a cottage lane, a village-green loop with a pond, a woodland walk to the Old Oak and Home Farm with grazing sheep. Day / Rain / Night re-render live from the model, with birds drifting overhead.',
+    blurb: 'Small living parish: the 520 m way, 8×8 plaza, cottage lane, green loop with pond, woodland walk to the Old Oak and Home Farm with grazing sheep — god rays and soft shadows trace the sun, water glints, windows glow at night, and villagers, birds and clouds move through it. Day / Rain / Night re-render live.',
   };
 }
 
