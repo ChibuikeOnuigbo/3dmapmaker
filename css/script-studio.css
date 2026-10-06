@@ -396,3 +396,28 @@
   .sg-x, .sg-p { width: 44px; height: 44px; }
   .sg-linkrow { min-height: 52px; }
 }
+
+/* ---------- graph behaviour polish: focus, guides, connect feedback ---------- */
+/* hover-focus: wires not touching the hovered card recede */
+.sg-wire.faded { opacity: .10; transition: opacity .18s ease; }
+.sg-wire { transition: opacity .18s ease; }
+/* hover-focus: neighbourhood partners ring softly */
+.sg-card.focusmate { box-shadow: 0 0 0 3px rgba(89,176,255,.55), 0 8px 22px rgba(0,0,0,.48); }
+/* connect drag: the valid drop target rings + breathes */
+.sg-card.dropok { outline: 3px dashed #59b0ff; outline-offset: 4px; border-color: #59b0ff; animation: sgDropPulse 0.9s ease-in-out infinite; }
+@keyframes sgDropPulse { 50% { outline-offset: 7px; outline-color: #8ec9ff; } }
+/* destination card acknowledges a completed link with a brief wash */
+.sg-card.linked-flash { animation: sgLinkFlash 0.65s ease-out; }
+@keyframes sgLinkFlash {
+  0% { box-shadow: 0 0 0 0 rgba(89,220,150,.85); }
+  100% { box-shadow: 0 0 0 26px rgba(89,220,150,0); }
+}
+/* magnetic alignment guides while dragging cards */
+.sg-guides { position: absolute; left: 0; top: 0; width: 2px; height: 2px; pointer-events: none; z-index: 2; }
+.sg-guide { position: absolute; background: #59b0ff; box-shadow: 0 0 6px rgba(89,176,255,.8); border-radius: 2px; }
+/* selected card: constant state, but the ring breathes once on selection */
+.sg-card.selected { animation: sgSelPop .45s ease-out; }
+@keyframes sgSelPop { 0% { box-shadow: 0 0 0 0 rgba(79,141,255,.9); } 100% { box-shadow: 0 0 0 3px rgba(79,141,255,.4), 0 8px 22px rgba(0,0,0,.48); } }
+@media (prefers-reduced-motion: reduce) {
+  .sg-card.dropok, .sg-card.linked-flash, .sg-card.selected { animation: none; }
+}

@@ -301,6 +301,9 @@ class NodeCardView {
     this.grip.addEventListener('pointerdown', (e) => this.owner.startCardResize(this, e));
     this.grip.addEventListener('dblclick', (e) => { e.stopPropagation(); this.owner.resetCardSize(this); });
     this.grip.addEventListener('click', (e) => e.stopPropagation());
+    // focus-hover: unrelated wires dim, link partners ring
+    this.el.addEventListener('pointerenter', () => this.owner.wires.applyFocus(n.id));
+    this.el.addEventListener('pointerleave', () => this.owner.wires.applyFocus(null));
   }
 
   _thumb(state) {
@@ -393,10 +396,30 @@ class WireLayer {
     this.svg.append(frag);
   }
 
-  _path(a, b) {
+  /** Card half-extents (world px) for endpoint clipping; unknown cards fall
+      back to the default card size so wires always land on a border. */
+  _rectOf(id) {
+    const card = this.canvas.cards?.get(id);
+    if (card) return { hw: card.sizeOf().w / 2 + 5, hh: card.sizeOf().h / 2 + 5 };
+    return { hw: CARD_W_DEF / 2 + 5, hh: 128 };
+  }
+
+  _path(a, b, rectA = null, rectB = null) {
+    // clip the center→center segment at each card border so the wire visibly
+    // connects to the card EDGE (never tunnels underneath it)
+    const ra = rectA ?? this._rectOf(a.id), rb = rectB ?? this._rectOf(b.id);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    let ax = a.x, ay = a.y, bx = b.x, by = b.y;
+    if (len > 1e-6) {
+      const tA = Math.min(dx ? ra.hw / Math.abs(dx) : Infinity, dy ? ra.hh / Math.abs(dy) : Infinity, 0.45);
+      const tB = Math.min(dx ? rb.hw / Math.abs(dx) : Infinity, dy ? rb.hh / Math.abs(dy) : Infinity, 0.45);
+      ax = a.x + dx * tA; ay = a.y + dy * tA;
+      bx = b.x - dx * tB; by = b.y - dy * tB;
+    }
     // bezier with horizontal tangents (blueprint-style easing)
-    const dx = Math.max(40, Math.abs(b.x - a.x) * 0.5);
-    return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
+    const tang = Math.max(40, Math.abs(bx - ax) * 0.5);
+    return `M ${ax} ${ay} C ${ax + tang} ${ay}, ${bx - tang} ${by}, ${bx} ${by}`;
   }
 
   startDrag(card, sockKey, ev) {
@@ -408,11 +431,26 @@ class WireLayer {
     this.refresh();
     const move = (e2) => {
       const w = this.canvas.toWorld(e2.clientX, e2.clientY);
-      this.drag.path.setAttribute('d', this._path(this.drag.start, w));
+      // pending wire also clips at the source card's border
+      this.drag.path.setAttribute('d', this._path(this.drag.start, w, this._rectOf(this.drag.fromId), { hw: 4, hh: 4 }));
+      // drop-target ring: the card under the pointer lights up while wiring
+      if (!this._dropScan) {
+        this._dropScan = requestAnimationFrame(() => {
+          this._dropScan = 0;
+          const els = (document.elementsFromPoint ? document.elementsFromPoint(e2.clientX, e2.clientY) : []) || [];
+          let el = els.map((x) => x?.closest?.('.sg-card')).find(Boolean) || null;
+          if (el && this.drag && el.dataset.id === this.drag.fromId) el = null;
+          if (this._prevDrop) this._prevDrop.classList.remove('dropok');
+          this._prevDrop = el;
+          if (this._prevDrop) this._prevDrop.classList.add('dropok');
+        });
+      }
     };
     const up = (e2) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      if (this._dropScan) { cancelAnimationFrame(this._dropScan); this._dropScan = 0; }
+      if (this._prevDrop) { this._prevDrop.classList.remove('dropok'); this._prevDrop = null; }
       const els = (document.elementsFromPoint ? document.elementsFromPoint(e2.clientX, e2.clientY)
         : [document.elementFromPoint(e2.clientX, e2.clientY)]) || [];
       // drop onto the topmost CARD under the pointer — a wire crossing in
@@ -429,12 +467,45 @@ class WireLayer {
         else {
           const edge = g.connect(a, b);
           this.studio.mutated(`Linked ${g.getNode(a).name} → ${g.getNode(b).name} (${edge.distM.toFixed(1)} m, auto)`);
+          // link flash on the destination card — the connect is acknowledged
+          cardEl.classList.add('linked-flash');
+          setTimeout(() => cardEl.classList.remove('linked-flash'), 650);
         }
       }
       this.refresh();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  }
+
+  /** Cancel a pending socket-wire (Esc etc.) — leaving zero traces. */
+  cancelDrag() {
+    if (!this.drag) return false;
+    this.drag = null;
+    if (this._dropScan) { cancelAnimationFrame(this._dropScan); this._dropScan = 0; }
+    if (this._prevDrop) { this._prevDrop.classList.remove('dropok'); this._prevDrop = null; }
+    this.refresh();
+    return true;
+  }
+
+  /* ---------------- focus-hover ---------------- */
+  /** Hovering a card fades the wires that don't touch it and rings the
+      link partners — instant neighbourhood readability on dense graphs. */
+  applyFocus(id) {
+    if (this._focusId === id) return;
+    this._focusId = id;
+    if (this._focusMates) { for (const el of this._focusMates) el.classList.remove('focusmate'); }
+    this._focusMates = [];
+    const g = this.studio.app.graph;
+    for (const p of this.svg.querySelectorAll('.sg-wire')) {
+      const hit = !id || p.dataset.a === id || p.dataset.b === id;
+      p.classList.toggle('faded', !hit);
+      if (hit && id) {
+        const otherId = p.dataset.a === id ? p.dataset.b : p.dataset.a;
+        const el = this.canvas.cards?.get(otherId)?.el;
+        if (el) { el.classList.add('focusmate'); this._focusMates.push(el); }
+      }
+    }
   }
 }
 
@@ -729,20 +800,61 @@ class GraphCanvas {
     const start = this.toWorld(e.clientX, e.clientY);
     const orig = { x: card.node.x, y: card.node.y };
     const clampW = (v) => Math.min(20000, Math.max(-20000, v));   // work-area rule
+    // magnetic alignment: candidate axes of every OTHER node, snap within
+    // ~6 screen px, and show a guide line through the aligned pair(s)
+    const others = [...g.nodes.values()].filter((n) => n.id !== card.node.id);
+    const xAxes = [...new Set(others.map((n) => n.x))];
+    const yAxes = [...new Set(others.map((n) => n.y))];
+    this._guides = this._guides || h('div', 'sg-guides');
+    if (!this._guides.isConnected) this.world.append(this._guides);
+    const nearest = (axes, v, tol) => {
+      let best = null, bd = tol;
+      for (const a of axes) { const d = Math.abs(a - v); if (d <= bd) { bd = d; best = a; } }
+      return best;
+    };
     const move = (e2) => {
       const w = this.toWorld(e2.clientX, e2.clientY);
-      g.moveNode(card.node.id, clampW(orig.x + (w.x - start.x)), clampW(orig.y + (w.y - start.y)));
+      let nx = clampW(orig.x + (w.x - start.x)), ny = clampW(orig.y + (w.y - start.y));
+      const tol = 6 / Math.max(0.08, this.scale);
+      const gx = nearest(xAxes, nx, tol), gy = nearest(yAxes, ny, tol);
+      if (gx !== null) nx = gx;
+      if (gy !== null) ny = gy;
+      g.moveNode(card.node.id, nx, ny);
       card.el.style.left = `${card.node.x}px`; card.el.style.top = `${card.node.y}px`;
+      this._showGuides([
+        gx !== null ? { axis: 'v', at: gx, from: Math.min(ny, ...others.filter(o => o.x === gx).map(o => o.y)), to: Math.max(ny, ...others.filter(o => o.x === gx).map(o => o.y)) } : null,
+        gy !== null ? { axis: 'h', at: gy, from: Math.min(nx, ...others.filter(o => o.y === gy).map(o => o.x)), to: Math.max(nx, ...others.filter(o => o.y === gy).map(o => o.x)) } : null,
+      ].filter(Boolean));
       this.scheduleWires();
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      this._showGuides(null);
       // tidy rule: drop lands on a 5 px grid (positions stay arrangeable)
       g.moveNode(card.node.id, Math.round(card.node.x / 5) * 5, Math.round(card.node.y / 5) * 5);
       this.studio.mutated(`Moved ${card.node.name}`);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  }
+
+  /** Alignment guide lines while card-dragging (world coords, zoom-safe width). */
+  _showGuides(list) {
+    const gl = this._guides;
+    if (!gl) return;
+    gl.innerHTML = '';
+    if (!list || !list.length) return;
+    const thick = Math.max(1, 1.6 / Math.max(0.08, this.scale));
+    const pad = 320 / Math.max(0.08, this.scale);
+    for (const g of list) {
+      const d = h('div', 'sg-guide');
+      if (g.axis === 'v') {
+        d.style.cssText = `left:${g.at - thick / 2}px; top:${g.from - pad}px; width:${thick}px; height:${(g.to - g.from) + 2 * pad}px;`;
+      } else {
+        d.style.cssText = `left:${g.from - pad}px; top:${g.at - thick / 2}px; height:${thick}px; width:${(g.to - g.from) + 2 * pad}px;`;
+      }
+      gl.append(d);
+    }
   }
 
   /** Corner-grip resize of a node card, clamped to the min/max size rule.
@@ -1123,7 +1235,11 @@ export class ScriptStudio {
       }
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
-      // Esc peels the topmost layer first: preview modal, then the studio.
+      // Esc peels the topmost layer first: in-flight wire, socket arm,
+      // add-node arm, preview modal — only then the studio itself.
+      if (this.canvas.wires.cancelDrag()) { this.toast('Connection cancelled'); return; }
+      if (this.socketArm) { this.socketArm = null; this.toast('Connect cancelled'); return; }
+      if (this.canvas.addArmed) { this.canvas.addArmed = false; this.surfaceHost.classList.remove('armed'); this.toast('Add-node cancelled'); return; }
       if (this.preview?.el && !this.preview.el.hidden) { this.preview.el.hidden = true; return; }
       this.app.closePanels();
     }, true);
