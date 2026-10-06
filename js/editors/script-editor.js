@@ -363,25 +363,31 @@ class WireLayer {
     const g = this.studio.app.graph;
     this.svg.innerHTML = '';
     const frag = document.createDocumentFragment();
+    // constant ~12 px of SCREEN space as the click target, whatever the zoom —
+    // the 2.6 px visual stroke is decor, not a control
+    const hitW = 12 / Math.max(0.18, this.canvas.scale);
     for (const e of g.edges.values()) {
       const a = g.getNode(e.a), b = g.getNode(e.b);
       if (!a || !b) continue;
       const p = this._path(a, b);
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', p);
-      // distance-sanity rule: walk links are meant to be short hops;
-      // anything over 20 m is flagged amber instead of silently accepted
-      path.setAttribute('class', 'sg-wire' + (e.blocked ? ' blocked' : '') + (e.distM > 20 ? ' long' : ''));
-      path.dataset.a = e.a; path.dataset.b = e.b;
+      const cls = 'sg-wire' + (e.blocked ? ' blocked' : '') + (e.distM > 20 ? ' long' : '');
+      const vis = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      vis.setAttribute('d', p);
+      vis.setAttribute('class', cls);
+      vis.dataset.a = e.a; vis.dataset.b = e.b;
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      hit.setAttribute('d', p);
+      hit.setAttribute('class', 'sg-wire-hit');
+      hit.setAttribute('stroke-width', hitW);
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${e.a} — ${e.b} · ${e.distM.toFixed(1)} m · click to unlink`;
-      path.append(title);
-      path.addEventListener('click', (ev) => {
+      hit.append(title);
+      hit.addEventListener('click', (ev) => {
         ev.stopPropagation();
         g.disconnect(e.a, e.b);
         this.studio.mutated(`Unlinked ${a.name} — ${b.name}`);
       });
-      frag.append(path);
+      frag.append(hit, vis);   // adjacent: .sg-wire-hit:hover + .sg-wire drives the glow
     }
     if (this.drag) frag.append(this.drag.path);
     this.svg.append(frag);
@@ -407,8 +413,11 @@ class WireLayer {
     const up = (e2) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      const cardEl = el?.closest?.('.sg-card');
+      const els = (document.elementsFromPoint ? document.elementsFromPoint(e2.clientX, e2.clientY)
+        : [document.elementFromPoint(e2.clientX, e2.clientY)]) || [];
+      // drop onto the topmost CARD under the pointer — a wire crossing in
+      // front of the destination card must not eat the connection
+      const cardEl = els.map((el) => el?.closest?.('.sg-card')).find(Boolean);
       const drag = this.drag; this.drag = null;
       if (cardEl && cardEl.dataset.id !== drag.fromId) {
         const g = this.studio.app.graph;
@@ -493,7 +502,7 @@ class GraphCanvas {
                 wx: (mx - this.tx) / this.scale, wy: (my - this.ty) / this.scale };
     };
     host.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom') || e.target.closest('.sg-minimap')) return;
+      if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom') || e.target.closest('.sg-minimap') || e.target.closest('.sg-wire') || e.target.closest('.sg-wire-hit')) return;
       if (this.addArmed) {
         const w = this.toWorld(e.clientX, e.clientY);
         this.studio.placeNode(w);
@@ -566,6 +575,8 @@ class GraphCanvas {
     }
     this.world.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`;
     this.world.style.setProperty('--s', this.scale);
+    // wire hit-targets track the zoom (~constant screen px) — refresh lazily
+    if (Math.abs(this.scale - (this._scaleAtWires ?? -1)) > 0.03) { this._scaleAtWires = this.scale; this.scheduleWires(); }
     this.gridLayer.style.backgroundSize = `${80 * this.scale}px ${80 * this.scale}px`;
     this.host.classList.toggle('compact', this.scale < 0.34);   // far out: dots, near: cards
     if (this.zoomPct) this.zoomPct.textContent = `${Math.round(this.scale * 100)}%`;
@@ -705,6 +716,13 @@ class GraphCanvas {
     this._apply();
   }
 
+  /** rAF-coalesced wire refresh — full SVG rebuilds are expensive on dense
+      graphs, so drag/zoom loops schedule at most one rebuild per frame. */
+  scheduleWires() {
+    if (this._wiresRaf) return;
+    this._wiresRaf = requestAnimationFrame(() => { this._wiresRaf = 0; this.wires.refresh(); });
+  }
+
   startCardDrag(card, e) {
     e.preventDefault(); e.stopPropagation();
     const g = this.studio.app.graph;
@@ -715,7 +733,7 @@ class GraphCanvas {
       const w = this.toWorld(e2.clientX, e2.clientY);
       g.moveNode(card.node.id, clampW(orig.x + (w.x - start.x)), clampW(orig.y + (w.y - start.y)));
       card.el.style.left = `${card.node.x}px`; card.el.style.top = `${card.node.y}px`;
-      this.wires.refresh();
+      this.scheduleWires();
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
@@ -739,7 +757,7 @@ class GraphCanvas {
       const w = this.toWorld(e2.clientX, e2.clientY);
       dw = w.x - start.x; dh = w.y - start.y;
       card.applySize(orig.w + dw, orig.h + dh);
-      this.wires.refresh();
+      this.scheduleWires();
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);

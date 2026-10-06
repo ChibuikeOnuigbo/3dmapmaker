@@ -7,6 +7,14 @@
   /* spacing rhythm: 4 · 8 · 12 · 16 · 24 */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
 
+  /* ---- custom cursors: black "blade" family with a neon edge (gamified) ----
+     Three 32×32 vector cursors: blade (default), crosshair hex (targets),
+     quad-arrows (move/pan). Native keywords stay as fallbacks, text keeps
+     its I-beam, directional resize keeps its system meaning. */
+  --cur-blade: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6.2 3.4 L6.2 23.6 L11.2 18.9 L14.4 25.8 L17.3 24.1 L14.1 17.2 L20.4 17.2 Z' fill='%23090b10' stroke='%237fb0ff' stroke-width='1.7' stroke-linejoin='round'/%3E%3Ccircle cx='6.2' cy='3.4' r='1.9' fill='%237fb0ff'/%3E%3C/svg%3E") 6 2, auto;
+  --cur-target: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 3.5 L27 9.8 L27 22.2 L16 28.5 L5 22.2 L5 9.8 Z' fill='none' stroke='%23090b10' stroke-width='3.2'/%3E%3Cpath d='M16 3.5 L27 9.8 L27 22.2 L16 28.5 L5 22.2 L5 9.8 Z' fill='none' stroke='%237fb0ff' stroke-width='1.1'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%23090b10'/%3E%3Ccircle cx='16' cy='16' r='1.2' fill='%237fb0ff'/%3E%3C/svg%3E") 16 16, pointer;
+  --cur-move: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.6 L20.4 8.6 L11.6 8.6 Z M29.4 16 L23.4 20.4 L23.4 11.6 Z M16 29.4 L11.6 23.4 L20.4 23.4 Z M2.6 16 L8.6 11.6 L8.6 20.4 Z' fill='%23090b10' stroke='%237fb0ff' stroke-width='.9'/%3E%3Crect x='12.4' y='12.4' width='7.2' height='7.2' rx='2' fill='%23090b10' stroke='%237fb0ff' stroke-width='1.2'/%3E%3C/svg%3E") 16 16, move;
+
   --surface: rgba(252, 253, 255, 0.96);
   --surface-2: rgba(244, 246, 250, 0.97);
   --ink: #1a2030;
@@ -863,3 +871,20 @@ body.landing-open #topbar { visibility: hidden; }
 .ed-add { position: absolute; left: 12px; top: 96px; z-index: var(--z-pop); display: block; min-width: 180px; }
 .ed-add[hidden] { display: none; }
 .ed-add .mi.on { background: rgba(24, 32, 54, 0.08); }
+
+/* ---------- custom cursor wiring (gamified black "blade" set) ---------- */
+/* everything inherits the blade, unless a more meaningful role applies */
+html { cursor: var(--cur-blade); }
+
+/* clickables get the target crosshair */
+button, a, [role="button"], summary,
+.tb-btn, .mode-btn, .iconbtn, .seg button, .chip, .mi, .tab, .card-slot,
+.chooser-card, .wchip, label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
+  cursor: var(--cur-target);
+}
+
+/* typed text keeps the I-beam and resize handles keep their direction */
+input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable] { cursor: text; }
+
+/* pannable/draggable surfaces get the quad-arrows */
+#panoCanvas, .sg-surface, #mapCanvas { cursor: var(--cur-move); }

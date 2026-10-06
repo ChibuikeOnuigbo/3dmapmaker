@@ -37,7 +37,7 @@
 .sg-switch::-webkit-scrollbar { display: none; }
 .sg-switch button {
   border: 0; background: none; color: var(--sg-mut); font: 600 13px/1 system-ui;
-  padding: 0 16px; min-height: 38px; border-radius: 8px; cursor: pointer;
+  padding: 0 16px; min-height: 38px; border-radius: 8px; cursor: var(--cur-target);
   display: inline-flex; align-items: center; white-space: nowrap;
 }
 .sg-switch button.on { background: var(--sg-accent); color: #fff; }
@@ -59,7 +59,7 @@
 .sg-top .btn, .sg-code-bar .btn, .sg-details .btn {
   border: 1px solid var(--sg-line-2); background: #232b39; color: #dbe4f0;
   padding: 0 16px; min-height: 38px; border-radius: 9px; font: 600 13px/1 system-ui;
-  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  cursor: var(--cur-target); display: inline-flex; align-items: center; justify-content: center;
   white-space: nowrap;
 }
 .sg-top .btn.ghost { background: transparent; }
@@ -67,7 +67,7 @@
 .sg-details .btn.block { display: flex; width: 100%; margin-top: 10px; background: var(--sg-accent); border-color: var(--sg-accent); color: #fff; }
 .sg-details .btn.ghost.block { background: transparent; border-color: var(--sg-line-2); color: #dbe4f0; }
 .sg-top .iconbtn, .sg-details .iconbtn {
-  border: 0; background: none; color: var(--sg-mut); cursor: pointer;
+  border: 0; background: none; color: var(--sg-mut); cursor: var(--cur-target);
   width: 40px; height: 40px; border-radius: 9px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -75,11 +75,11 @@
 /* ---------- middle: surface + dock ---------- */
 .sg-middle { flex: 1; display: flex; min-height: 0; min-width: 0; position: relative; }
 .sg-surface {
-  flex: 1; min-width: 0; position: relative; overflow: hidden; cursor: grab;
+  flex: 1; min-width: 0; position: relative; overflow: hidden; cursor: var(--cur-move);
   background: var(--sg-bg);
   touch-action: none; overscroll-behavior: none;
 }
-.sg-surface.armed { cursor: crosshair; }
+.sg-surface.armed { cursor: var(--cur-target); }
 .sg-griddots {
   position: absolute; inset: -4000px; pointer-events: none;
   background-image: radial-gradient(circle, #262d3a 1.4px, transparent 1.4px);
@@ -93,12 +93,20 @@
 }
 .sg-wire {
   fill: none; stroke: #7f95bd; stroke-width: 2.6; opacity: .85;
-  pointer-events: stroke; cursor: pointer;
+  pointer-events: none;              /* décor only — .sg-wire-hit owns events */
 }
+/* invisible fat sibling = the real pointer target (constant screen size) */
+.sg-wire-hit {
+  fill: none; stroke: rgba(0,0,0,0);
+  pointer-events: stroke; cursor: var(--cur-target);
+}
+.sg-wire-hit:hover + .sg-wire { stroke: var(--sg-warn); stroke-width: 3.6; }
 .sg-wire.blocked { stroke: #8a3a3a; stroke-dasharray: 6 4; }
 /* distance-sanity rule: walk hops > 20 m flagged amber */
 .sg-wire.long { stroke: #d9a05a; stroke-dasharray: 9 5; opacity: .95; }
-.sg-wire.pending { stroke: #59b0ff; stroke-dasharray: 5 5; pointer-events: none; }
+.sg-wire.pending { stroke: #59b0ff; stroke-dasharray: 5 5; pointer-events: none; animation: sgWireMarch .55s linear infinite; }
+@keyframes sgWireMarch { to { stroke-dashoffset: -20; } }
+@media (prefers-reduced-motion: reduce) { .sg-wire.pending { animation: none; } }
 
 /* on-surface zoom cluster — visible controls are a graph-UX essential */
 .sg-zoom {
@@ -111,7 +119,7 @@
 .sg-zoom button {
   width: 44px; height: 44px; border: 0; border-radius: 9px;
   background: transparent; color: var(--sg-txt-2);
-  font: 700 18px/1 system-ui; cursor: pointer;
+  font: 700 18px/1 system-ui; cursor: var(--cur-target);
   display: flex; align-items: center; justify-content: center;
 }
 .sg-zoom button[data-zf] { font: 700 15px/1 system-ui; }
@@ -129,7 +137,7 @@
   border: 1px solid var(--sg-line); border-radius: 12px;
   background: rgba(16,19,26,.88);
   box-shadow: 0 10px 26px rgba(0,0,0,.45);
-  cursor: crosshair; touch-action: none;
+  cursor: var(--cur-target); touch-action: none;
 }
 
 /* dock toggle pressed-state dim */
@@ -154,7 +162,7 @@
 .sg-card-head {
   display: flex; flex-direction: column; gap: 2px;
   padding: 9px 12px; background: linear-gradient(180deg, #2a4a86, #233c6d);
-  border-radius: 12px 12px 0 0; cursor: move;
+  border-radius: 12px 12px 0 0; cursor: var(--cur-move);
 }
 .sg-card-name { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sg-card-id { font-size: 11px; color: #b6c4dd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -170,7 +178,7 @@
 .sg-sockets { display: flex; justify-content: space-around; padding: 8px; gap: 4px; }
 .sg-sock {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  border: 0; background: none; cursor: crosshair; padding: 6px 2px 4px;
+  border: 0; background: none; cursor: var(--cur-target); padding: 6px 2px 4px;
   border-radius: 8px;
   color: var(--sg-txt-2); font: 700 12px/1.2 system-ui;
 }
@@ -183,7 +191,7 @@
 .sg-card-foot { display: flex; gap: 6px; padding: 6px 10px 10px; }
 .sg-mini {
   flex: 1; border: 1px solid var(--sg-line-2); background: #232b39; color: #dbe4f0;
-  border-radius: 8px; padding: 8px 0; min-height: 34px; cursor: pointer; font-size: 13px;
+  border-radius: 8px; padding: 8px 0; min-height: 34px; cursor: var(--cur-target); font-size: 13px;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .sg-mini svg { width: 15px; height: 15px; }
@@ -250,7 +258,7 @@
 .sg-key { font-weight: 800; color: var(--sg-accent-2); width: 14px; font-size: 14px; }
 .sg-dim { color: var(--sg-dim); font-size: 11px; white-space: nowrap; }
 .sg-x, .sg-p {
-  border: 0; background: none; color: var(--sg-mut); cursor: pointer;
+  border: 0; background: none; color: var(--sg-mut); cursor: var(--cur-target);
   font-size: 17px; width: 36px; height: 36px; border-radius: 8px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
 }
@@ -287,7 +295,7 @@
 .sg-li {
   display: block; width: 100%; text-align: left; border: 0; background: none;
   color: var(--sg-txt-2); padding: 13px 14px; min-height: 44px; box-sizing: border-box;
-  font: 13px system-ui; cursor: pointer;
+  font: 13px system-ui; cursor: var(--cur-target);
 }
 .sg-li.none { color: #5f6b81; cursor: default; }
 
@@ -296,7 +304,7 @@
   position: fixed; inset: 0; z-index: 70; background: #000;
 }
 .sg-preview[hidden] { display: none; }
-.sg-pv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.sg-pv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: var(--cur-move); touch-action: none; }
 .sg-pv-top {
   position: absolute; top: 0; left: 0; right: 0; z-index: 2;
   display: flex; align-items: center; gap: 12px; padding: 12px 16px;
@@ -315,7 +323,7 @@
 .sg-pv-chip {
   border: 1px solid rgba(255,255,255,.35); background: rgba(20,26,36,.72);
   color: #fff; border-radius: 999px; padding: 12px 20px; min-height: 44px;
-  font: 600 13px system-ui; cursor: pointer;
+  font: 600 13px system-ui; cursor: var(--cur-target);
   backdrop-filter: blur(6px);
 }
 .sg-pv-msg {
@@ -327,7 +335,6 @@
 /* ---------- hover only where hover exists (no sticky taps) ---------- */
 @media (hover: hover) {
   .sg-top .iconbtn:hover, .sg-details .iconbtn:hover { background: var(--sg-line); color: #fff; }
-  .sg-wire:hover { stroke: var(--sg-warn); stroke-width: 3.6; }
   .sg-sock:hover::before { background: var(--sg-warn); border-color: var(--sg-warn); }
   .sg-mini:hover { background: #2e3a50; }
   .sg-mini.danger:hover { background: #5a2c2c; border-color: #7a3a3a; }
