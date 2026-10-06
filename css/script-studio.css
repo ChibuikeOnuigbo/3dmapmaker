@@ -421,3 +421,19 @@
 @media (prefers-reduced-motion: reduce) {
   .sg-card.dropok, .sg-card.linked-flash, .sg-card.selected { animation: none; }
 }
+
+/* ---------- multi-select: rubber band + selection states ---------- */
+.sg-surface.selecting { cursor: var(--cur-target); }
+.sg-marquee {
+  position: absolute; z-index: 6; pointer-events: none;
+  border: 1.5px dashed #59b0ff; border-radius: 4px;
+  background: rgba(89,176,255,.12);
+  box-shadow: inset 0 0 0 1px rgba(89,176,255,.25), 0 0 12px rgba(89,176,255,.25);
+  animation: sgMarquee 1s linear infinite;
+}
+@keyframes sgMarquee { 50% { border-color: #8ec9ff; background: rgba(89,176,255,.17); } }
+/* cards inside the live rubber band preview their inclusion */
+.sg-card.willselect { outline: 2px solid #59b0ff; outline-offset: 3px; border-color: #59b0ff; }
+/* selection chip lights up while a multi-selection exists */
+.sg-stat.sel:not(:empty) { color: #8ec9ff; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .sg-marquee { animation: none; } }

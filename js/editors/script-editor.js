@@ -282,7 +282,7 @@ class NodeCardView {
   _bind() {
     const n = this.node;
     this.head.addEventListener('pointerdown', (e) => this.owner.startCardDrag(this, e));
-    this.el.addEventListener('click', (e) => { e.stopPropagation(); this.owner.studio.select(n.id); });
+    this.el.addEventListener('click', (e) => { e.stopPropagation(); this.owner.studio.select(n.id, { additive: e.shiftKey }); });
     this.thumbWrap.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       this.expanded = !this.expanded;
@@ -322,6 +322,8 @@ class NodeCardView {
     this.el.style.top = `${n.y}px`;
     if (n.card && Number.isFinite(n.card.w) && Number.isFinite(n.card.h)) this.applySize(n.card.w, n.card.h);
     else { this.el.classList.remove('sized'); this.el.style.width = ''; this.el.style.height = ''; }
+    const selIds = this.owner.studio.selectedIds;
+    this.el.classList.toggle('selected', selIds?.size ? selIds.has(n.id) : this.owner.studio.selectedId === n.id);
     const url = variantUrlOf(n, this.owner.studio.variant);
     const prev = this.img.dataset.src || '';
     if (url && url !== prev) { this.img.dataset.src = url; this._thumb('loading'); this.img.src = url; }
@@ -336,7 +338,6 @@ class NodeCardView {
     }
     const deg = g.edges.values();
     let count = 0; for (const e of deg) if (e.a === n.id || e.b === n.id) count++;
-    this.el.classList.toggle('selected', this.owner.studio.selectedId === n.id);
     this.el.classList.toggle('isolated', count === 0);   // isolation rule visual
     this.el.querySelector('.sg-card-id').textContent = `${n.id} · ${count} link${count === 1 ? '' : 's'}`;
   }
@@ -526,6 +527,7 @@ class GraphCanvas {
     this.wires.mount();
     this.cards = new Map();               // id -> NodeCardView
     this.addArmed = false;
+    this.selectArmed = false;
     this._dragging = false;
     this.mini = hostEl.querySelector('.sg-minimap');
     this.zoomPct = hostEl.querySelector('[data-zoompct]');
@@ -574,6 +576,7 @@ class GraphCanvas {
     };
     host.addEventListener('pointerdown', (e) => {
       if (e.target.closest('.sg-card') || e.target.closest('.sg-sock') || e.target.closest('.sg-zoom') || e.target.closest('.sg-minimap') || e.target.closest('.sg-wire') || e.target.closest('.sg-wire-hit')) return;
+      if (this.selectArmed && pts.size === 0) { this._startMarquee(e); return; }
       if (this.addArmed) {
         const w = this.toWorld(e.clientX, e.clientY);
         this.studio.placeNode(w);
@@ -787,6 +790,45 @@ class GraphCanvas {
     this._apply();
   }
 
+  /** Rubber-band multi-select (Select mode): drag a rectangle over empty
+      space — enclosed cards join the selection with live highlight. */
+  _startMarquee(e) {
+    e.preventDefault(); e.stopPropagation();
+    const host = this.host, hr = host.getBoundingClientRect();
+    const ax = e.clientX - hr.left, ay = e.clientY - hr.top;
+    const rect = h('div', 'sg-marquee');
+    host.append(rect);
+    let moved = 0, hits = [];
+    const apply = (bx, by) => {
+      const x0 = Math.min(ax, bx), y0 = Math.min(ay, by), x1 = Math.max(ax, bx), y1 = Math.max(ay, by);
+      rect.style.cssText = `left:${x0}px; top:${y0}px; width:${x1 - x0}px; height:${y1 - y0}px;`;
+      moved = Math.max(moved, (x1 - x0) + (y1 - y0));
+      const w0 = this.toWorld(hr.left + x0, hr.top + y0), w1 = this.toWorld(hr.left + x1, hr.top + y1);
+      hits = [];
+      for (const [id, c] of this.cards) {
+        const inside = c.node.x >= w0.x && c.node.x <= w1.x && c.node.y >= w0.y && c.node.y <= w1.y;
+        c.el.classList.toggle('willselect', inside);
+        if (inside) hits.push(id);
+      }
+    };
+    const move = (e2) => apply(e2.clientX - hr.left, e2.clientY - hr.top);
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      rect.remove();
+      const final = hits.slice();
+      for (const c of this.cards.values()) c.el.classList.remove('willselect');
+      if (moved < 6) { this.studio.select(null); this.studio.setSelectArmed(false); return; }   // tap = clear selection
+      this.studio.selectMany(final);
+      if (final.length) this.studio.toast(`${final.length} node${final.length === 1 ? '' : 's'} selected`, 'ok', 1500);
+      else this.studio.toast('Nothing inside the selection box', 'err', 1400);
+      // one-shot like add-node: the tool switches back to pan after use
+      this.studio.setSelectArmed(false);
+    };
+    apply(ax, ay);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
   /** rAF-coalesced wire refresh — full SVG rebuilds are expensive on dense
       graphs, so drag/zoom loops schedule at most one rebuild per frame. */
   scheduleWires() {
@@ -803,8 +845,16 @@ class GraphCanvas {
     // magnetic alignment: candidate axes of every OTHER node, snap within
     // ~6 screen px, and show a guide line through the aligned pair(s)
     const others = [...g.nodes.values()].filter((n) => n.id !== card.node.id);
-    const xAxes = [...new Set(others.map((n) => n.x))];
-    const yAxes = [...new Set(others.map((n) => n.y))];
+    // group drag: a selected card dragged inside a multi-selection moves the
+    // WHOLE group by the same world delta (one history entry on release)
+    const group = (this.studio.selectedIds?.size > 1 && this.studio.selectedIds.has(card.node.id))
+      ? [...this.studio.selectedIds].filter((id) => id !== card.node.id)
+          .map((id) => ({ id, ox: g.getNode(id)?.x, oy: g.getNode(id)?.y }))
+          .filter((it) => it.ox !== undefined)
+      : [];
+    // magnetic axes exclude OTHER group members (they travel together)
+    const xAxes = [...new Set(others.filter((o) => !this.studio.selectedIds?.has(o.id)).map((n) => n.x))];
+    const yAxes = [...new Set(others.filter((o) => !this.studio.selectedIds?.has(o.id)).map((n) => n.y))];
     this._guides = this._guides || h('div', 'sg-guides');
     if (!this._guides.isConnected) this.world.append(this._guides);
     const nearest = (axes, v, tol) => {
@@ -821,6 +871,14 @@ class GraphCanvas {
       if (gy !== null) ny = gy;
       g.moveNode(card.node.id, nx, ny);
       card.el.style.left = `${card.node.x}px`; card.el.style.top = `${card.node.y}px`;
+      if (group.length) {
+        const dx = nx - orig.x, dy = ny - orig.y;
+        for (const it of group) {
+          g.moveNode(it.id, clampW(it.ox + dx), clampW(it.oy + dy));
+          const c = this.cards.get(it.id);
+          if (c) { c.el.style.left = `${clampW(it.ox + dx)}px`; c.el.style.top = `${clampW(it.oy + dy)}px`; }
+        }
+      }
       this._showGuides([
         gx !== null ? { axis: 'v', at: gx, from: Math.min(ny, ...others.filter(o => o.x === gx).map(o => o.y)), to: Math.max(ny, ...others.filter(o => o.x === gx).map(o => o.y)) } : null,
         gy !== null ? { axis: 'h', at: gy, from: Math.min(nx, ...others.filter(o => o.y === gy).map(o => o.x)), to: Math.max(nx, ...others.filter(o => o.y === gy).map(o => o.x)) } : null,
@@ -832,7 +890,11 @@ class GraphCanvas {
       this._showGuides(null);
       // tidy rule: drop lands on a 5 px grid (positions stay arrangeable)
       g.moveNode(card.node.id, Math.round(card.node.x / 5) * 5, Math.round(card.node.y / 5) * 5);
-      this.studio.mutated(`Moved ${card.node.name}`);
+      for (const it of group) {
+        const n = g.getNode(it.id);
+        if (n) g.moveNode(it.id, Math.round(n.x / 5) * 5, Math.round(n.y / 5) * 5);
+      }
+      this.studio.mutated(group.length ? `Moved ${group.length + 1} nodes` : `Moved ${card.node.name}`);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -912,6 +974,20 @@ class GraphCanvas {
     this.rebuild();
     this.studio.mutated(`Deleted ${n.name}`);
     if (this.studio.selectedId === id) this.studio.select(null);
+  }
+
+  /** Delete the whole multi-selection as ONE history step; the last-node
+      rule blocks wiping the world entirely (selection is cleared instead). */
+  deleteGroup() {
+    const g = this.studio.app.graph;
+    const ids = [...(this.studio.selectedIds || [])].filter((id) => g.getNode(id));
+    if (!ids.length) return;
+    if (ids.length >= g.nodes.size) { this.studio.toast('Rule: the world needs at least one node — clearing the selection instead', 'err', 4000); this.studio.select(null); return; }
+    if (!window.confirm(`Delete ${ids.length} nodes and their links?`)) return;
+    for (const id of ids) g.removeNode(id);
+    this.studio.selectedIds?.clear(); this.studio.selectedId = null; this.studio._selChip?.();
+    this.rebuild();
+    this.studio.mutated(`Deleted ${ids.length} nodes`);
   }
 }
 
@@ -1168,6 +1244,7 @@ export class ScriptStudio {
         <span class="grow"></span>
         <span class="sg-stat" data-stat="nodes" title="Nodes in the world graph"></span>
         <span class="sg-stat" data-stat="edges" title="Links between nodes"></span>
+        <span class="sg-stat sel" data-stat="sel" title="Multi-selection — drag a rubber band (Select mode), Shift-click cards, Ctrl+A selects all"></span>
         <span class="sg-stat warn" data-stat="missing" title="Panorama image status for the active variant"></span>
         <span class="sg-sep"></span>
         <div class="sg-acts">
@@ -1175,6 +1252,7 @@ export class ScriptStudio {
           <button class="iconbtn" data-redo title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg><use href="#i-right"/></svg></button>
           <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)"><svg class="ic"><use href="#i-panels"/></svg>Details</button>
           <button class="btn ghost" data-add title="Add a node — then click empty graph space"><svg class="ic"><use href="#i-plus"/></svg>Node</button>
+          <button class="btn ghost" data-select title="Multi-select mode — drag a rubber band over empty space · then drag any selected card to move the group · Del deletes the group"><svg class="ic"><use href="#i-select"/></svg>Select</button>
           <button class="btn ghost" data-list title="Find a node by name or id"><svg class="ic"><use href="#i-search"/></svg>Find</button>
           <button class="btn ghost" data-fit title="Fit the whole graph"><svg class="ic"><use href="#i-fit"/></svg>Fit</button>
           <button class="iconbtn" data-close title="Close studio (Esc)" aria-label="Close studio"><svg><use href="#i-close"/></svg></button>
@@ -1219,8 +1297,10 @@ export class ScriptStudio {
     q('[data-add]').addEventListener('click', () => {
       this.canvas.addArmed = !this.canvas.addArmed;
       this.surfaceHost.classList.toggle('armed', this.canvas.addArmed);
+      if (this.canvas.addArmed) this.setSelectArmed(false);   // one armed tool at a time
       this.toast(this.canvas.addArmed ? 'Click empty graph space to drop the node' : 'Add-node cancelled');
     });
+    q('[data-select]').addEventListener('click', () => this.setSelectArmed(!(this.canvas.selectArmed)));
     const pop = this.el.querySelector('.sg-listpop');
     q('[data-list]').addEventListener('click', () => { pop.hidden = !pop.hidden; if (!pop.hidden) this._fillList(); });
     pop.querySelector('input').addEventListener('input', () => this._fillList(pop.querySelector('input').value));
@@ -1232,14 +1312,21 @@ export class ScriptStudio {
         if (k === 'z' && e.shiftKey) { e.preventDefault(); this.redo(); return; }
         if (k === 'z') { e.preventDefault(); this.undo(); return; }
         if (k === 'y') { e.preventDefault(); this.redo(); return; }
+        if (k === 'a') { e.preventDefault(); this.selectMany([...this.app.graph.nodes.keys()]); this.toast(`Selected all ${this.app.graph.nodes.size} nodes`, 'ok', 1400); return; }
+      }
+      if (!e.target.closest?.('input, textarea') && (e.key === 'Delete' || e.key === 'Backspace')) {
+        if (this.selectedIds?.size > 1) { e.preventDefault(); this.canvas.deleteGroup(); return; }
+        if (this.selectedId) { e.preventDefault(); this.canvas.deleteNode(this.selectedId); return; }
       }
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
-      // Esc peels the topmost layer first: in-flight wire, socket arm,
-      // add-node arm, preview modal — only then the studio itself.
+      // Esc peels the topmost layer first: in-flight wire, armed tools,
+      // multi-selection, preview modal — only then the studio itself.
       if (this.canvas.wires.cancelDrag()) { this.toast('Connection cancelled'); return; }
       if (this.socketArm) { this.socketArm = null; this.toast('Connect cancelled'); return; }
+      if (this.canvas.selectArmed) { this.setSelectArmed(false); this.toast('Select-mode off'); return; }
       if (this.canvas.addArmed) { this.canvas.addArmed = false; this.surfaceHost.classList.remove('armed'); this.toast('Add-node cancelled'); return; }
+      if (this.selectedIds?.size > 1) { this.select(null); this.toast('Selection cleared'); return; }
       if (this.preview?.el && !this.preview.el.hidden) { this.preview.el.hidden = true; return; }
       this.app.closePanels();
     }, true);
@@ -1314,14 +1401,55 @@ export class ScriptStudio {
 
   close() { this._open = false; if (this.el) this.el.hidden = true; }
 
-  select(id) {
-    this.selectedId = id;
-    if (id && this.dockHidden) {   // a deliberate selection reopens the dock
+  /** Select-mode (rubber band) toggle — mutually exclusive with add-node. */
+  setSelectArmed(on) {
+    this.canvas.selectArmed = !!on;
+    this.surfaceHost.classList.toggle('selecting', !!on);
+    this.el?.querySelector('[data-select]')?.setAttribute('aria-pressed', String(!!on));
+    if (on && this.canvas.addArmed) { this.canvas.addArmed = false; this.surfaceHost.classList.remove('armed'); }
+    this.toast(on ? 'Drag a rubber band over empty graph space — cards inside join the selection' : 'Select-mode off', 'ok', 1800);
+  }
+
+  select(id, { additive = false } = {}) {
+    this.selectedIds = this.selectedIds || new Set();
+    if (id == null) {
+      this.selectedIds.clear();
+      this.selectedId = null;
+    } else if (additive) {
+      // Shift-click toggles membership in the multi-selection
+      if (this.selectedIds.has(id)) this.selectedIds.delete(id);
+      else this.selectedIds.add(id);
+      this.selectedId = id;
+    } else {
+      this.selectedIds = new Set([id]);
+      this.selectedId = id;
+    }
+    this._afterSelect();
+  }
+
+  /** Marquee / Ctrl+A entry point: replace the whole selection. */
+  selectMany(ids) {
+    this.selectedIds = new Set(ids);
+    this.selectedId = this.selectedIds.size ? [...this.selectedIds][0] : null;
+    this._afterSelect();
+  }
+
+  _afterSelect() {
+    const total = this.selectedIds?.size ?? 0;
+    if (this.selectedId != null && total === 1 && this.dockHidden) {   // a deliberate selection reopens the dock
       this.dockHidden = false;
       this.el?.querySelector('[data-dock]')?.setAttribute('aria-pressed', 'true');
     }
-    if (this.mode === 'visual') this.details.render(id);
+    if (this.mode === 'visual' && total === 1) this.details.render(this.selectedId);
     this.canvas.sync();
+    this._selChip();
+  }
+
+  _selChip() {
+    const el = this.el?.querySelector('[data-stat="sel"]');
+    if (!el) return;
+    const n = this.selectedIds?.size ?? 0;
+    el.textContent = n > 1 ? `${n} selected` : '';
   }
 
   previewNode(id) { this.preview.open(id); }
