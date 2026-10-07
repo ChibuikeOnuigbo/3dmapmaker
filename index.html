@@ -85,12 +85,7 @@
   </div>
 
   <div class="tb-group" id="modeGroup" hidden>
-    <button class="tb-btn mode-btn" data-mode="day" title="Daylight scenes"><svg class="ic"><use href="#i-sun"/></svg><span class="tb-txt">Day</span></button>
-    <button class="tb-btn mode-btn" data-mode="rain" title="Rain scenes"><svg class="ic"><use href="#i-rain"/></svg><span class="tb-txt">Rain</span></button>
-    <button class="tb-btn mode-btn" data-mode="night" title="Night scenes"><svg class="ic"><use href="#i-moon"/></svg><span class="tb-txt">Night</span></button>
-    <button class="tb-btn mode-btn" data-mode="dawn" title="Golden dawn scenes — low sun, long rays"><svg class="ic"><use href="#i-dawn"/></svg><span class="tb-txt">Dawn</span></button>
-    <button class="tb-btn mode-btn" data-mode="snow" title="Snow scenes — falling snow, bright drifts"><svg class="ic"><use href="#i-snow"/></svg><span class="tb-txt">Snow</span></button>
-    <button class="tb-btn mode-btn" data-mode="storm" title="Storm scenes — driving rain, wind gusts, lightning"><svg class="ic"><use href="#i-storm"/></svg><span class="tb-txt">Storm</span></button>
+    <button class="tb-btn" id="sceneBtn" title="Scene — switch time of day & weather" aria-label="Scene — switch time of day and weather" aria-haspopup="true"><svg class="ic"><use id="sceneUse" href="#i-sun"/></svg><span class="tb-txt" id="sceneTxt">Day</span><svg class="chev"><use href="#i-chev"/></svg></button>
   </div>
 
   <div class="tb-group">
@@ -101,6 +96,7 @@
 </header>
 
 <div class="pop menu" id="mainMenu" role="menu" aria-label="More options"></div>
+<div class="pop" id="scenePop" role="menu" aria-label="Scene — time of day and weather"></div>
 <div class="pop menu" id="studioPop" role="menu" aria-label="Choose studio"></div>
 
 <!-- ============ floating widgets ============ -->

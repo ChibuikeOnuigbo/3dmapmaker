@@ -129,10 +129,18 @@ test('living world: every mode button wired end-to-end (btn → ENV → immersio
   const main = read('js/main.js');
   const viewer = read('js/viewer/viewer.js');
   const modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
+  // the six modes live in the one-button scene selector: SCENE_MODES (rows
+  // painted with data-mode keys) + ENV patches, both in main.js
+  assert.ok(html.includes('id="sceneBtn"'), 'scene selector button missing');
+  assert.ok(html.includes('id="scenePop"'), 'scene popup missing');
+  assert.ok(html.includes('id="sceneUse"') && html.includes('id="sceneTxt"'), 'scene button face (icon+label) missing');
   for (const m of modes) {
-    assert.ok(html.includes(`data-mode="${m}"`), `mode button missing: ${m}`);
+    assert.ok(new RegExp(`${m}:\\s*\\{ icon:\\s*'i-`).test(main), `SCENE_MODES entry missing: ${m}`);
     assert.ok(new RegExp(`${m}:\\s*\\{ timeOfDay:\\s*'`).test(main), `ENV patch missing: ${m}`);
   }
+  assert.ok(main.includes('b.dataset.mode = key'), 'scene rows must carry data-mode for dispatch');
+  assert.ok(main.includes('_paintScenePop') && main.includes('_syncSceneFace'), 'scene painters missing');
+  assert.ok(main.includes(`this._placePop(scenePop, '#sceneBtn')`), 'scene popup must anchor to its button');
   for (const icon of ['i-sun', 'i-rain', 'i-moon', 'i-dawn', 'i-snow', 'i-storm']) {
     assert.ok(html.includes(`id="${icon}"`), `icon symbol missing: ${icon}`);
   }

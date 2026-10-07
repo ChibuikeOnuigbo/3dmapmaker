@@ -47,6 +47,19 @@ const ACCESSORY_DEFS = [
   { key: 'breeze',      label: 'Idle breeze',         hint: 'soft view drift when standing still' },
 ];
 
+/* Scene (time-of-day & weather) selector: the six-mode row that used to be
+   six wide buttons in the topbar is now ONE compact button + popup. This
+   table is the single source of truth — availability comes from the world
+   (urlset variants or coded-world presets), everything else from here. */
+const SCENE_MODES = {
+  day:   { icon: 'i-sun',   label: 'Day',   tip: 'Clear daylight' },
+  dawn:  { icon: 'i-dawn',  label: 'Dawn',  tip: 'Golden hour — low sun, long rays' },
+  rain:  { icon: 'i-rain',  label: 'Rain',  tip: 'Overcast drizzle, wet panoramas' },
+  storm: { icon: 'i-storm', label: 'Storm', tip: 'Driving rain, gusts, lightning' },
+  night: { icon: 'i-moon',  label: 'Night', tip: 'Stars, fireflies, window glow' },
+  snow:  { icon: 'i-snow',  label: 'Snow',  tip: 'Falling snow, bright drifts' },
+};
+
 const $ = (sel) => document.querySelector(sel);
 
 const PERF_PROFILES = {
@@ -338,18 +351,43 @@ class App {
       }
       if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
     }
-    if (!modes) { group.hidden = true; return; }
+    if (!modes?.length) { group.hidden = true; $('#scenePop')?.classList.remove('open'); return; }
     if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
     group.hidden = false;
-    group.querySelectorAll('.mode-btn').forEach((b) => {
-      b.style.display = modes.includes(b.dataset.mode) ? '' : 'none';
-      b.classList.toggle('active', b.dataset.mode === this.displayMode);
-    });
+    this._sceneModesList = modes;
+    this._syncSceneFace();
+    this._paintScenePop();
+  }
+
+  _syncSceneFace() {
+    const def = SCENE_MODES[this.displayMode] || SCENE_MODES.day;
+    $('#sceneUse')?.setAttribute('href', `#${def.icon}`);
+    const t = $('#sceneTxt'); if (t) t.textContent = def.label;
+  }
+
+  _paintScenePop() {
+    const pop = $('#scenePop'); if (!pop) return;
+    pop.textContent = '';
+    const lab = document.createElement('div');
+    lab.className = 'lab'; lab.textContent = 'Scene';
+    pop.appendChild(lab);
+    for (const key of this._sceneModesList || []) {
+      const def = SCENE_MODES[key]; if (!def) continue;
+      const on = key === this.displayMode;
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'mi mode-btn'; b.dataset.mode = key; b.title = def.tip;
+      b.innerHTML = `<svg class="ic"><use href="#${def.icon}"/></svg><span class="grow">${def.label}<small>${def.tip}</small></span>` +
+        `<span class="chk">${on ? '<svg><use href="#i-check"/></svg>' : ''}</span>`;
+      b.classList.toggle('on', on);
+      b.addEventListener('click', () => { this.setDisplayMode(key); pop.classList.remove('open'); });
+      pop.appendChild(b);
+    }
   }
 
   setDisplayMode(mode) {
     if (mode === this.displayMode) return;
     this.displayMode = mode;
+    this._syncSceneFace?.();
     const id = this.movement?.currentNodeId;
     if (!this._urlsetModes && id && this.graph?.environment) {
       /* Coded world: mode ⇒ environment patch, then ONE regeneration pass.
@@ -635,9 +673,17 @@ class App {
       if (sp && !sp.contains(e.target) && !$('#studioBtn').contains(e.target)) sp.classList.remove('open');
     });
 
-    // display modes (worlds with scene variants)
-    document.querySelectorAll('#modeGroup .mode-btn').forEach((b) => {
-      b.addEventListener('click', () => this.setDisplayMode(b.dataset.mode));
+    // scene selector: one compact topbar button opens the mode popup
+    const sceneBtn = $('#sceneBtn'), scenePop = $('#scenePop');
+    sceneBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (scenePop.classList.contains('open')) { scenePop.classList.remove('open'); return; }
+      this._paintScenePop();
+      this._placePop(scenePop, '#sceneBtn');
+      scenePop.classList.add('open');
+    });
+    document.addEventListener('click', (e) => {
+      if (!scenePop.contains(e.target) && !sceneBtn.contains(e.target)) scenePop.classList.remove('open');
     });
 
     // move pad
@@ -763,7 +809,7 @@ class App {
     // resizing between phone/tablet/desktop layouts must re-anchor any popup
     // that is open right now (old screens: desktop offsets slid off-screen)
     window.addEventListener('resize', () => {
-      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn'], ['#accessoryPop', '#accessoryBtn']]) {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn'], ['#accessoryPop', '#accessoryBtn'], ['#scenePop', '#sceneBtn']]) {
         const pop = $(popSel);
         if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
       }
