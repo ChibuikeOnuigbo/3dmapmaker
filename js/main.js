@@ -435,6 +435,8 @@ class App {
       // start warming the destination while we glide, so the transition at
       // arrival is a cache hit (Spec: never blank, never waiting)
       this._ensurePanorama(to, { fromId: from }).catch(() => {});
+      const mc = document.getElementById('mapCanvas');              // cyan pulse on the map
+      if (mc) { mc.classList.remove('walkpulse'); void mc.offsetWidth; mc.classList.add('walkpulse'); }
     });
     this.bus.on('walk:progress', (pos) => { this.mapRenderer.setWalkProgress(pos); });
     this.bus.on('position:changed', async ({ nodeId, edge, fromId, teleport }) => {
