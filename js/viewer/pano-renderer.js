@@ -212,8 +212,3 @@ export class PanoRenderer {
   }
 }
 
-/** Equirect painting helper shared with the generator: bearing → u fraction. */
-export function bearingToU(bearingDeg) {
-  let b = ((bearingDeg % 360) + 360) % 360;
-  return (b - 180 < 0 ? b + 180 : b - 180) / 360;
-}

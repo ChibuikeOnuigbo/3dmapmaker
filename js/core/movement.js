@@ -52,14 +52,6 @@ export function planMove(graph, fromNodeId, relativeDir, yawDeg, opts = {}) {
   };
 }
 
-/** Candidate position after a movement step — for pre-generation checks. */
-export function candidatePosition(graph, nodeId, bearingDeg, stepMeters) {
-  const n = graph.getNode(nodeId);
-  const dpx = graph.scale.mToPx(stepMeters);
-  const rad = bearingDeg * Math.PI / 180;
-  return { x: n.x + Math.sin(rad) * dpx, y: n.y - Math.cos(rad) * dpx };
-}
-
 /**
  * Interpolated map position while walking edge `edge` from `fromId`,
  * progress t in [0,1]. The map marker uses this — one canonical position.
