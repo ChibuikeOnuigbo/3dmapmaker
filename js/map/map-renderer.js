@@ -109,6 +109,7 @@ export class MapRenderer {
       this.cam.y = this._drag.camY - dy / this.cam.scale;
       this.requestDraw();
     });
+    el.addEventListener('pointercancel', () => { this._drag = null; });   // stolen touch: drop the stale anchor
     el.addEventListener('pointerup', (e) => {
       if (!this._drag) return;
       const wasClick = this._drag.moved < 6;

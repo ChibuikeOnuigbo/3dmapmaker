@@ -108,6 +108,39 @@ test('css braces balanced and no url() to missing assets', () => {
   }
 });
 
+test('studio interactions are pointer-cancel safe (no stranded gestures)', () => {
+  const se = read('js/editors/script-editor.js');
+  // every window-level drag (wire, marquee, card drag, resize, minimap)
+  // must listen for pointercancel — a stolen touch must never strand a gesture
+  const wins = (se.match(/window\.addEventListener\('pointermove',/g) || []).length;
+  const cancels = (se.match(/window\.addEventListener\('pointercancel',/g) || []).length;
+  assert.ok(wins >= 4 && cancels >= wins, `window drags=${wins} but cancels=${cancels}`);
+  // the Esc-cancel path must detach the wire drag's listeners (hDetach)
+  assert.ok(se.includes('this.drag.hDetach = detach'), 'wire drag must expose its detacher to cancelDrag()');
+  assert.ok(se.includes('e2.pointerId !== this.drag.pointerId'), 'wire drag must ignore foreign pointers');
+  // closing the studio mid-wiring must not strand a pending wire
+  assert.ok(/close\(\)\s*{[^}]*cancelDrag\(\)/s.test(se), 'close() must cancel a pending wire drag');
+  // marquee guard flag must be releasable on cancel (soft-lock regression)
+  assert.ok(se.includes('this._marqueeActive = false;'), 'marquee cleanup must release the band guard');
+});
+
+test('custom cursor set: black gamified family is complete and well-formed', () => {
+  const css = read('css/app.css');
+  for (const name of ['--cur-blade', '--cur-target', '--cur-cross', '--cur-move', '--cur-grab', '--cur-grabbing', '--cur-nwse', '--cur-text', '--cur-deny']) {
+    assert.ok(css.includes(`${name}:`), `missing cursor ${name}`);
+  }
+  for (const m of css.matchAll(/(--cur-[\w-]+):\s*url\("data:image\/svg\+xml,([^"]*)"\)\s+(\d+)\s+(\d+),\s*([\w-]+);/g)) {
+    const [, name, enc, hx, hy, kw] = m;
+    const svg = decodeURIComponent(enc);
+    assert.ok(svg.startsWith("<svg ") && svg.includes("width='32'") && svg.includes("height='32'"),
+      `${name}: SVG cursor must declare fixed 32x32 size (Firefox requirement)`);
+    assert.ok(svg.includes("fill='#") || svg.includes("stroke='#"), `${name}: cursor must carry the black/neon palette`);
+    assert.ok(svg.endsWith('</svg>'), `${name}: malformed SVG cursor`);
+    assert.ok(Number(hx) <= 32 && Number(hy) <= 32, `${name}: hotspot outside the 32px image`);
+    assert.ok(/^(auto|pointer|move|text|grab|grabbing|crosshair|nwse-resize|not-allowed)$/.test(kw), `${name}: bad fallback keyword ${kw}`);
+  }
+});
+
 (async () => {
   console.log('Panorama Maps — static smoke');
   for (const [name, fn] of tests) {

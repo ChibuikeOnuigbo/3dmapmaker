@@ -75,11 +75,11 @@
 /* ---------- middle: surface + dock ---------- */
 .sg-middle { flex: 1; display: flex; min-height: 0; min-width: 0; position: relative; }
 .sg-surface {
-  flex: 1; min-width: 0; position: relative; overflow: hidden; cursor: var(--cur-move);
+  flex: 1; min-width: 0; position: relative; overflow: hidden; cursor: var(--cur-grab);
   background: var(--sg-bg);
   touch-action: none; overscroll-behavior: none;
 }
-.sg-surface.armed { cursor: var(--cur-target); }
+.sg-surface.armed { cursor: var(--cur-cross); }
 .sg-griddots {
   position: absolute; inset: -4000px; pointer-events: none;
   background-image: radial-gradient(circle, #262d3a 1.4px, transparent 1.4px);
@@ -200,7 +200,7 @@
 /* corner grip: user-controlled card size within the min/max rule */
 .sg-resize {
   position: absolute; right: 2px; bottom: 2px; width: 20px; height: 20px;
-  cursor: nwse-resize; border-radius: 0 0 10px 0; opacity: .45;
+  cursor: var(--cur-nwse); border-radius: 0 0 10px 0; opacity: .45;
   background:
     linear-gradient(135deg, transparent 0 55%, rgba(190,205,235,.9) 55% 62%, transparent 62% 72%, rgba(190,205,235,.9) 72% 79%, transparent 79%);
   touch-action: none; z-index: 3;
@@ -304,7 +304,7 @@
   position: fixed; inset: 0; z-index: 70; background: #000;
 }
 .sg-preview[hidden] { display: none; }
-.sg-pv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: var(--cur-move); touch-action: none; }
+.sg-pv-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: var(--cur-grab); touch-action: none; }
 .sg-pv-top {
   position: absolute; top: 0; left: 0; right: 0; z-index: 2;
   display: flex; align-items: center; gap: 12px; padding: 12px 16px;
@@ -423,7 +423,7 @@
 }
 
 /* ---------- multi-select: rubber band + selection states ---------- */
-.sg-surface.selecting { cursor: var(--cur-target); }
+.sg-surface.selecting { cursor: var(--cur-cross); }
 .sg-marquee {
   position: absolute; z-index: 6; pointer-events: none;
   border: 1.5px dashed #59b0ff; border-radius: 4px;

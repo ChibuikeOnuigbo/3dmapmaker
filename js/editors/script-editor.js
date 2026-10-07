@@ -402,7 +402,7 @@ class WireLayer {
       back to the default card size so wires always land on a border. */
   _rectOf(id) {
     const card = this.canvas.cards?.get(id);
-    if (card) return { hw: card.sizeOf().w / 2 + 5, hh: card.sizeOf().h / 2 + 5 };
+    if (card) { const s = card.sizeOf(); return { hw: s.w / 2 + 5, hh: s.h / 2 + 5 }; }
     return { hw: CARD_W_DEF / 2 + 5, hh: 128 };
   }
 
@@ -431,12 +431,15 @@ class WireLayer {
 
   startDrag(card, sockKey, ev) {
     ev.preventDefault();
+    if (this.drag) this.cancelDrag();          // one live wire-drag, ever
     const from = card.node;
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('class', 'sg-wire pending');
-    this.drag = { fromId: from.id, sockKey, path, start: { x: from.x, y: from.y } };
+    this.drag = { fromId: from.id, sockKey, path, start: { x: from.x, y: from.y }, pointerId: ev.pointerId };
     this.refresh();
     const move = (e2) => {
+      // foreign pointer (2nd touch) or a post-cancel leak: never move the wire
+      if (!this.drag || e2.pointerId !== this.drag.pointerId) return;
       const w = this.canvas.toWorld(e2.clientX, e2.clientY);
       // pending wire also clips at the source card's border
       this.drag.path.setAttribute('d', this._path(this.drag.start, w, this._rectOf(this.drag.fromId), { hw: 4, hh: 4 }));
@@ -453,11 +456,20 @@ class WireLayer {
         });
       }
     };
-    const up = (e2) => {
+    const detach = () => {                    // the Esc path can reach this via drag.hDetach
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+    };
+    const clearDropFx = () => {
       if (this._dropScan) { cancelAnimationFrame(this._dropScan); this._dropScan = 0; }
       if (this._prevDrop) { this._prevDrop.classList.remove('dropok'); this._prevDrop = null; }
+    };
+    const up = (e2) => {
+      // released pointer is not the wiring one — keep wiring
+      if (!this.drag || (e2.pointerId !== undefined && e2.pointerId !== this.drag.pointerId)) return;
+      detach();
+      clearDropFx();
       const els = (document.elementsFromPoint ? document.elementsFromPoint(e2.clientX, e2.clientY)
         : [document.elementFromPoint(e2.clientX, e2.clientY)]) || [];
       // drop onto the topmost CARD under the pointer — a wire crossing in
@@ -467,27 +479,43 @@ class WireLayer {
       if (cardEl && cardEl.dataset.id !== drag.fromId) {
         const g = this.studio.app.graph;
         const a = drag.fromId, b = cardEl.dataset.id;
-        // duplicate-link rule: the pair may exist — connecting again is a no-op
-        let exists = false;
-        for (const e of g.edges.values()) if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) { exists = true; break; }
-        if (exists) this.studio.toast(`${g.getNode(a).name} and ${g.getNode(b).name} are already linked`, 'err');
+        const na = g.getNode(a), nb = g.getNode(b);
+        if (!na || !nb) { /* endpoint vanished mid-drag (undo/reset) — drop quietly */ }
         else {
-          const edge = g.connect(a, b);
-          this.studio.mutated(`Linked ${g.getNode(a).name} → ${g.getNode(b).name} (${edge.distM.toFixed(1)} m, auto)`);
-          // link flash on the destination card — the connect is acknowledged
-          cardEl.classList.add('linked-flash');
-          setTimeout(() => cardEl.classList.remove('linked-flash'), 650);
+          // duplicate-link rule: the pair may exist — connecting again is a no-op
+          let exists = false;
+          for (const e of g.edges.values()) if ((e.a === a && e.b === b) || (e.a === b && e.b === a)) { exists = true; break; }
+          if (exists) this.studio.toast(`${na.name} and ${nb.name} are already linked`, 'err');
+          else {
+            const edge = g.connect(a, b);
+            this.studio.mutated(`Linked ${na.name} → ${nb.name} (${edge.distM.toFixed(1)} m, auto)`);
+            // link flash on the destination card — the connect is acknowledged
+            cardEl.classList.add('linked-flash');
+            setTimeout(() => cardEl.classList.remove('linked-flash'), 650);
+          }
         }
       }
       this.refresh();
     };
+    const cancel = (e2) => {
+      // pointercancel (touch stolen by the OS etc.): abort, NEVER connect
+      if (!this.drag) return;
+      if (e2 && e2.pointerId !== undefined && e2.pointerId !== this.drag.pointerId) return;
+      detach();
+      clearDropFx();
+      this.drag = null;
+      this.refresh();
+    };
+    this.drag.hDetach = detach;               // cancelDrag() detaches too (Esc)
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   }
 
   /** Cancel a pending socket-wire (Esc etc.) — leaving zero traces. */
   cancelDrag() {
     if (!this.drag) return false;
+    this.drag.hDetach?.();
     this.drag = null;
     if (this._dropScan) { cancelAnimationFrame(this._dropScan); this._dropScan = 0; }
     if (this._prevDrop) { this._prevDrop.classList.remove('dropok'); this._prevDrop = null; }
@@ -695,10 +723,17 @@ class GraphCanvas {
       e.stopPropagation(); e.preventDefault();
       this.mini.setPointerCapture?.(e.pointerId);
       goto(e);
-      const move = (e2) => goto(e2);
-      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      const pid = e.pointerId;
+      const move = (e2) => { if (e2.pointerId === pid) goto(e2); };
+      const end = (e2) => {
+        if (e2 && e2.pointerId !== undefined && e2.pointerId !== pid) return;
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+      };
       window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
     });
   }
 
@@ -819,13 +854,20 @@ class GraphCanvas {
         if (inside) hits.push(id);
       }
     };
-    const move = (e2) => apply(e2.clientX - hr.left, e2.clientY - hr.top);
-    const up = () => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
-      this._marqueeActive = false;
+    const pid = e.pointerId;                 // only THIS pointer steers the band
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      this._marqueeActive = false;           // cancel must also release the guard
       rect.remove();
-      const final = hits.slice();
       for (const c of this.cards.values()) c.el.classList.remove('willselect');
+    };
+    const move = (e2) => { if (e2.pointerId === pid) apply(e2.clientX - hr.left, e2.clientY - hr.top); };
+    const up = (e2) => {
+      if (e2.pointerId !== pid) return;      // other fingers lifting: not ours
+      const final = hits.slice();
+      cleanup();
       if (moved < 6) { this.studio.select(null); this.studio.setSelectArmed(false); return; }   // tap = clear selection
       this.studio.selectMany(final);
       if (final.length) this.studio.toast(`${final.length} node${final.length === 1 ? '' : 's'} selected`, 'ok', 1500);
@@ -833,9 +875,17 @@ class GraphCanvas {
       // one-shot like add-node: the tool switches back to pan after use
       this.studio.setSelectArmed(false);
     };
+    // pointercancel (touch stolen mid-band): abort cleanly — no selection,
+    // and the single-band guard is released so Select keeps working
+    const cancel = (e2) => {
+      if (e2 && e2.pointerId !== undefined && e2.pointerId !== pid) return;
+      cleanup();
+      this.studio.setSelectArmed(false);
+    };
     apply(ax, ay);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   }
 
   /** rAF-coalesced wire refresh — full SVG rebuilds are expensive on dense
@@ -879,7 +929,9 @@ class GraphCanvas {
       for (const a of axes) { const d = Math.abs(a - v); if (d <= bd) { bd = d; best = a; } }
       return best;
     };
+    const pid = e.pointerId;
     const move = (e2) => {
+      if (e2.pointerId !== pid) return;      // other fingers don't steer the drag
       const w = this.toWorld(e2.clientX, e2.clientY);
       let nx = clampW(orig.x + (w.x - start.x)), ny = clampW(orig.y + (w.y - start.y));
       const tol = 6 / Math.max(0.08, this.scale);
@@ -903,8 +955,14 @@ class GraphCanvas {
       ].filter(Boolean));
       this.scheduleWires();
     };
-    const up = () => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+    const detach = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+    };
+    const up = (e2) => {
+      if (e2 && e2.pointerId !== pid) return;
+      detach();
       this._showGuides(null);
       // tidy rule: drop lands on a 5 px grid (positions stay arrangeable)
       g.moveNode(card.node.id, Math.round(card.node.x / 5) * 5, Math.round(card.node.y / 5) * 5);
@@ -914,8 +972,24 @@ class GraphCanvas {
       }
       this.studio.mutated(group.length ? `Moved ${group.length + 1} nodes` : `Moved ${card.node.name}`);
     };
+    // pointercancel (touch stolen mid-drag): restore pre-drag positions EXACTLY,
+    // no history entry — an aborted gesture must leave the graph untouched
+    const cancel = (e2) => {
+      if (e2 && e2.pointerId !== undefined && e2.pointerId !== pid) return;
+      detach();
+      g.moveNode(card.node.id, orig.x, orig.y);
+      card.el.style.left = `${orig.x}px`; card.el.style.top = `${orig.y}px`;
+      for (const it of group) {
+        g.moveNode(it.id, it.ox, it.oy);
+        const c = this.cards.get(it.id);
+        if (c) { c.el.style.left = `${it.ox}px`; c.el.style.top = `${it.oy}px`; }
+      }
+      this._showGuides(null);
+      this.wires.refresh();
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   }
 
   /** Alignment guide lines while card-dragging (world coords, zoom-safe width). */
@@ -945,21 +1019,37 @@ class GraphCanvas {
     const start = this.toWorld(e.clientX, e.clientY);
     const orig = card.sizeOf();
     let dw = 0, dh = 0;
+    const pid = e.pointerId;
     const move = (e2) => {
+      if (e2.pointerId !== pid) return;
       const w = this.toWorld(e2.clientX, e2.clientY);
       dw = w.x - start.x; dh = w.y - start.y;
       card.applySize(orig.w + dw, orig.h + dh);
       this.scheduleWires();
     };
-    const up = () => {
-      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+    const detach = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+    };
+    const up = (e2) => {
+      if (e2 && e2.pointerId !== pid) return;
+      detach();
       const w = Math.round((orig.w + dw) / 5) * 5, h = Math.round((orig.h + dh) / 5) * 5;
       card.applySize(w, h, true);
       this.wires.refresh();
       this.studio.mutated(`Resized ${card.node.name} to ${clampCard(w, CARD_MIN.w, CARD_MAX.w)}×${clampCard(h, CARD_MIN.h, CARD_MAX.h)}`);
     };
+    // cancelled resize snaps the card back to its original size, no history
+    const cancel = (e2) => {
+      if (e2 && e2.pointerId !== undefined && e2.pointerId !== pid) return;
+      detach();
+      card.applySize(orig.w, orig.h);
+      this.wires.refresh();
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
   }
 
   /** Double-click on the grip: back to the default card size (rule-consistent). */
@@ -1173,6 +1263,7 @@ class PreviewModal {
     cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
     cv.addEventListener('pointermove', (e) => { if (drag) { look((drag.x - e.clientX) * 0.22, (e.clientY - drag.y) * 0.18); drag = { x: e.clientX, y: e.clientY }; } });
     cv.addEventListener('pointerup', () => { drag = null; });
+    cv.addEventListener('pointercancel', () => { drag = null; });   // no stale look-delta after a stolen touch
     this.el.querySelector('[data-x]').addEventListener('click', () => { this.el.hidden = true; });
     this.el.querySelector('[data-fs]').addEventListener('click', () => {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -1419,7 +1510,11 @@ export class ScriptStudio {
     }
   }
 
-  close() { this._open = false; if (this.el) this.el.hidden = true; }
+  close() {
+    this._open = false;
+    this.canvas?.wires?.cancelDrag();        // never strand a pending wire + listeners
+    if (this.el) this.el.hidden = true;
+  }
 
   /** Select-mode (rubber band) toggle — mutually exclusive with add-node. */
   setSelectArmed(on) {

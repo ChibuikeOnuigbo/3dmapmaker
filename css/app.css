@@ -7,13 +7,21 @@
   /* spacing rhythm: 4 · 8 · 12 · 16 · 24 */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
 
-  /* ---- custom cursors: black "blade" family with a neon edge (gamified) ----
-     Three 32×32 vector cursors: blade (default), crosshair hex (targets),
-     quad-arrows (move/pan). Native keywords stay as fallbacks, text keeps
-     its I-beam, directional resize keeps its system meaning. */
-  --cur-blade: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6.2 3.4 L6.2 23.6 L11.2 18.9 L14.4 25.8 L17.3 24.1 L14.1 17.2 L20.4 17.2 Z' fill='%23090b10' stroke='%237fb0ff' stroke-width='1.7' stroke-linejoin='round'/%3E%3Ccircle cx='6.2' cy='3.4' r='1.9' fill='%237fb0ff'/%3E%3C/svg%3E") 6 2, auto;
-  --cur-target: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 3.5 L27 9.8 L27 22.2 L16 28.5 L5 22.2 L5 9.8 Z' fill='none' stroke='%23090b10' stroke-width='3.2'/%3E%3Cpath d='M16 3.5 L27 9.8 L27 22.2 L16 28.5 L5 22.2 L5 9.8 Z' fill='none' stroke='%237fb0ff' stroke-width='1.1'/%3E%3Ccircle cx='16' cy='16' r='3.2' fill='%23090b10'/%3E%3Ccircle cx='16' cy='16' r='1.2' fill='%237fb0ff'/%3E%3C/svg%3E") 16 16, pointer;
-  --cur-move: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.6 L20.4 8.6 L11.6 8.6 Z M29.4 16 L23.4 20.4 L23.4 11.6 Z M16 29.4 L11.6 23.4 L20.4 23.4 Z M2.6 16 L8.6 11.6 L8.6 20.4 Z' fill='%23090b10' stroke='%237fb0ff' stroke-width='.9'/%3E%3Crect x='12.4' y='12.4' width='7.2' height='7.2' rx='2' fill='%23090b10' stroke='%237fb0ff' stroke-width='1.2'/%3E%3C/svg%3E") 16 16, move;
+  /* ---- custom cursors: obsidian "blade" family with energy-cyan glow ----
+     Nine 32x32 vector cursors (gamified HUD set): faceted blade arrow,
+     hex lock-on reticle, FPS crosshair, quad-arrows, gauntlet grab/fist,
+     diagonal resize blades, I-beam, denial sigil. Native keywords stay
+     as fallbacks; every cursor reads on light AND dark surfaces via a
+     white offset underlay. */
+  --cur-blade: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M7.1 4.3 L7.1 24.5 L12.1 19.8 L15.3 26.7 L18.2 25 L15 18.1 L21.3 18.1 Z' fill='%23ffffff' opacity='0.42'/%3E%3Cpath d='M6.2 3.4 L6.2 23.6 L11.2 18.9 L14.4 25.8 L17.3 24.1 L14.1 17.2 L20.4 17.2 Z' fill='%23090b10' stroke='%2363d4ff' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M8.1 6.9 L8.1 18.2 L11.4 15.1 L16.9 15.1 Z' fill='%231c2740' opacity='0.9'/%3E%3Ccircle cx='6.2' cy='3.4' r='2.1' fill='%2363d4ff'/%3E%3Ccircle cx='6.2' cy='3.4' r='0.9' fill='%23eafaff'/%3E%3C/svg%3E") 6 2, auto;
+  --cur-target: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpolygon points='16,4.2 26.2,10.1 26.2,21.9 16,27.8 5.8,21.9 5.8,10.1' fill='none' stroke='%23090b10' stroke-width='3.4' stroke-linejoin='round'/%3E%3Cpolygon points='16,4.2 26.2,10.1 26.2,21.9 16,27.8 5.8,21.9 5.8,10.1' fill='none' stroke='%2363d4ff' stroke-width='1.2' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='4.2' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='26.2' cy='10.1' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='26.2' cy='21.9' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='16' cy='27.8' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='5.8' cy='21.9' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='5.8' cy='10.1' r='1.25' fill='%2363d4ff'/%3E%3Ccircle cx='16' cy='16' r='3.6' fill='%23090b10'/%3E%3Ccircle cx='16' cy='16' r='1.4' fill='%2363d4ff'/%3E%3C/svg%3E") 16 16, pointer;
+  --cur-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='8.6' fill='none' stroke='%23090b10' stroke-width='2.8'/%3E%3Ccircle cx='16' cy='16' r='8.6' fill='none' stroke='%2363d4ff' stroke-width='1'/%3E%3Cpath d='M16 2.4 V6.4 M16 25.6 V29.6 M2.4 16 H6.4 M25.6 16 H29.6' stroke='%23090b10' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='1.9' fill='%2363d4ff'/%3E%3C/svg%3E") 16 16, crosshair;
+  --cur-move: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.6 L20.4 8.6 L11.6 8.6 Z M29.4 16 L23.4 20.4 L23.4 11.6 Z M16 29.4 L11.6 23.4 L20.4 23.4 Z M2.6 16 L8.6 11.6 L8.6 20.4 Z' fill='%23090b10' stroke='%2363d4ff' stroke-width='.9'/%3E%3Crect x='12.4' y='12.4' width='7.2' height='7.2' rx='2' fill='%23090b10' stroke='%2363d4ff' stroke-width='1.2'/%3E%3Ccircle cx='16' cy='16' r='1.2' fill='%2363d4ff'/%3E%3C/svg%3E") 16 16, move;
+  --cur-grab: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='%23090b10' stroke='%2363d4ff' stroke-width='1.15'%3E%3Cuse href='%23gh' xlink:href='%23gh' x='0.9' y='1' fill='%23ffffff' stroke='none' opacity='0.45'/%3E%3Cg id='gh'%3E%3Crect x='10.2' y='6.4' width='3.1' height='9.2' rx='1.55'/%3E%3Crect x='13.9' y='4.3' width='3.2' height='10.8' rx='1.6'/%3E%3Crect x='17.6' y='5.5' width='3.1' height='9.7' rx='1.55'/%3E%3Crect x='21.2' y='7.7' width='3' height='8.2' rx='1.5'/%3E%3Cpath d='M9.8 15.4 C7.6 14.2 6.2 11.8 7.4 10.5 C8.6 9.2 11 10.8 11.9 12.8 Z'/%3E%3Crect x='9.4' y='12.9' width='15.4' height='11.4' rx='4.8'/%3E%3C/g%3E%3C/g%3E%3Ccircle cx='11.8' cy='21.7' r='0.9' fill='%2363d4ff'/%3E%3Ccircle cx='15.6' cy='22.1' r='0.9' fill='%2363d4ff'/%3E%3Ccircle cx='19.4' cy='21.7' r='0.9' fill='%2363d4ff'/%3E%3C/svg%3E") 16 13, grab;
+  --cur-grabbing: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='%23090b10' stroke='%2363d4ff' stroke-width='1.2'%3E%3Cuse href='%23gf' xlink:href='%23gf' x='0.9' y='1' fill='%23ffffff' stroke='none' opacity='0.45'/%3E%3Cg id='gf'%3E%3Ccircle cx='10.7' cy='11.3' r='2.55'/%3E%3Ccircle cx='14.5' cy='10.9' r='2.55'/%3E%3Ccircle cx='18.3' cy='11.1' r='2.55'/%3E%3Ccircle cx='22.1' cy='11.9' r='2.55'/%3E%3Crect x='8' y='10.8' width='16.8' height='13' rx='5.2'/%3E%3Ccircle cx='8.9' cy='16.6' r='2.7'/%3E%3C/g%3E%3C/g%3E%3Ccircle cx='10.7' cy='13.6' r='0.85' fill='%2363d4ff'/%3E%3Ccircle cx='14.5' cy='13.2' r='0.85' fill='%2363d4ff'/%3E%3Ccircle cx='18.3' cy='13.4' r='0.85' fill='%2363d4ff'/%3E%3Ccircle cx='22.1' cy='14.2' r='0.85' fill='%2363d4ff'/%3E%3C/svg%3E") 16 15, grabbing;
+  --cur-nwse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M8.6 8.6 L23.4 23.4' stroke='%23090b10' stroke-width='3.8' stroke-linecap='round'/%3E%3Cpath d='M8.6 8.6 L23.4 23.4' stroke='%2363d4ff' stroke-width='1.3' stroke-linecap='round'/%3E%3Cpath d='M26.4 26.4 L20.2 26.4 L26.4 20.2 Z' fill='%23090b10' stroke='%2363d4ff' stroke-width='1' stroke-linejoin='round'/%3E%3Cpath d='M5.6 5.6 L11.8 5.6 L5.6 11.8 Z' fill='%23090b10' stroke='%2363d4ff' stroke-width='1' stroke-linejoin='round'/%3E%3C/svg%3E") 16 16, nwse-resize;
+  --cur-text: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M11 6 H21 M11 26 H21 M16 6 V26' stroke='%23090b10' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M11 6 H21 M11 26 H21 M16 6 V26' stroke='%2363d4ff' stroke-width='1' stroke-linecap='round'/%3E%3C/svg%3E") 16 16, text;
+  --cur-deny: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M9.3 22.7 L22.7 9.3' stroke='%23090b10' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='9.6' fill='none' stroke='%23090b10' stroke-width='3.2'/%3E%3Cpath d='M9.3 22.7 L22.7 9.3' stroke='%23ff6a6a' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='9.6' fill='none' stroke='%23ff6a6a' stroke-width='1.1'/%3E%3C/svg%3E") 16 16, not-allowed;
 
   --surface: rgba(252, 253, 255, 0.96);
   --surface-2: rgba(244, 246, 250, 0.97);
@@ -241,8 +249,8 @@ svg { display: block; }
 .mini svg { width: 15px; height: 15px; }
 #mapCanvasWrap { height: 234px; }
 #mapWidget.full #mapCanvasWrap { flex: 1; height: auto; }
-#mapCanvas { width: 100%; height: 100%; display: block; cursor: grab; }
-#mapCanvas:active { cursor: grabbing; }
+#mapCanvas { width: 100%; height: 100%; display: block; cursor: var(--cur-grab); }
+#mapCanvas:active { cursor: var(--cur-grabbing); }
 /* show-map FAB when widget hidden */
 #mapFab {
   position: fixed; right: var(--s3); bottom: var(--s3); z-index: var(--z-widget);
@@ -876,15 +884,22 @@ body.landing-open #topbar { visibility: hidden; }
 /* everything inherits the blade, unless a more meaningful role applies */
 html { cursor: var(--cur-blade); }
 
-/* clickables get the target crosshair */
+/* clickables get the hex lock-on reticle */
 button, a, [role="button"], summary,
 .tb-btn, .mode-btn, .iconbtn, .seg button, .chip, .mi, .tab, .card-slot,
 .chooser-card, .wchip, label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) {
   cursor: var(--cur-target);
 }
 
-/* typed text keeps the I-beam and resize handles keep their direction */
-input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable] { cursor: text; }
+/* disabled controls flash the mission-denied sigil */
+button:disabled, [disabled], [aria-disabled="true"] { cursor: var(--cur-deny); }
 
-/* pannable/draggable surfaces get the quad-arrows */
-#panoCanvas, .sg-surface, #mapCanvas { cursor: var(--cur-move); }
+/* typed text keeps a styled beam, matching the set */
+input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable] { cursor: var(--cur-text); }
+
+/* pannable surfaces are gauntlets: open hand that closes into a grip */
+#panoCanvas, .sg-pv-canvas, #mapCanvas, .sg-surface { cursor: var(--cur-grab); }
+#panoCanvas:active, .sg-pv-canvas:active, #mapCanvas:active, .sg-surface:active { cursor: var(--cur-grabbing); }
+
+/* armed tools (add node / rubber-band select) get the FPS crosshair */
+.sg-surface.armed, .sg-surface.selecting { cursor: var(--cur-cross); }
