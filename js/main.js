@@ -313,7 +313,7 @@ class App {
         if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); this._urlsetModes = modes; break; }
         if (n.pano?.kind === 'generated') generated = true;
       }
-      if (!modes && generated) modes = ['day', 'rain', 'night'];
+      if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow'];
     }
     if (!modes) { group.hidden = true; return; }
     if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
@@ -335,6 +335,8 @@ class App {
         day:   { timeOfDay: 'day', weather: 'clear' },
         rain:  { timeOfDay: 'overcast', weather: 'rain' },
         night: { timeOfDay: 'night', weather: 'clear', sunElevationDeg: 38 },
+        dawn:  { timeOfDay: 'golden', weather: 'clear' },
+        snow:  { timeOfDay: 'overcast', weather: 'snow' },
       };
       this.setEnvironment(ENV[mode] ?? ENV.day);
       this._syncModeGroup();
@@ -357,6 +359,7 @@ class App {
     Object.assign(this.graph.environment, patch);
     const env = this.graph.environment;
     this.viewer.immersion.rain = env.weather === 'rain';
+    this.viewer.immersion.snow = env.weather === 'snow';
     this.cache.clearDecoded();
     const id = this.movement?.currentNodeId;
     if (id) this._enterNode(id, { teleport: true });
@@ -462,8 +465,18 @@ class App {
     // coded worlds declare ambient life in the model (`environment.animals`) —
     // the viewer's seeded flock follows the world, not the screen (§17)
     const envW = this.graph.environment || {};
-    this.viewer.immersion.birds = !!(envW.animals || []).includes('birds');
-    this.viewer.immersion.clouds = (envW.weather ?? 'clear') === 'clear' && envW.timeOfDay !== 'night';
+    const animals = envW.animals || [];
+    const clearSky = (envW.weather ?? 'clear') === 'clear';
+    const tod = envW.timeOfDay ?? 'day';
+    this.viewer.immersion.birds = animals.includes('birds');
+    this.viewer.immersion.clouds = clearSky && tod !== 'night';
+    // the living-world layer cake: stars & fireflies own the night, butterflies
+    // and sun shafts own fair daylight, snow falls when the world says so
+    this.viewer.immersion.night = tod === 'night';
+    this.viewer.immersion.fireflies = tod === 'night' && clearSky;
+    this.viewer.immersion.butterflies = animals.includes('butterflies') && clearSky && (tod === 'day' || tod === 'golden');
+    this.viewer.immersion.sunrays = clearSky && (tod === 'day' || tod === 'golden');
+    this.viewer.immersion.snow = envW.weather === 'snow';
     // animated actors: hand the viewer this node's position (meters) so it can
     // project the coded walkers of environment.actors into the live view
     const ppmA = this.graph.scale?.pixelsPerMeter ?? 2;
@@ -471,6 +484,8 @@ class App {
       xM: node.x / ppmA, yM: node.y / ppmA,
       headingDeg: node.headingDeg ?? 0,
       actors: envW.actors ?? [],
+      timeOfDay: tod,
+      sun: { azDeg: envW.sunAzimuthDeg ?? 118, elDeg: envW.sunElevationDeg ?? 34 },
     };
     this.bus.emit('debug:node', nodeId);
     this.mapRenderer.setCurrent(nodeId, this.viewer.view.yawDeg);

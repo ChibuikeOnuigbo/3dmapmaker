@@ -32,7 +32,7 @@ export class PanoramaViewer {
     this.pitchOverdrag = 0;
     this._rawPitch = 0;
 
-    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, transitionMs: 420 };
+    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, snow: false, night: false, fireflies: false, butterflies: false, sunrays: false, transitionMs: 420 };
     // world anchors for animated actors — set by the app on every node entry:
     // { xM, yM (node position in meters), headingDeg, actors:[{kind:'walker',...}] }
     this.anchors = null;
@@ -47,6 +47,10 @@ export class PanoramaViewer {
     this._lastT = 0;
     this._transition = null;
     this._rainDrops = [];
+    this._snow = [];                         // snowfall flakes (screen space, gusts)
+    this._stars = null;                      // seeded night sky (world azimuth)
+    this._flies = null;                      // seeded firefly swarm
+    this._butter = null;                     // seeded butterflies (world meters)
     this._t0 = performance.now();
 
     this._bindInput();
@@ -246,10 +250,15 @@ export class PanoramaViewer {
     const cvs = this.fx.canvas;
     this.fx.clearRect(0, 0, cvs.width, cvs.height);
     if (cvs.width !== cvs.clientWidth || cvs.height !== cvs.clientHeight) { cvs.width = cvs.clientWidth; cvs.height = cvs.clientHeight; }
+    this._renderStars(now, dt, cvs);       // deepest: the night sky itself
+    this._renderSunRays(now, dt, cvs);     // low sun shafts behind the clouds
     this._renderClouds(now, dt, cvs);
     this._renderBirds(now, dt, cvs);
     this._renderActors(now, dt, cvs);
+    this._renderButterflies(now, dt, cvs);
+    this._renderFireflies(now, dt, cvs);
     this._renderRain(now, dt, cvs);
+    this._renderSnow(now, dt, cvs);        // precip sits closest to the lens
   }
 
   /* ---------------- animated world layers ---------------- */
@@ -284,6 +293,53 @@ export class PanoramaViewer {
     return { nx, ny, distM: distH };
   }
 
+  /** Small quadruped silhouette drawn around (sx, syF): four trotting legs
+      (diagonal pairs), a stretched body, head, and a tail — raised proud for
+      cats, wagging for dogs. `phase` drives the gait; `moving` freezes it. */
+  _drawQuadruped(ctx, sx, syF, bh, tint, phase, moving, { tailUp = false, flip = 1 } = {}) {
+    const h = bh * 0.52;                       // shoulder height px
+    const len = h * 1.85;                      // body length px
+    ctx.save();
+    ctx.translate(sx, syF);
+    ctx.scale(flip, 1);
+    const bob = moving ? Math.abs(Math.sin(phase)) * h * 0.06 : 0;
+    const bodyY = -h * 0.66 - bob;
+    // contact shadow
+    ctx.fillStyle = 'rgba(22,26,22,0.33)';
+    ctx.beginPath(); ctx.ellipse(0, 0, len * 0.56, Math.max(1.2, h * 0.09), 0, 0, Math.PI * 2); ctx.fill();
+    // legs — diagonal pairs in anti-phase
+    const sw = moving ? Math.sin(phase) * h * 0.30 : 0;
+    ctx.strokeStyle = 'rgba(30,28,26,0.9)';
+    ctx.lineWidth = Math.max(1, h * 0.13); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-len * 0.32, bodyY + h * 0.28); ctx.lineTo(-len * 0.32 + sw, 0);
+    ctx.moveTo(-len * 0.18, bodyY + h * 0.28); ctx.lineTo(-len * 0.18 - sw, 0);
+    ctx.moveTo(len * 0.18, bodyY + h * 0.28); ctx.lineTo(len * 0.18 - sw, 0);
+    ctx.moveTo(len * 0.32, bodyY + h * 0.28); ctx.lineTo(len * 0.32 + sw, 0);
+    ctx.stroke();
+    // body
+    ctx.strokeStyle = tint;
+    ctx.lineWidth = Math.max(2, h * 0.46);
+    ctx.beginPath(); ctx.moveTo(-len * 0.34, bodyY); ctx.lineTo(len * 0.30, bodyY - h * 0.03); ctx.stroke();
+    // head with a hint of ears
+    ctx.fillStyle = tint;
+    ctx.beginPath(); ctx.arc(len * 0.42, bodyY - h * 0.24, Math.max(1.4, h * 0.23), 0, Math.PI * 2); ctx.fill();
+    // tail: cats carry a question-mark, dogs wag low
+    ctx.strokeStyle = tint; ctx.lineWidth = Math.max(1, h * 0.11);
+    ctx.beginPath();
+    if (tailUp) {
+      const curl = Math.sin(phase * 0.35) * h * 0.06;
+      ctx.moveTo(-len * 0.36, bodyY - h * 0.02);
+      ctx.quadraticCurveTo(-len * 0.56, bodyY - h * 0.52, -len * 0.46 + curl, bodyY - h * 0.78);
+    } else {
+      const wag = Math.sin(phase * 0.7) * h * 0.12;
+      ctx.moveTo(-len * 0.36, bodyY - h * 0.04);
+      ctx.lineTo(-len * 0.56, bodyY - h * 0.30 + wag);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /** Animated villagers walking coded routes (environment.actors): ping-pong
       loops between two world points, projected every frame — body, head,
       bobbing gait, swinging legs and a contact shadow. Within ~70 m they are
@@ -294,6 +350,36 @@ export class PanoramaViewer {
     const aspect = W / Math.max(1, H);
     const t = (now - this._t0) / 1000;
     for (const act of this.anchors.actors) {
+      if (act.kind === 'dog' || act.kind === 'cat') {
+        // quadrupeds share the walkers' route model; cats dwell at both ends
+        const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
+        const lenM = Math.max(0.5, Math.hypot(ax, ay));
+        const P = lenM / Math.max(0.2, act.speedMps || 1);   // one-way seconds
+        const d = act.kind === 'cat' ? 3.2 : 0;              // dwell at each end
+        const s = (((t + (act.phase || 0)) % (2 * (d + P))) + 2 * (d + P)) % (2 * (d + P));
+        let k = 0, moving = false, dir = 1;
+        if (s < d)          { k = 0; }                                  // rest @ A
+        else if (s < d + P) { k = (s - d) / P; moving = true; }         // walk A→B
+        else if (s < 2 * d + P) { k = 1; dir = -1; }                    // rest @ B
+        else                { k = 1 - (s - 2 * d - P) / P; moving = true; dir = -1; }
+        const feetX = act.x0 + ax * k, feetY = act.y0 + ay * k;
+        const feet = this._projectWorld(feetX, feetY, 0, aspect);
+        const head = this._projectWorld(feetX, feetY, 0.95, aspect);
+        if (!feet || !head) continue;
+        const sx = (feet.nx * 0.5 + 0.5) * W;
+        const syF = (1 - (feet.ny * 0.5 + 0.5)) * H;
+        const bh = Math.max(3, syF - (1 - (head.ny * 0.5 + 0.5)) * H);
+        if (bh > H) continue;
+        const cadence = act.kind === 'dog' ? 0.34 : 0.52;
+        const stepPh = t * (2 * Math.PI / cadence) + (act.phase || 0) * 3;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(0.92, 1.25 - feet.distM / 60));
+        if (ctx.globalAlpha <= 0.02) { ctx.restore(); continue; }
+        this._drawQuadruped(ctx, sx, syF, bh, act.tint || '#4a3a28', stepPh, moving,
+          { tailUp: act.kind === 'cat', flip: dir });
+        ctx.restore();
+        continue;
+      }
       if (act.kind !== 'walker') continue;
       const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
       const lenM = Math.max(0.5, Math.hypot(ax, ay));
@@ -380,6 +466,222 @@ export class PanoramaViewer {
       for (const [ox, oy, r] of [[0, 0, 1], [-0.55, 0.14, 0.62], [0.5, 0.1, 0.72]]) {
         ctx.beginPath(); ctx.ellipse(x + ox * s, y + oy * s * 0.5, s * 0.5 * r, s * 0.17 * r, 0, 0, Math.PI * 2); ctx.fill();
       }
+      ctx.restore();
+    }
+  }
+
+  /* ---------------- the living world: sky, shafts, little lives --------- */
+
+  /** Twinkling starfield, world-azimuth anchored like the birds (§17): pan
+      and the sky pans with you. Looking up slides stars down, as it should. */
+  _starFieldLayer() {
+    if (this._stars) return this._stars;
+    const rng = rngFor('viewer_starfield_v1');
+    this._stars = [];
+    for (let i = 0; i < 140; i++) {
+      this._stars.push({
+        az: rng() * 360,
+        el: 0.03 + rng() * 0.40,                  // fraction of canvas height
+        r: 0.7 + rng() * 1.5,
+        tw: 0.5 + rng() * 2.4,                    // twinkle rad/s
+        ph: rng() * Math.PI * 2,
+      });
+    }
+    return this._stars;
+  }
+
+  _renderStars(now, dt, cvs) {
+    if (!this.immersion.night) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const pitchShift = (pitch / Math.max(40, fov)) * 0.9;
+    ctx.fillStyle = '#dfe8ff';
+    for (const s of this._starFieldLayer()) {
+      const rel = ((s.az - yaw + 540) % 360) - 180;
+      if (Math.abs(rel) > fov / 2 + 6) continue;
+      const x = (rel + fov / 2) / fov * w;
+      const y = (s.el + pitchShift) * h;
+      if (y < -4 || y > h * 0.66) continue;       // the horizon band is ground fog
+      ctx.globalAlpha = 0.28 + 0.62 * (0.5 + 0.5 * Math.sin(t * s.tw + s.ph));
+      ctx.fillRect(x, y, s.r, s.r);
+    }
+    ctx.globalAlpha = 1;
+    // a shooting star every ~13 s: 1.1 s of travel, travel lane seeded by the
+    // cycle index so it never repeats in the same place while you watch
+    const CYC = 13, SPAN = 1.1, tt = t % CYC;
+    if (tt < SPAN) {
+      const k = tt / SPAN, lane = Math.floor(t / CYC);
+      const azA = ((lane * 97.318) % 360 + 360) % 360;
+      const elA = 0.05 + ((lane * 37) % 16) / 100;
+      const project = (kk) => {
+        const az = azA + 26 * kk, el = elA + 0.09 * kk;
+        const r = ((az - yaw + 540) % 360) - 180;
+        if (Math.abs(r) > fov / 2 + 10) return null;
+        return { x: (r + fov / 2) / fov * w, y: (el + pitchShift) * h };
+      };
+      const head = project(k), tail = project(Math.max(0, k - 0.16));
+      if (head && tail) {
+        const a = Math.sin(Math.PI * k);          // ease in, burn out
+        const grad = ctx.createLinearGradient(tail.x, tail.y, head.x, head.y);
+        grad.addColorStop(0, 'rgba(223,232,255,0)');
+        grad.addColorStop(1, `rgba(240,246,255,${0.85 * a})`);
+        ctx.strokeStyle = grad; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(tail.x, tail.y); ctx.lineTo(head.x, head.y); ctx.stroke();
+      }
+    }
+  }
+
+  /** Forward-scatter sun shafts: soft beams fanning around the sun's WORLD
+      azimuth/elevation — walk east at dawn and the rays swing with you. */
+  _renderSunRays(now, dt, cvs) {
+    if (!this.immersion.sunrays) return;
+    const sun = this.anchors?.sun;
+    if (!sun) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const rel = ((sun.azDeg - yaw + 540) % 360) - 180;
+    if (Math.abs(rel) > fov / 2 + 30) return;
+    const sx = (rel + fov / 2) / fov * w;
+    const sy = h * (0.40 - (sun.elDeg / 90) * 0.5) + (pitch / Math.max(40, fov)) * h * 0.9;
+    if (sy < -h * 0.2 || sy > h * 0.58) return;
+    const dawn = (this.anchors?.timeOfDay === 'golden');
+    const col = dawn ? '255,194,128' : '255,238,180';
+    const len = Math.hypot(w, h) * 0.85;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {                 // slow-breathing beams
+      const a = (i / 6) * Math.PI * 2 + t * 0.05;
+      const breathe = 0.5 + 0.5 * Math.sin(t * 0.55 + i * 1.7);
+      ctx.strokeStyle = `rgba(${col},${0.024 + 0.030 * breathe})`;
+      ctx.lineWidth = 30 + 26 * breathe;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(a) * 46, sy + Math.sin(a) * 46);
+      ctx.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(${col},0.10)`;          // halo core + outer bloom
+    ctx.beginPath(); ctx.arc(sx, sy, 44, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(${col},0.045)`;
+    ctx.beginPath(); ctx.arc(sx, sy, 96, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  /** Fireflies — night-only, clear-sky life near the ground: world-anchored
+      wander, layered glow, gentle pulse. 24 orbs ≈ nothing per frame. */
+  _fireflySwarm() {
+    if (this._flies) return this._flies;
+    const rng = rngFor('viewer_fireflies_v1');
+    this._flies = [];
+    for (let i = 0; i < 24; i++) {
+      this._flies.push({
+        az0: rng() * 360,
+        w: 0.06 + rng() * 0.14,                   // azimuth wander rate
+        amp: 2.5 + rng() * 5.5,                   // wander amplitude (deg)
+        el: 0.60 + rng() * 0.15,                  // hover band (lower half)
+        sp: 0.5 + rng() * 1.6,                    // glow pulse rate
+        ph: rng() * Math.PI * 2,
+        s: 1.1 + rng() * 1.6,
+      });
+    }
+    return this._flies;
+  }
+
+  _renderFireflies(now, dt, cvs) {
+    if (!this.immersion.fireflies) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const pitchShift = (pitch / Math.max(40, fov)) * 0.9;
+    for (const f of this._fireflySwarm()) {
+      const az = f.az0 + Math.sin(t * f.w) * f.amp;
+      const rel = ((az - yaw + 540) % 360) - 180;
+      if (Math.abs(rel) > fov / 2 + 8) continue;
+      const x = (rel + fov / 2) / fov * w;
+      const y = (Math.min(0.88, f.el + pitchShift)) * h + Math.sin(t * 0.7 + f.ph * 3) * 6;
+      const glow = 0.18 + 0.82 * (0.5 + 0.5 * Math.sin(t * f.sp + f.ph));
+      ctx.fillStyle = `rgba(196,255,130,${0.16 * glow})`;
+      ctx.beginPath(); ctx.arc(x, y, f.s * 3.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(222,255,168,${0.85 * glow})`;
+      ctx.beginPath(); ctx.arc(x, y, f.s * 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** Snowfall — drifting flakes with a slow gust cycle; larger flakes fall
+      faster and read closer (cheap parallax). Rain hides it by mode design. */
+  _renderSnow(now, dt, cvs) {
+    if (!this.immersion.snow) { this._snow.length = 0; return; }
+    const t = (now - this._t0) / 1000;
+    if (this._snow.length === 0) {
+      for (let i = 0; i < 130; i++) {
+        this._snow.push({
+          x: Math.random() * cvs.width, y: Math.random() * cvs.height,
+          v: 30 + Math.random() * 66,             // fall speed px/s
+          r: 0.9 + Math.random() * 2.1,           // size ⇄ depth
+          ph: Math.random() * Math.PI * 2,
+          sw: 8 + Math.random() * 24,             // personal sway
+        });
+      }
+    }
+    const gust = (Math.sin(t * 0.21) * 0.5 + 0.5) * 16;   // whole-scene wind
+    const ctx = this.fx;
+    for (const f of this._snow) {
+      f.y += f.v * dt / 1000;
+      f.x += (Math.sin(t * 0.9 + f.ph) * f.sw + gust) * dt / 1000;
+      if (f.y > cvs.height + 3) { f.y = -3; f.x = Math.random() * cvs.width; }
+      if (f.x > cvs.width + 3) f.x = -3; else if (f.x < -3) f.x = cvs.width + 3;
+      ctx.fillStyle = `rgba(246,250,255,${0.42 + Math.min(0.45, f.r * 0.16)})`;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** Butterflies — hard world-anchored little lives (§17): a handful of
+      seeded meadows around the current node, figure-8 loops ~1 m up, projected
+      through the same camera math as the villagers so parallax sells them. */
+  _butterflyMeadow() {
+    if (this._butter) return this._butter;
+    const rng = rngFor('viewer_butterflies_v1');
+    const tints = ['#e8a4c8', '#a4d0ff', '#ffd98a', '#c8b0ff', '#a8e6b0'];
+    this._butter = [];
+    for (let i = 0; i < 5; i++) {
+      this._butter.push({
+        ox: rng() * 24 - 12, oy: rng() * 24 - 12, // meadow offset from node, m
+        w: 0.4 + rng() * 0.45,                    // loop rate rad/s
+        amp: 1.6 + rng() * 2.2,                   // loop radius m
+        ph: rng() * Math.PI * 2,
+        flap: 9 + rng() * 5,
+        tint: tints[i % tints.length],
+      });
+    }
+    return this._butter;
+  }
+
+  _renderButterflies(now, dt, cvs) {
+    if (!this.immersion.butterflies || !this.anchors) return;
+    const t = (now - this._t0) / 1000;
+    const aspect = cvs.width / Math.max(1, cvs.height);
+    const ctx = this.fx;
+    for (const b of this._butterflyMeadow()) {
+      const wx = this.anchors.xM + b.ox + Math.sin(t * b.w + b.ph) * b.amp;
+      const wy = this.anchors.yM + b.oy + Math.sin(2 * t * b.w + b.ph) * b.amp * 0.6;
+      const zz = 1.0 + 0.35 * Math.sin(t * b.w * 1.7 + b.ph * 2);
+      const p = this._projectWorld(wx, wy, zz, aspect);
+      if (!p || p.distM > 34) continue;
+      const s = Math.max(2.4, 130 / Math.max(2, p.distM));   // wing px by range
+      const x = (p.nx * 0.5 + 0.5) * cvs.width;
+      const y = (1 - (p.ny * 0.5 + 0.5)) * cvs.height;
+      const flap = Math.abs(Math.sin(t * b.flap + b.ph));    // wings close→open
+      const spread = s * (0.35 + 0.75 * (1 - flap));
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(0.95, 1.3 - p.distM / 30));
+      ctx.fillStyle = b.tint;
+      ctx.beginPath();                                        // two wing lobes
+      ctx.ellipse(x - spread * 0.45, y, spread * 0.5, s * 0.5, -0.5, 0, Math.PI * 2);
+      ctx.ellipse(x + spread * 0.45, y, spread * 0.5, s * 0.5, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(40,36,34,0.9)';                   // body
+      ctx.fillRect(x - Math.max(0.8, s * 0.07) / 2, y - s * 0.42, Math.max(0.8, s * 0.07), s * 0.84);
       ctx.restore();
     }
   }

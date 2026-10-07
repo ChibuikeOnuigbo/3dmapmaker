@@ -40,6 +40,7 @@ const SKY_PRESETS = {
   night:  { top: '#0b1026', horizon: '#22304d', sun: '#e8ecff', groundFog: '#171f31' },
 };
 const ROAD_COLORS = { asphalt: [74, 77, 82], stone: [146, 140, 128], dirt: [139, 119, 92] };
+const SNOW_C = [236, 242, 249];        // fresh snowpack under an overcast sky
 
 export class GenerationProvider {
   /** @returns {Promise<{canvas:CanvasImageSource, meta:object}>} */
@@ -71,8 +72,8 @@ export class ProceduralWorldProvider extends GenerationProvider {
     // clone the preset — weather must never mutate SKY_PRESETS, or the next
     // regeneration (mode flip) would inherit stale overcast colors
     const sky = { ...(SKY_PRESETS[env.timeOfDay] || SKY_PRESETS.day) };
-    if (env.weather === 'overcast' || env.weather === 'rain') Object.assign(sky, SKY_PRESETS.overcast);
-    const weatherFog = env.weather === 'rain' ? 0.75 : env.weather === 'overcast' ? 0.6 : 0.5;
+    if (env.weather === 'overcast' || env.weather === 'rain' || env.weather === 'snow') Object.assign(sky, SKY_PRESETS.overcast);
+    const weatherFog = env.weather === 'rain' ? 0.75 : env.weather === 'snow' ? 0.85 : env.weather === 'overcast' ? 0.6 : 0.5;
     this._envNow = env;                     // painters read sun/shadow/window state from here
 
     this._paintSky(ctx, W, H, sky, env);
@@ -169,6 +170,8 @@ export class ProceduralWorldProvider extends GenerationProvider {
         const wx = node.x + colSin[i] * dPx;
         const wy = node.y - colCos[i] * dPx;
         let c = ground.at(wx, wy, seedG);
+        // snowpack: open water stays dark & glassy, everything else drifts white
+        if (env.weather === 'snow') c = mix(c, SNOW_C, ground.groundKind() === 'water' ? 0.16 : 0.78);
         // sun path sparkle across open water — specular streak toward the sun
         // azimuth (the "ray-traced" tell: it shifts believably as you turn)
         if (canGlint && ground.groundKind() === 'water') {

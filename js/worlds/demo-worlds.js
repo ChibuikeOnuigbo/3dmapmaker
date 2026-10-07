@@ -265,7 +265,7 @@ export function buildChapelLane() {
   [[-34, 214], [-48, 200], [-58, 214], [30, 508], [46, 520]].forEach(([xm, ym], i) =>
     feature(g, { id: 'flowers_' + i, type: 'flowers', x: xm * PXM, y: ym * PXM, rM: 1.2 }));
 
-  g.environment.animals = ['birds'];   // ambient seeded flock — viewer animates it
+  g.environment.animals = ['birds', 'butterflies'];   // ambient seeded life — viewer animates it
 
   // animated walkers — world-anchored routes in meters; the viewer projects
   // them into the live view every frame (ping-pong loop, seeded offsets)
@@ -273,6 +273,8 @@ export function buildChapelLane() {
     { id: 'walker_way', kind: 'walker', x0: 2, y0: 140, x1: -2, y1: 182, speedMps: 1.15, phase: 0, tint: '#6b4a34', name: 'Walker on the way' },
     { id: 'walker_lane', kind: 'walker', x0: 8, y0: 318, x1: 70, y1: 322, speedMps: 1.05, phase: 12, tint: '#3a5468', name: 'Walker down the lane' },
     { id: 'walker_green', kind: 'walker', x0: -22, y0: 206, x1: -56, y1: 230, speedMps: 0.8, phase: 27, tint: '#5c5c50', name: 'Stroller by the pond' },
+    { id: 'dog_green', kind: 'dog', x0: -14, y0: 224, x1: -64, y1: 212, speedMps: 2.3, phase: 5, tint: '#4a3a28', name: 'Dog bounding round the green' },
+    { id: 'cat_lane', kind: 'cat', x0: 14, y0: 320, x1: 46, y1: 318, speedMps: 0.7, phase: 41, tint: '#2c2c34', name: 'Cat prowling the cottage lane' },
   ];
   g.environment.description = 'A rural parish: a stone church at the north end of a 520 m processional way, an 8×8 plaza grid (king-move demo), a side lane of cottages, a village-green loop with its pond, a woodland walk to the Old Oak, and Home Farm with its sheep pasture.';
 
@@ -287,7 +289,7 @@ export function buildChapelLane() {
     tests: {
       church: { zoneId: 'zone_church_vicinity', boundaryMeters: 500, streetPrefix: 'way_' },
     },
-    blurb: 'Small living parish: the 520 m way, 8×8 plaza, cottage lane, green loop with pond, woodland walk to the Old Oak and Home Farm with grazing sheep — god rays and soft shadows trace the sun, water glints, windows glow at night, and villagers, birds and clouds move through it. Day / Rain / Night re-render live.',
+    blurb: 'Small living parish: the 520 m way, 8×8 plaza, cottage lane, green loop with pond, woodland walk to the Old Oak and Home Farm with grazing sheep — god rays and soft shadows trace the sun, water glints, windows glow at night, and villagers, a bounding dog, a prowling cat, birds, clouds and butterflies move through it. After dark: stars, fireflies and the odd shooting star. Day / Dawn / Rain / Night / Snow re-render live.',
   };
 }
 
@@ -301,7 +303,7 @@ export function buildMillbrook() {
   g.environment = {
     ...g.environment,
     timeOfDay: 'golden', weather: 'clear', sunAzimuthDeg: 262, sunElevationDeg: 14,
-    groundBase: '#8a9d6b', animals: ['birds'],
+    groundBase: '#8a9d6b', animals: ['birds', 'butterflies'],
     description: 'A riverside market town: Main Street, Church Avenue, Market Square, Mill Road and a residential loop.',
     features: [],
   };
@@ -367,12 +369,20 @@ export function buildMillbrook() {
 
   g.nearestNode(-200 * PXM, 200 * PXM, 40 * PXM).pano.incomplete = { top: 7, bottom: 0 };
 
+  // animated souls: shoppers, a riverside stroller, a market dog, a church-ave cat
+  g.environment.actors = [
+    { id: 'mb_main_1', kind: 'walker', x0: -100, y0: 2, x1: 80, y1: 2, speedMps: 1.2, phase: 3, tint: '#5a4632', name: 'Shopper on Main Street' },
+    { id: 'mb_river_1', kind: 'walker', x0: -80, y0: 98, x1: 90, y1: 100, speedMps: 0.9, phase: 18, tint: '#38515e', name: 'Stroller on Riverside Walk' },
+    { id: 'mb_market_dog', kind: 'dog', x0: -30, y0: 20, x1: 30, y1: 24, speedMps: 2.1, phase: 9, tint: '#54401f', name: 'Dog weaving through the market' },
+    { id: 'mb_church_cat', kind: 'cat', x0: 62, y0: -8, x1: 88, y1: -70, speedMps: 0.7, phase: 26, tint: '#33323c', name: 'Cat climbing Church Avenue' },
+  ];
+
   addZoneAssignments(g);
   const start = g.nearestNode(-40 * PXM, 0, 20 * PXM);
   return {
     graph: g,
     startNodeId: start.id,
-    blurb: 'Medium town — market square, church approach, mill road and riverside loop with multiple branches to explore.',
+    blurb: 'Golden-hour town — market square, church approach, mill road and riverside loop, alive with shoppers, a market dog, a church-avenue cat, birds and butterflies. Day / Dawn / Rain / Night / Snow re-render live.',
   };
 }
 
@@ -386,7 +396,7 @@ export function buildGreatVale() {
   g.environment = {
     ...g.environment,
     timeOfDay: 'day', weather: 'clear', sunAzimuthDeg: 130, sunElevationDeg: 45,
-    groundBase: '#83a06d', animals: ['birds'],
+    groundBase: '#83a06d', animals: ['birds', 'butterflies'],
     description: 'A large vale town: an 8×6 block street grid with a perimeter boulevard and a diagonal avenue. 1,000+ panorama nodes with lazy loading and spatial indexing.',
     features: [],
   };
@@ -448,11 +458,20 @@ export function buildGreatVale() {
   g.addLandmark({ id: 'lake', type: 'water', name: 'Vale Lake', x: W * 0.18, y: H + 90 * PXM, importance: 0.7 });
   g.addLandmark({ id: 'market', type: 'market', name: 'Vale Market', x: W * 0.5, y: H * 0.5, importance: 0.8 });
 
+  // animated souls across the grid: avenue & street walkers, a market dog,
+  // a boulevard cat — seeded, so every visitor sees the same living town
+  g.environment.actors = [
+    { id: 'gv_ave_walker', kind: 'walker', x0: 150, y0: 50, x1: 150, y1: 380, speedMps: 1.25, phase: 7, tint: '#4c3f56', name: 'Avenue 3 walker' },
+    { id: 'gv_st_walker', kind: 'walker', x0: 100, y0: 300, x1: 500, y1: 300, speedMps: 1.1, phase: 21, tint: '#43584a', name: 'Street 6 walker' },
+    { id: 'gv_market_dog', kind: 'dog', x0: 560, y0: 180, x1: 640, y1: 220, speedMps: 2.4, phase: 2, tint: '#4a3a28', name: 'Dog at Vale Market' },
+    { id: 'gv_blvd_cat', kind: 'cat', x0: 5, y0: 8, x1: 200, y1: 8, speedMps: 0.75, phase: 33, tint: '#2c2c34', name: 'Cat on the boulevard' },
+  ];
+
   addZoneAssignments(g);
   return {
     graph: g,
     startNodeId: g.nearestNode(W * 0.5, H * 0.5, 30 * PXM).id,
-    blurb: `Large world — ${g.nodes.size}+ panorama nodes over an 8×6 block town. Demonstrates lazy generation, LRU caching and spatial indexing.`,
+    blurb: `Large world — ${g.nodes.size}+ panorama nodes over an 8×6 block town with wandering walkers, a market dog, a boulevard cat, birds and butterflies. Demonstrates lazy generation, LRU caching and spatial indexing. Day / Dawn / Rain / Night / Snow re-render live.`,
   };
 }
 
