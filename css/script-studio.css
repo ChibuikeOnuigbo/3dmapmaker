@@ -523,3 +523,28 @@
 .sg-card.dragging { transition-duration: .05s; }
 .sg-card:not(.dragging):hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,.55), 0 0 0 1px rgba(99,212,255,.28); border-color: rgba(99,212,255,.45); }
 .sg-card.dragging { z-index: 6; box-shadow: 0 18px 40px rgba(0,0,0,.6), 0 0 0 1.5px rgba(99,212,255,.4); }
+
+/* ---------- motion wave 2 (studio) ---------- */
+/* wiring starts at a socket — declare intent with the crosshair */
+.sg-sock { cursor: var(--cur-cross); }
+
+/* details rows glide on hover, compress on press */
+.sg-linkrow { transition: transform .12s cubic-bezier(.16,1,.3,1), background .14s ease, border-color .14s ease; }
+.sg-linkrow:hover { transform: translateX(3px); background: rgba(99,212,255,.07); border-color: rgba(99,212,255,.3); }
+.sg-linkrow:active { transform: translateX(3px) scale(.98); }
+
+/* every button inside cards, the dock and the preview shares lift+press */
+.sg-card-foot button, .sg-details button, .sg-preview button, .sg-mini {
+  transition: transform .12s cubic-bezier(.16,1,.3,1), background .14s ease,
+              border-color .14s ease, filter .14s ease, box-shadow .16s ease;
+}
+.sg-card-foot button:hover, .sg-details button:hover, .sg-preview button:hover, .sg-mini:hover { transform: translateY(-1.5px); filter: brightness(1.14); }
+.sg-card-foot button:active, .sg-details button:active, .sg-preview button:active, .sg-mini:active { transform: scale(.92); transition-duration: .05s; }
+
+/* the "missing panoramas" warning button throbs while problems exist */
+.sg-mini.danger { animation: sgDangerThrob 1.6s ease-in-out infinite; }
+@keyframes sgDangerThrob {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 180, 107, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 180, 107, .22); }
+}
+@media (prefers-reduced-motion: reduce) { .sg-mini.danger { animation: none !important; } }

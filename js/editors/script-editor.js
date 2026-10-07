@@ -528,6 +528,15 @@ class WireLayer {
   /** Hovering a card fades the wires that don't touch it and rings the
       link partners — instant neighbourhood readability on dense graphs. */
   applyFocus(id) {
+    // pointer sweeps across many cards fire enter/leave per card; coalesce
+    // whole-graph passes into at most one per animation frame
+    if (this._focusWanted === id) return;
+    this._focusWanted = id;
+    if (this._focusRaf) return;
+    this._focusRaf = requestAnimationFrame(() => { this._focusRaf = 0; this._applyFocusNow(this._focusWanted); });
+  }
+
+  _applyFocusNow(id) {
     if (this._focusId === id) return;
     this._focusId = id;
     if (this._focusMates) { for (const el of this._focusMates) el.classList.remove('focusmate'); }
@@ -1468,6 +1477,7 @@ export class ScriptStudio {
   }
 
   setMode(m) {
+    this.canvas.wires.cancelDrag();          // no stranded wire while hopping to the code view
     this.mode = m;
     this.el.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
     const visual = m === 'visual';
@@ -1493,6 +1503,7 @@ export class ScriptStudio {
   setVariant(v) {
     if (!VARIANTS.some(x => x.key === v)) v = 'day';
     if (this.variant === v) return;
+    this.wires.cancelDrag();                 // card geometry changes per variant — don't strand a wire
     this.variant = v;
     this.el.querySelectorAll('[data-var]').forEach(b => b.classList.toggle('on', b.dataset.var === v));
     // force thumbnails to re-probe the new variant files

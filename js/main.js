@@ -427,6 +427,8 @@ class App {
     this.bus.on('move:blocked', ({ relativeDir }) => {
       const btn = document.querySelector(`#movePad .mbtn[data-dir="${relativeDir}"]`);
       if (btn) { btn.classList.remove('blockshake'); void btn.offsetWidth; btn.classList.add('blockshake'); }
+      const cv = document.getElementById('panoCanvas');             // red edge pulse: the world itself says "no"
+      if (cv) { cv.classList.remove('pathdeny'); void cv.offsetWidth; cv.classList.add('pathdeny'); }
       this.toast('No path that way', null, 1400);
     });
     this.bus.on('walk:started', ({ to, from }) => {
