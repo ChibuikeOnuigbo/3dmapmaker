@@ -351,7 +351,11 @@ class App {
       }
       if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
     }
-    if (!modes?.length) { group.hidden = true; $('#scenePop')?.classList.remove('open'); return; }
+    if (!modes?.length) {
+      group.hidden = true; this._sceneModesList = [];
+      const pop0 = $('#scenePop'); if (pop0) { pop0.classList.remove('open'); pop0.textContent = ''; }
+      return;
+    }
     if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
     group.hidden = false;
     this._sceneModesList = modes;
@@ -375,7 +379,7 @@ class App {
       const def = SCENE_MODES[key]; if (!def) continue;
       const on = key === this.displayMode;
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'mi mode-btn'; b.dataset.mode = key; b.title = def.tip;
+      b.type = 'button'; b.className = 'mi'; b.dataset.mode = key; b.title = def.tip;
       b.innerHTML = `<svg class="ic"><use href="#${def.icon}"/></svg><span class="grow">${def.label}<small>${def.tip}</small></span>` +
         `<span class="chk">${on ? '<svg><use href="#i-check"/></svg>' : ''}</span>`;
       b.classList.toggle('on', on);
@@ -677,10 +681,11 @@ class App {
     const sceneBtn = $('#sceneBtn'), scenePop = $('#scenePop');
     sceneBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (scenePop.classList.contains('open')) { scenePop.classList.remove('open'); return; }
+      if (scenePop.classList.contains('open')) { scenePop.classList.remove('open'); sceneBtn.setAttribute('aria-expanded', 'false'); return; }
       this._paintScenePop();
       this._placePop(scenePop, '#sceneBtn');
       scenePop.classList.add('open');
+      sceneBtn.setAttribute('aria-expanded', 'true');
     });
     document.addEventListener('click', (e) => {
       if (!scenePop.contains(e.target) && !sceneBtn.contains(e.target)) scenePop.classList.remove('open');

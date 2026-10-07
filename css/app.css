@@ -889,24 +889,24 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contentedit
               background .14s ease, border-color .14s ease, color .14s ease,
               filter .14s ease, opacity .14s ease;
 }
-.tb-btn:hover, .mode-btn:hover, .iconbtn:hover, .seg button:hover, .chip:hover,
+.tb-btn:hover, .iconbtn:hover, .seg button:hover, .chip:hover,
 .mbtn:hover, .land-btn:hover,
 .sr-item:hover, .lp-opt:hover, .mseg button:hover, .mw-head button:hover {
   transform: translateY(-1.5px);
   filter: brightness(1.045);
 }
-.tb-btn:active, .mode-btn:active, .iconbtn:active, .seg button:active, .chip:active,
+.tb-btn:active, .iconbtn:active, .seg button:active, .chip:active,
 .mbtn:active, .land-btn:active,
 .sr-item:active, .lp-opt:active, .mseg button:active, .mw-head button:active {
   transform: translateY(0) scale(.94);
   transition-duration: .05s;
 }
 /* icons inside pressables pop with a spring */
-.tb-btn svg, .mode-btn svg, .iconbtn svg, .seg button svg, .chip svg, .tab svg,
+.tb-btn svg, .iconbtn svg, .seg button svg, .chip svg, .tab svg,
 .land-btn svg, .sr-item svg, .mseg button svg, .mw-head button svg {
   transition: transform .18s var(--ease-back);
 }
-.tb-btn:hover svg, .mode-btn:hover svg, .iconbtn:hover svg, .seg button:hover svg,
+.tb-btn:hover svg, .iconbtn:hover svg, .seg button:hover svg,
 .chip:hover svg, .tab:hover svg, .land-btn:hover svg, .sr-item:hover svg,
 .mseg button:hover svg, .mw-head button:hover svg { transform: scale(1.16); }
 .tb-btn:active svg, .iconbtn:active svg, .seg button:active svg, .land-btn:active svg { transform: scale(.9); }
