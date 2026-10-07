@@ -365,6 +365,7 @@ class WireLayer {
 
   refresh() {
     const g = this.studio.app.graph;
+    this._rectCache = new Map();          // one layout read per card per pass, not per edge
     this.svg.innerHTML = '';
     const frag = document.createDocumentFragment();
     // constant ~12 px of SCREEN space as the click target, whatever the zoom —
@@ -408,7 +409,12 @@ class WireLayer {
   _path(a, b, rectA = null, rectB = null) {
     // clip the center→center segment at each card border so the wire visibly
     // connects to the card EDGE (never tunnels underneath it)
-    const ra = rectA ?? this._rectOf(a.id), rb = rectB ?? this._rectOf(b.id);
+    const cache = this._rectCache ?? (this._rectCache = new Map());
+    const rectOf = (id) => {
+      if (!cache.has(id)) cache.set(id, this._rectOf(id));
+      return cache.get(id);
+    };
+    const ra = rectA ?? rectOf(a.id), rb = rectB ?? rectOf(b.id);
     const dx = b.x - a.x, dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
     let ax = a.x, ay = a.y, bx = b.x, by = b.y;
@@ -796,6 +802,8 @@ class GraphCanvas {
     e.preventDefault(); e.stopPropagation();
     const host = this.host, hr = host.getBoundingClientRect();
     const ax = e.clientX - hr.left, ay = e.clientY - hr.top;
+    if (this._marqueeActive) return;                 // single rubber band at a time
+    this._marqueeActive = true;
     const rect = h('div', 'sg-marquee');
     host.append(rect);
     let moved = 0, hits = [];
@@ -814,6 +822,7 @@ class GraphCanvas {
     const move = (e2) => apply(e2.clientX - hr.left, e2.clientY - hr.top);
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      this._marqueeActive = false;
       rect.remove();
       const final = hits.slice();
       for (const c of this.cards.values()) c.el.classList.remove('willselect');
@@ -853,8 +862,16 @@ class GraphCanvas {
           .filter((it) => it.ox !== undefined)
       : [];
     // magnetic axes exclude OTHER group members (they travel together)
-    const xAxes = [...new Set(others.filter((o) => !this.studio.selectedIds?.has(o.id)).map((n) => n.x))];
-    const yAxes = [...new Set(others.filter((o) => !this.studio.selectedIds?.has(o.id)).map((n) => n.y))];
+    const nonGroup = others.filter((o) => !this.studio.selectedIds?.has(o.id));
+    const xAxes = [...new Set(nonGroup.map((n) => n.x))];
+    const yAxes = [...new Set(nonGroup.map((n) => n.y))];
+    // guide spans precomputed once per drag — the move loop must not refilter
+    // the whole node set per pointer frame (hot on 2k-node graphs)
+    const spanX = new Map(), spanY = new Map();
+    for (const o of nonGroup) {
+      (spanX.get(o.x) ?? spanX.set(o.x, []).get(o.x)).push(o.y);
+      (spanY.get(o.y) ?? spanY.set(o.y, []).get(o.y)).push(o.x);
+    }
     this._guides = this._guides || h('div', 'sg-guides');
     if (!this._guides.isConnected) this.world.append(this._guides);
     const nearest = (axes, v, tol) => {
@@ -879,9 +896,10 @@ class GraphCanvas {
           if (c) { c.el.style.left = `${clampW(it.ox + dx)}px`; c.el.style.top = `${clampW(it.oy + dy)}px`; }
         }
       }
+      const sx = gx !== null ? spanX.get(gx) : null, sy = gy !== null ? spanY.get(gy) : null;
       this._showGuides([
-        gx !== null ? { axis: 'v', at: gx, from: Math.min(ny, ...others.filter(o => o.x === gx).map(o => o.y)), to: Math.max(ny, ...others.filter(o => o.x === gx).map(o => o.y)) } : null,
-        gy !== null ? { axis: 'h', at: gy, from: Math.min(nx, ...others.filter(o => o.y === gy).map(o => o.x)), to: Math.max(nx, ...others.filter(o => o.y === gy).map(o => o.x)) } : null,
+        gx !== null ? { axis: 'v', at: gx, from: Math.min(ny, ...sx), to: Math.max(ny, ...sx) } : null,
+        gy !== null ? { axis: 'h', at: gy, from: Math.min(nx, ...sy), to: Math.max(nx, ...sy) } : null,
       ].filter(Boolean));
       this.scheduleWires();
     };
@@ -1218,6 +1236,7 @@ export class ScriptStudio {
     this.mode = 'visual';
     this.variant = 'day';
     this.selectedId = null;
+    this.selectedIds = new Set();
     this.dockHidden = false;
     this.socketArm = null;
     this._histLast = null;                    // serialized snapshot after the last mutation
@@ -1385,6 +1404,7 @@ export class ScriptStudio {
     this._open = true;
     this.el.hidden = false;
     this.canvas.rebuild();
+    this._reconcileSelection();          // another world may imply another node set
     this.setMode(this.mode);
     this.onThumbState();
     // fresh editing session: reset the undo history to this graph state
@@ -1440,7 +1460,9 @@ export class ScriptStudio {
       this.dockHidden = false;
       this.el?.querySelector('[data-dock]')?.setAttribute('aria-pressed', 'true');
     }
-    if (this.mode === 'visual' && total === 1) this.details.render(this.selectedId);
+    // details dock mirrors exactly one node — anything else (zero or many)
+    // clears it, or a deleted/deselected node would linger on screen
+    if (this.mode === 'visual') this.details.render(total === 1 ? this.selectedId : null);
     this.canvas.sync();
     this._selChip();
   }
@@ -1503,11 +1525,22 @@ export class ScriptStudio {
     u?.classList.toggle('off', !this._undo.length);
     r?.classList.toggle('off', !this._redo.length);
   }
+  /** Drop selection entries whose nodes no longer exist (undo, world swap).
+      Never invents a selection — only reconciles what is still real. */
+  _reconcileSelection() {
+    if (this.selectedIds?.size) {
+      for (const id of [...this.selectedIds]) if (!this.app.graph.getNode(id)) this.selectedIds.delete(id);
+      if (!this.selectedIds.size) this.selectedId = null;
+      else if (!this.selectedIds.has(this.selectedId)) this.selectedId = [...this.selectedIds][0];
+    } else if (this.selectedId && !this.app.graph.getNode(this.selectedId)) this.selectedId = null;
+    this._selChip?.();
+  }
+
   _histRestore(snap, label) {
     applyGraphSubset(this.app.graph, JSON.parse(JSON.stringify(snap)));   // diff-apply keeps live objects
     this.canvas.rebuild();
-    if (this.selectedId && !this.app.graph.getNode(this.selectedId)) this.selectedId = null;
-    if (this.mode === 'visual') this.details.render(this.selectedId);
+    this._reconcileSelection();
+    if (this.mode === 'visual') this.details.render(this.selectedIds?.size === 1 ? this.selectedId : null);
     if (this.mode === 'code') this.code.reload();
     this.app.notifyMapChanged?.();
     this.app.dirty = true;
