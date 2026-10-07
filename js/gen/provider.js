@@ -25,6 +25,18 @@ function cellHash(x, y, seed) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
+/** Smooth value noise over continuous world coords: bilinear-blended
+    cellHash — organic streaks that never grid-lock. 0..1 */
+function vnoise(x, y, cell, seed) {
+  const gx = x / cell, gy = y / cell;
+  const ix = Math.floor(gx), iy = Math.floor(gy);
+  const fx = gx - ix, fy = gy - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = cellHash(ix, iy, seed), b = cellHash(ix + 1, iy, seed);
+  const c = cellHash(ix, iy + 1, seed), d = cellHash(ix + 1, iy + 1, seed);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
 function hex(hex) {
   const n = parseInt(hex.slice(1), 16);
   return [n >> 16 & 255, n >> 8 & 255, n & 255];
@@ -282,11 +294,26 @@ export class ProceduralWorldProvider extends GenerationProvider {
         if (roadBest) {
           const { f, d, t, len, hw } = roadBest;
           const surface = ROAD_COLORS[f.surface || 'asphalt'];
+          const snowy = world.environment?.weather === 'snow';
           if (d <= hw) {
             c = vary(surface, noise(wx, wy, seed + 3), 12);
             if (f.surface === 'stone') c = mix(c, [170, 164, 150], noise(wx, wy, seed + 5) * 0.4);
+            // realism decals (world-space value noise — stable, never slides):
+            // hairline cracks meander across the asphalt, oil & wear stain
+            // the busiest lane, tyres polish two darker tracks at ±0.8 m
+            if (f.surface !== 'dirt' && !snowy) {
+              const ridge = Math.abs(vnoise(wx, wy, 3.2 * ppm, seed + 401) * 2 - 1);
+              const vein = vnoise(wx, wy, 9 * ppm, seed + 402);
+              if (ridge < 0.05 && vein > 0.42) c = mix(c, [36, 38, 44], 0.55);            // crack
+              const stain = vnoise(wx, wy, 6 * ppm, seed + 403);
+              if (stain > 0.72) c = mix(c, [30, 32, 38], Math.min(0.34, (stain - 0.72) * 1.5));  // oil patch
+              if (f.surface === 'asphalt' && d > 0.55 * ppm && d < 1.05 * ppm) {
+                const band = Math.exp(-Math.pow((d - 0.8 * ppm) / (0.22 * ppm), 2));
+                c = mix(c, [54, 56, 60], band * 0.12);                                  // tyre polish
+              }
+            }
             // worn centre line (14 cm wide, dashed)
-            if ((f.widthM >= 4) && d < 0.07 * ppm && ((t * len / ppm) % 9) < 4.5) c = [188, 176, 130];
+            if ((f.widthM >= 4) && d < 0.07 * ppm && ((t * len / ppm) % 9) < 4.5) c = snowy ? mix([188, 176, 130], SNOW_C, 0.7) : [188, 176, 130];
           } else {
             // sidewalk band
             c = vary([152, 150, 144], noise(wx, wy, seed + 17), 10);

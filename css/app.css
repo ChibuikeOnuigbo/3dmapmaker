@@ -1029,3 +1029,17 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contentedit
 /* successful teleports breathe the map once (walk:started hook below) */
 @keyframes fxWalkPulse { 0% { box-shadow: 0 0 0 0 rgba(99, 212, 255, .5); } 100% { box-shadow: 0 0 0 14px rgba(99, 212, 255, 0); } }
 #mapCanvas.walkpulse { animation: fxWalkPulse .6s ease-out; }
+
+/* ---------- Accessory popup: living-world effect toggles ---------- */
+.ac-rows { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 2px; margin-top: 6px; }
+.switch.ac-row { padding: 8px 6px; border-radius: 10px; transition: background .14s ease, transform .12s var(--ease-out); }
+.switch.ac-row:hover { background: var(--accent-soft); transform: translateX(2px); }
+.switch.ac-row .sub { display: block; }
+.ac-auto {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3); border: 1px solid var(--line); border-radius: 99px; padding: 2px 7px;
+  transition: all .16s ease;
+}
+.ac-row.auto .ac-auto { color: var(--accent); border-color: rgba(26, 102, 232, .45); background: var(--accent-soft); }
+.ac-row:not(.auto) .ac-auto { opacity: .45; }
+.tswitch input:checked + .track { box-shadow: 0 0 0 4px rgba(26, 102, 232, .10), 0 0 10px rgba(26, 102, 232, .35); }

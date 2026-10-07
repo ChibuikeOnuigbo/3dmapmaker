@@ -32,7 +32,7 @@ export class PanoramaViewer {
     this.pitchOverdrag = 0;
     this._rawPitch = 0;
 
-    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, snow: false, night: false, fireflies: false, butterflies: false, sunrays: false, storm: false, balloon: false, owl: false, mist: false, rabbits: false, transitionMs: 420 };
+    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, snow: false, night: false, fireflies: false, butterflies: false, sunrays: false, storm: false, balloon: false, owl: false, mist: false, rabbits: false, actors: true, ripples: true, transitionMs: 420 };
     // world anchors for animated actors — set by the app on every node entry:
     // { xM, yM (node position in meters), headingDeg, actors:[{kind:'walker',...}] }
     this.anchors = null;
@@ -353,7 +353,7 @@ export class PanoramaViewer {
       bobbing gait, swinging legs and a contact shadow. Within ~70 m they are
       crisp silhouettes, then they fade like everything else does. */
   _renderActors(now, dt, cvs) {
-    if (!this.fx || !this.anchors?.actors?.length) return;
+    if (!this.fx || !this.immersion.actors || !this.anchors?.actors?.length) return;
     const ctx = this.fx, W = cvs.width, H = cvs.height;
     const aspect = W / Math.max(1, H);
     const t = (now - this._t0) / 1000;
@@ -822,6 +822,7 @@ export class PanoramaViewer {
   /** Pond & lake ripples — expanding rings centred on seeded spots inside the
       world's water regions (handed over as anchors). Rain stirs double rings. */
   _renderRipples(now, dt, cvs) {
+    if (!this.immersion.ripples) return;
     const water = this.anchors?.water;
     if (!water?.length) return;
     const t = (now - this._t0) / 1000;

@@ -159,6 +159,7 @@
   <input id="speedRange" type="range" min="0" max="100" step="1" aria-label="Walk speed" title="Walk speed">
   <span id="speedTxt" aria-live="off">1.4 m/s</span>
   <button class="mgear" id="motionBtn" title="Motion settings" aria-label="Motion settings" aria-haspopup="true"><svg class="ic"><use href="#i-sliders"/></svg></button>
+  <button class="mgear" id="accessoryBtn" title="Accessory — living world effects" aria-label="Accessory — living world effects" aria-haspopup="true"><svg class="ic"><use href="#i-magic"/></svg></button>
 </div>
 
 <div class="pop" id="motionPop" role="menu" aria-label="Motion settings">
@@ -181,6 +182,14 @@
     <div class="mlabel">Transition time <span class="mval" id="mDurVal">Auto</span></div>
     <input type="range" id="mDur" min="0" max="100" value="0" aria-label="Transition time">
     <div class="mhint">Auto follows the walk speed; drag right to slow the blend down.</div>
+  </div>
+</div>
+<div class="pop" id="accessoryPop" role="menu" aria-label="Accessory — living world effects">
+  <div class="mfield">
+    <div class="mlabel">Accessory — living world effects</div>
+    <div class="mhint">Each effect follows the world until you touch its switch (then it stays forced). Reset hands control back to the world.</div>
+    <div class="ac-rows" id="acRows"></div>
+    <button class="btn ghost block" id="acReset" type="button" style="margin-top:8px;">Reset all to world defaults</button>
   </div>
 </div>
 <div id="debugOverlay" hidden aria-label="Developer overlay"></div>

@@ -25,6 +25,28 @@ import { ScriptStudio } from './editors/script-editor.js';
 import { Landing } from './ui/landing.js';
 import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsSvc } from './io/storage.js';
 
+/* Living-world accessories: every animated layer can follow the world
+   ('auto'), or be forced ON/OFF by the user (persisted in prefs).       */
+const ACCESSORY_DEFS = [
+  { key: 'birds',       label: 'Birds',               hint: 'seeded flocks drifting the sky' },
+  { key: 'clouds',      label: 'Clouds',              hint: 'lazy cumulus on fair days' },
+  { key: 'actors',      label: 'Villagers & pets',    hint: 'walkers, dogs and cats on coded routes' },
+  { key: 'rabbits',     label: 'Rabbits',             hint: 'hopping through nearby meadows' },
+  { key: 'butterflies', label: 'Butterflies',         hint: 'fluttering over the flowers' },
+  { key: 'fireflies',   label: 'Fireflies',           hint: 'glowing drift on clear nights' },
+  { key: 'night',       label: 'Stars & meteors',     hint: 'night sky + the odd shooting star' },
+  { key: 'sunrays',     label: 'Sun rays',            hint: 'breathing shafts around the sun' },
+  { key: 'balloon',     label: 'Hot-air balloons',    hint: 'stately drifters on fair days' },
+  { key: 'owl',         label: 'Night owl',           hint: 'a silent glide every so often' },
+  { key: 'mist',        label: 'Mist banks',          hint: 'low ground fog at dawn & dusk' },
+  { key: 'ripples',     label: 'Water ripples',       hint: 'rings on ponds, rivers and lakes' },
+  { key: 'rain',        label: 'Rain',                hint: 'drizzle overlay (Rain / Storm modes)' },
+  { key: 'snow',        label: 'Snow',                hint: 'falling snow (Snow mode)' },
+  { key: 'storm',       label: 'Storm force',         hint: 'driving rain + lightning flashes' },
+  { key: 'sway',        label: 'Camera sway',         hint: 'gentle head-bob while walking' },
+  { key: 'breeze',      label: 'Idle breeze',         hint: 'soft view drift when standing still' },
+];
+
 const $ = (sel) => document.querySelector(sel);
 
 const PERF_PROFILES = {
@@ -37,6 +59,7 @@ class App {
   constructor() {
     this.bus = new EventBus();
     this.prefs = prefsSvc.load();
+    this.accessory = { ...(this.prefs.accessory || {}) };   // key → true | false | undefined(auto)
     this.storage = new ProjectStorage();
     this.assets = null;
     this.graph = null;
@@ -362,6 +385,7 @@ class App {
     this.viewer.immersion.rain = env.weather === 'rain' || env.weather === 'storm';
     this.viewer.immersion.storm = env.weather === 'storm';
     this.viewer.immersion.snow = env.weather === 'snow';
+    this._applyAccessory();
     this.cache.clearDecoded();
     const id = this.movement?.currentNodeId;
     if (id) this._enterNode(id, { teleport: true });
@@ -428,6 +452,33 @@ class App {
   }
 
   /* ================= movement / arrival ================= */
+  /** Accessory overrides: undefined = follow the world; true/false = forced. */
+  _applyAccessory() {
+    if (!this.viewer) return;
+    for (const d of ACCESSORY_DEFS) {
+      const o = this.accessory?.[d.key];
+      if (o === true) this.viewer.immersion[d.key] = true;
+      else if (o === false) this.viewer.immersion[d.key] = false;
+    }
+  }
+
+  /** Paint the Accessory popup rows: switch shows the EFFECTIVE state,
+      the 'auto' pill shows whether the world is still in charge. */
+  _paintAccessoryPop() {
+    const host = $('#acRows');
+    if (!host) return;
+    const esc1 = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    host.innerHTML = ACCESSORY_DEFS.map(d => {
+      const forced = this.accessory?.[d.key];
+      const effective = forced ?? !!this.viewer?.immersion[d.key];
+      return `<label class="switch ac-row${forced === undefined ? ' auto' : ''}">
+        <span><span class="lab">${esc1(d.label)}</span><span class="sub">${esc1(d.hint)}</span></span>
+        <span class="ac-auto" title="This effect follows the world">${forced === undefined ? 'auto' : 'forced'}</span>
+        <span class="tswitch"><input type="checkbox" data-ac="${d.key}" ${effective ? 'checked' : ''} aria-label="${esc1(d.label)}"><span class="track"></span></span>
+      </label>`;
+    }).join('');
+  }
+
   _bindBus() {
     this.bus.on('move:blocked', ({ relativeDir }) => {
       const btn = document.querySelector(`#movePad .mbtn[data-dir="${relativeDir}"]`);
@@ -505,6 +556,7 @@ class App {
       sun: { azDeg: envW.sunAzimuthDeg ?? 118, elDeg: envW.sunElevationDeg ?? 34 },
       water: this._envWater ?? [],
     };
+    this._applyAccessory();   // user overrides ride on top of the world's defaults
     this.bus.emit('debug:node', nodeId);
     this.mapRenderer.setCurrent(nodeId, this.viewer.view.yawDeg);
 
@@ -653,6 +705,39 @@ class App {
       });
     }
 
+    // Accessory popup — every living-world effect gets a user toggle
+    const ap = $('#accessoryPop');
+    if (ap && !ap.dataset.bound) {
+      ap.dataset.bound = '1';
+      on('#accessoryBtn', 'click', () => {
+        if (ap.classList.contains('open')) { ap.classList.remove('open'); return; }
+        this._paintAccessoryPop();
+        this._placePop(ap, '#accessoryBtn');
+        ap.classList.add('open');
+      });
+      document.addEventListener('click', (e) => {
+        if (ap.classList.contains('open') && !ap.contains(e.target) && !$('#accessoryBtn').contains(e.target)) ap.classList.remove('open');
+      });
+      ap.addEventListener('keydown', (e) => { if (e.key === 'Escape') ap.classList.remove('open'); });
+      $('#acRows').addEventListener('change', (e) => {
+        const input = e.target.closest('input[data-ac]');
+        if (!input) return;
+        this.accessory[input.dataset.ac] = input.checked;          // explicit force
+        prefsSvc.save({ accessory: this.accessory });
+        this._applyAccessory();
+        this._paintAccessoryPop();
+        const def = ACCESSORY_DEFS.find(d => d.key === input.dataset.ac);
+        this.toast(`${def?.label ?? input.dataset.ac}: ${input.checked ? 'on' : 'off'}`, 'ok', 1100);
+      });
+      $('#acReset').addEventListener('click', () => {
+        this.accessory = {};
+        prefsSvc.save({ accessory: this.accessory });
+        this._applyAccessory();
+        this._paintAccessoryPop();
+        this.toast('Effects follow the world again', 'ok', 1500);
+      });
+    }
+
     // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
     on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.3));
@@ -678,7 +763,7 @@ class App {
     // resizing between phone/tablet/desktop layouts must re-anchor any popup
     // that is open right now (old screens: desktop offsets slid off-screen)
     window.addEventListener('resize', () => {
-      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn']]) {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn'], ['#accessoryPop', '#accessoryBtn']]) {
         const pop = $(popSel);
         if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
       }

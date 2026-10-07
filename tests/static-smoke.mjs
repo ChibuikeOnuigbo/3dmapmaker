@@ -146,6 +146,29 @@ test('living world: every mode button wired end-to-end (btn → ENV → immersio
   assert.ok(main.includes('water: this._envWater'), 'water regions must reach viewer anchors');
 });
 
+test('accessory popup: every listed effect is a real viewer flag, rows are painted & persisted', () => {
+  const html = read('index.html');
+  const main = read('js/main.js');
+  const viewer = read('js/viewer/viewer.js');
+  assert.ok(html.includes('id="accessoryBtn"') && html.includes('id="accessoryPop"') && html.includes('id="acRows"') && html.includes('id="acReset"'),
+    'accessory UI (button/popup/rows/reset) must all exist');
+  const defs = [...main.matchAll(/\{ key: '([a-z]+)',\s+label:/g)].map(m => m[1]);
+  assert.ok(defs.length >= 15, `expected at least 15 accessory effects, got ${defs.length}`);
+  const immersionHead = viewer.slice(viewer.indexOf('this.immersion ='), viewer.indexOf('transitionMs: 420'));
+  for (const k of defs) assert.ok(immersionHead.includes(`${k}:`), `accessory "${k}" is not a viewer.immersion flag`);
+  assert.ok(main.includes('_paintAccessoryPop') && main.includes('data-ac='), 'rows must be painted from ACCESSORY_DEFS');
+  assert.ok(main.includes('prefsSvc.save({ accessory: this.accessory })'), 'toggles must persist via prefs');
+  assert.ok(main.includes("['#accessoryPop', '#accessoryBtn']"), 'resize reposition loop must include the accessory popup');
+});
+
+test('painter realism: world-space decal noise paints cracks, stains and tyre polish', () => {
+  const provider = read('js/gen/provider.js');
+  assert.ok(provider.includes('function vnoise('), 'vnoise helper missing');
+  for (const mark of ['401', '402', '403']) assert.ok(provider.includes(`seed + ${mark}`), `decal octave ${mark} missing`);
+  assert.ok(provider.includes('tyre polish'), 'tyre-polish bands missing');
+  assert.ok(provider.includes("weather === 'snow'"), 'decals must respect snowpack');
+});
+
 test('custom cursor set: black gamified family is complete and well-formed', () => {
   const css = read('css/app.css');
   for (const name of ['--cur-blade', '--cur-target', '--cur-cross', '--cur-move', '--cur-grab', '--cur-grabbing', '--cur-nwse', '--cur-text', '--cur-deny']) {
