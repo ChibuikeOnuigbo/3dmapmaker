@@ -32,7 +32,7 @@ export class PanoramaViewer {
     this.pitchOverdrag = 0;
     this._rawPitch = 0;
 
-    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, snow: false, night: false, fireflies: false, butterflies: false, sunrays: false, transitionMs: 420 };
+    this.immersion = { sway: false, swayIntensity: 0.4, breeze: false, rain: false, birds: false, clouds: false, snow: false, night: false, fireflies: false, butterflies: false, sunrays: false, storm: false, balloon: false, owl: false, mist: false, rabbits: false, transitionMs: 420 };
     // world anchors for animated actors — set by the app on every node entry:
     // { xM, yM (node position in meters), headingDeg, actors:[{kind:'walker',...}] }
     this.anchors = null;
@@ -51,6 +51,9 @@ export class PanoramaViewer {
     this._stars = null;                      // seeded night sky (world azimuth)
     this._flies = null;                      // seeded firefly swarm
     this._butter = null;                     // seeded butterflies (world meters)
+    this._balloons = null;                   // drifting hot-air balloons
+    this._wisps = null;                      // dawn low-mist banks
+    this._rabbits = null;                    // meadow rabbits (world meters)
     this._t0 = performance.now();
 
     this._bindInput();
@@ -253,11 +256,16 @@ export class PanoramaViewer {
     this._renderStars(now, dt, cvs);       // deepest: the night sky itself
     this._renderSunRays(now, dt, cvs);     // low sun shafts behind the clouds
     this._renderClouds(now, dt, cvs);
+    this._renderBalloons(now, dt, cvs);    // fair-day drifters on the horizon
+    this._renderMist(now, dt, cvs);        // dawn banks hugging the ground
+    this._renderOwl(now, dt, cvs);         // the night watch glides through
     this._renderBirds(now, dt, cvs);
     this._renderActors(now, dt, cvs);
+    this._renderRabbits(now, dt, cvs);     // meadow life at your feet
+    this._renderRipples(now, dt, cvs);     // pond & lake rings (rain stirs more)
     this._renderButterflies(now, dt, cvs);
     this._renderFireflies(now, dt, cvs);
-    this._renderRain(now, dt, cvs);
+    this._renderRain(now, dt, cvs);        // storm mode lives inside here
     this._renderSnow(now, dt, cvs);        // precip sits closest to the lens
   }
 
@@ -686,20 +694,256 @@ export class PanoramaViewer {
     }
   }
 
+  /* ---------------- wave 2: weather gods, water, meadow ---------------- */
+
+  /** Hot-air balloons drifting the fair-day sky — huge, slow, world-anchored;
+      the kind of thing you chase with the camera because it feels real. */
+  _balloonLayer() {
+    if (this._balloons) return this._balloons;
+    const rng = rngFor('viewer_balloons_v1');
+    const tints = [['#d8604c', '#f2e4c8'], ['#4c7bd8', '#e8ecf5'], ['#d8a44c', '#f5ecd8']];
+    this._balloons = [];
+    for (let i = 0; i < 2; i++) {
+      const [tint, band] = tints[i % tints.length];
+      this._balloons.push({
+        az0: rng() * 360,
+        drift: (0.28 + rng() * 0.22) * (rng() < 0.5 ? 1 : -1),   // deg/sec — stately
+        el: 0.09 + rng() * 0.12,
+        size: 30 + rng() * 14,
+        ph: rng() * Math.PI * 2,
+        tint, band,
+      });
+    }
+    return this._balloons;
+  }
+
+  _renderBalloons(now, dt, cvs) {
+    if (!this.immersion.balloon) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const pitchShift = (pitch / Math.max(40, fov)) * 0.9;
+    for (const b of this._balloonLayer()) {
+      const az = ((b.az0 + t * b.drift) % 360 + 360) % 360;
+      const rel = ((az - yaw + 540) % 360) - 180;
+      if (Math.abs(rel) > fov / 2 + 20) continue;
+      const x = (rel + fov / 2) / fov * w;
+      const y = (b.el + pitchShift) * h + Math.sin(t * 0.22 + b.ph) * 5;
+      const s = b.size;
+      ctx.save();
+      // envelope with a pale belly band
+      ctx.fillStyle = b.tint;
+      ctx.beginPath(); ctx.ellipse(x, y, s * 0.46, s * 0.56, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = b.band;
+      ctx.beginPath(); ctx.ellipse(x, y, s * 0.20, s * 0.56, 0, 0, Math.PI * 2); ctx.fill();
+      // rigging + basket
+      ctx.strokeStyle = 'rgba(60,48,38,0.8)'; ctx.lineWidth = Math.max(1, s * 0.03);
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.18, y + s * 0.42); ctx.lineTo(x - s * 0.09, y + s * 0.74);
+      ctx.moveTo(x + s * 0.18, y + s * 0.42); ctx.lineTo(x + s * 0.09, y + s * 0.74);
+      ctx.stroke();
+      ctx.fillStyle = '#5d4630';
+      ctx.fillRect(x - s * 0.12, y + s * 0.72, s * 0.24, s * 0.18);
+      ctx.restore();
+    }
+  }
+
+  /** Night watch: an owl glides across the sky every ~17 s — a slow, wide,
+      silent silhouette. Lane seeded per cycle like the shooting star. */
+  _renderOwl(now, dt, cvs) {
+    if (!this.immersion.owl) return;
+    const t = (now - this._t0) / 1000;
+    const CYC = 17, SPAN = 2.8, tt = t % CYC;
+    if (tt > SPAN) return;
+    const u = tt / SPAN, lane = Math.floor(t / CYC);
+    const dir = lane % 2 ? 1 : -1;
+    const azA = ((lane * 53.21) % 360 + 360) % 360;
+    const az = azA + dir * (44 * u);
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const rel = ((az - yaw + 540) % 360) - 180;
+    if (Math.abs(rel) > fov / 2 + 16) return;
+    const x = (rel + fov / 2) / fov * w;
+    const y = (0.27 + (pitch / Math.max(40, fov)) * 0.9) * h + Math.sin(u * Math.PI) * -14;
+    const flap = Math.sin(t * 5.2) * 0.5;             // slow powerful beats
+    const s = 20;
+    ctx.save();
+    ctx.strokeStyle = `rgba(14,18,28,${0.75 * Math.sin(Math.PI * Math.min(1, u * 4, (1 - u) * 4 + 0.2))})`;
+    ctx.lineWidth = Math.max(2.4, s * 0.16); ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - s * 1.4, y - flap * s * 0.5);
+    ctx.quadraticCurveTo(x - s * 0.6, y + flap * s * 0.4, x, y);
+    ctx.quadraticCurveTo(x + s * 0.6, y + flap * s * 0.4, x + s * 1.4, y - flap * s * 0.5);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(14,18,28,0.85)';
+    ctx.beginPath(); ctx.arc(x, y, s * 0.22, 0, Math.PI * 2); ctx.fill();   // head-body blob
+    ctx.restore();
+  }
+
+  /** Dawn low-mist: wide soft banks hugging the ground, world-azimuth
+      anchored, drifting sideways at a whisper. */
+  _mistLayer() {
+    if (this._wisps) return this._wisps;
+    const rng = rngFor('viewer_mist_v1');
+    this._wisps = [];
+    for (let i = 0; i < 7; i++) {
+      this._wisps.push({
+        az0: rng() * 360,
+        drift: (0.5 + rng() * 0.8) * (rng() < 0.5 ? 1 : -1),
+        el: 0.66 + rng() * 0.16,
+        wpx: 130 + rng() * 240,
+        hpx: 10 + rng() * 16,
+        ph: rng() * Math.PI * 2,
+      });
+    }
+    return this._wisps;
+  }
+
+  _renderMist(now, dt, cvs) {
+    if (!this.immersion.mist) return;
+    const t = (now - this._t0) / 1000;
+    const ctx = this.fx, w = cvs.width, h = cvs.height;
+    const fov = this.view.fovDeg, yaw = this.view.yawDeg, pitch = this.view.pitchDeg;
+    const pitchShift = (pitch / Math.max(40, fov)) * 0.9;
+    for (const m of this._mistLayer()) {
+      const az = ((m.az0 + t * m.drift * 0.05) % 360 + 360) % 360;
+      const rel = ((az - yaw + 540) % 360) - 180;
+      if (Math.abs(rel) > fov / 2 + 60) continue;
+      const x = (rel + fov / 2) / fov * w;
+      const y = (Math.min(0.94, m.el + pitchShift)) * h;
+      const breathe = 0.6 + 0.4 * Math.sin(t * 0.3 + m.ph);
+      ctx.fillStyle = `rgba(224,231,240,${0.05 + 0.05 * breathe})`;
+      ctx.beginPath(); ctx.ellipse(x, y, m.wpx / 2, m.hpx * breathe, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(224,231,240,${0.03 + 0.03 * breathe})`;
+      ctx.beginPath(); ctx.ellipse(x + m.wpx * 0.18, y - m.hpx * 0.7, m.wpx / 3, m.hpx * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** Pond & lake ripples — expanding rings centred on seeded spots inside the
+      world's water regions (handed over as anchors). Rain stirs double rings. */
+  _renderRipples(now, dt, cvs) {
+    const water = this.anchors?.water;
+    if (!water?.length) return;
+    const t = (now - this._t0) / 1000;
+    const aspect = cvs.width / Math.max(1, cvs.height);
+    const ctx = this.fx;
+    const ringsPer = this.immersion.rain ? 4 : 2;
+    const speed = this.immersion.rain ? 1.6 : 3.2;           // seconds per ring
+    for (let wi = 0; wi < water.length; wi++) {
+      const reg = water[wi];
+      const rng = rngFor('viewer_ripples_' + wi);
+      for (let i = 0; i < ringsPer; i++) {
+        const oxM = (rng() - 0.5) * reg.spreadM, oyM = (rng() - 0.5) * reg.spreadM;
+        const p = this._projectWorld(reg.xM + oxM, reg.yM + oyM, 0.02, aspect);
+        if (!p || p.distM > 80) continue;
+        const x = (p.nx * 0.5 + 0.5) * cvs.width;
+        const y = (1 - (p.ny * 0.5 + 0.5)) * cvs.height;
+        const rMax = Math.max(6, 220 / Math.max(2, p.distM));  // px by range
+        const k = ((t / speed) + i / ringsPer + (wi * 0.31)) % 1;
+        ctx.strokeStyle = `rgba(214,228,240,${0.30 * (1 - k)})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.ellipse(x, y, rMax * k, rMax * k * 0.30, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** Rabbits in the meadow — rest, then three quick parabolic hops along a
+      seeded heading, rest again. World-anchored around the current node. */
+  _rabbitWarren() {
+    if (this._rabbits) return this._rabbits;
+    const rng = rngFor('viewer_rabbits_v1');
+    this._rabbits = [];
+    for (let i = 0; i < 3; i++) {
+      this._rabbits.push({
+        ox: rng() * 30 - 15, oy: rng() * 30 - 15,       // warren centre, m
+        dir: rng() * Math.PI * 2,                        // initial hop bearing
+        rest: 2.2 + rng() * 1.6,
+        ph: rng() * 8,
+        tint: ['#6b5a44', '#7a684e', '#5d4f3e'][i % 3],
+      });
+    }
+    return this._rabbits;
+  }
+
+  _renderRabbits(now, dt, cvs) {
+    if (!this.immersion.rabbits || !this.anchors) return;
+    const t = (now - this._t0) / 1000;
+    const aspect = cvs.width / Math.max(1, cvs.height);
+    const ctx = this.fx;
+    const HOP = 0.42, HOPS = 3, STRIDE = 0.85;         // hop seconds, count, metres
+    for (const r of this._rabbitWarren()) {
+      const cycle = r.rest + HOPS * HOP;
+      const s = ((t + r.ph) % cycle);
+      let hopI = -1, ku = 0;                             // resting…
+      if (s >= r.rest) { hopI = Math.floor((s - r.rest) / HOP); ku = ((s - r.rest) / HOP) % 1; }
+      const travelled = (hopI < 0 ? HOPS : hopI + ku) * STRIDE;
+      const wx = this.anchors.xM + r.ox + Math.cos(r.dir) * travelled;
+      const wy = this.anchors.yM + r.oy + Math.sin(r.dir) * travelled;
+      const lift = hopI < 0 ? 0 : Math.sin(Math.PI * ku) * 0.16;      // parabola, m
+      const feet = this._projectWorld(wx, wy, lift, aspect);
+      const head = this._projectWorld(wx, wy, lift + 0.30, aspect);
+      if (!feet || !head || feet.distM > 40) continue;
+      const sx = (feet.nx * 0.5 + 0.5) * cvs.width;
+      const syF = (1 - (feet.ny * 0.5 + 0.5)) * cvs.height;
+      const bh = Math.max(2.2, syF - (1 - (head.ny * 0.5 + 0.5)) * cvs.height);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(0.9, 1.15 - feet.distM / 34));
+      if (ctx.globalAlpha <= 0.02) { ctx.restore(); continue; }
+      // shadow, crouched body, head, ears
+      ctx.fillStyle = 'rgba(22,26,22,0.30)';
+      ctx.beginPath(); ctx.ellipse(sx, syF, bh * 0.30, Math.max(0.9, bh * 0.07), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = r.tint;
+      ctx.beginPath(); ctx.ellipse(sx, syF - bh * 0.28, bh * 0.30, bh * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + bh * 0.24, syF - bh * 0.52, Math.max(1, bh * 0.15), 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = r.tint; ctx.lineWidth = Math.max(0.8, bh * 0.07); ctx.lineCap = 'round';
+      const earTip = hopI < 0 ? bh * 0.34 : bh * 0.44;   // ears prick mid-hop
+      ctx.beginPath();
+      ctx.moveTo(sx + bh * 0.20, syF - bh * 0.60); ctx.lineTo(sx + bh * 0.16, syF - bh * 0.60 - earTip);
+      ctx.moveTo(sx + bh * 0.28, syF - bh * 0.60); ctx.lineTo(sx + bh * 0.30, syF - bh * 0.62 - earTip);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   _renderRain(now, dt, cvs) {
     if (!this.immersion.rain) { this._rainDrops.length = 0; return; }
-    if (this._rainDrops.length === 0) {
-      for (let i = 0; i < 90; i++) this._rainDrops.push({ x: Math.random() * cvs.width, y: Math.random() * cvs.height, v: 480 + Math.random() * 360, l: 8 + Math.random() * 14 });
+    const storm = !!this.immersion.storm;
+    const want = storm ? 170 : 90;
+    // storm ⇄ rain toggles rebuild the drop pool so intensity snaps in
+    if (this._rainDrops.length !== want) {
+      this._rainDrops.length = 0;
+      for (let i = 0; i < want; i++) {
+        this._rainDrops.push({
+          x: Math.random() * cvs.width, y: Math.random() * cvs.height,
+          v: (storm ? 720 : 480) + Math.random() * (storm ? 520 : 360),
+          l: (storm ? 12 : 8) + Math.random() * 14,
+        });
+      }
     }
-    this.fx.strokeStyle = 'rgba(174,194,224,0.45)';
-    this.fx.lineWidth = 1;
+    const t = (now - this._t0) / 1000;
+    const gust = storm ? (Math.sin(t * 0.5) * 0.5 + 0.5) * 9 : 0;   // wind shove
+    const slant = storm ? -(6 + gust) : -1.5;
+    this.fx.strokeStyle = storm ? 'rgba(188,204,230,0.55)' : 'rgba(174,194,224,0.45)';
+    this.fx.lineWidth = storm ? 1.3 : 1;
     this.fx.beginPath();
     for (const d of this._rainDrops) {
       d.y += d.v * dt / 1000;
-      if (d.y > cvs.height) { d.y = -d.l; d.x = Math.random() * cvs.width; }
-      this.fx.moveTo(d.x, d.y); this.fx.lineTo(d.x - 1.5, d.y + d.l);
+      d.x += (slant * 14) * dt / 1000;
+      if (d.y > cvs.height) { d.y = -d.l; d.x = Math.random() * (cvs.width + 80); }
+      if (d.x < -80) d.x = cvs.width + Math.random() * 40;
+      this.fx.moveTo(d.x, d.y); this.fx.lineTo(d.x + slant * 0.3, d.y + d.l);
     }
     this.fx.stroke();
+    // lightning: a double-strike flash every ~8 s while the storm rages
+    if (storm) {
+      const CYC = 8, tt = t % CYC;
+      const p1 = Math.exp(-Math.pow((tt - 0.05) / 0.045, 2));
+      const p2 = 0.7 * Math.exp(-Math.pow((tt - 0.22) / 0.06, 2));
+      const a = Math.min(0.42, (p1 + p2) * 0.42);
+      if (a > 0.004) { this.fx.fillStyle = `rgba(226,236,255,${a})`; this.fx.fillRect(0, 0, cvs.width, cvs.height); }
+    }
   }
 
   /** Animated birds — a fixed seeded flock drifting around WORLD azimuth, so

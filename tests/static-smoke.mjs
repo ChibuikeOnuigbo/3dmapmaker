@@ -124,6 +124,28 @@ test('studio interactions are pointer-cancel safe (no stranded gestures)', () =>
   assert.ok(se.includes('this._marqueeActive = false;'), 'marquee cleanup must release the band guard');
 });
 
+test('living world: every mode button wired end-to-end (btn → ENV → immersion → layer)', () => {
+  const html = read('index.html');
+  const main = read('js/main.js');
+  const viewer = read('js/viewer/viewer.js');
+  const modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
+  for (const m of modes) {
+    assert.ok(html.includes(`data-mode="${m}"`), `mode button missing: ${m}`);
+    assert.ok(new RegExp(`${m}:\\s*\\{ timeOfDay:\\s*'`).test(main), `ENV patch missing: ${m}`);
+  }
+  for (const icon of ['i-sun', 'i-rain', 'i-moon', 'i-dawn', 'i-snow', 'i-storm']) {
+    assert.ok(html.includes(`id="${icon}"`), `icon symbol missing: ${icon}`);
+  }
+  for (const flag of ['night', 'fireflies', 'butterflies', 'sunrays', 'snow', 'storm', 'balloon', 'owl', 'mist', 'rabbits']) {
+    assert.ok(main.includes(`viewer.immersion.${flag} =`), `immersion flag not mapped: ${flag}`);
+    assert.ok(viewer.includes(`immersion.${flag}`), `viewer never reads flag: ${flag}`);
+  }
+  for (const layer of ['_renderStars', '_renderSunRays', '_renderBalloons', '_renderMist', '_renderOwl', '_renderBirds', '_renderActors', '_renderRabbits', '_renderRipples', '_renderButterflies', '_renderFireflies', '_renderRain', '_renderSnow']) {
+    assert.ok(viewer.includes(`this.${layer}(now, dt, cvs)`), `layer not in _renderFx: ${layer}`);
+  }
+  assert.ok(main.includes('water: this._envWater'), 'water regions must reach viewer anchors');
+});
+
 test('custom cursor set: black gamified family is complete and well-formed', () => {
   const css = read('css/app.css');
   for (const name of ['--cur-blade', '--cur-target', '--cur-cross', '--cur-move', '--cur-grab', '--cur-grabbing', '--cur-nwse', '--cur-text', '--cur-deny']) {

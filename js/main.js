@@ -313,7 +313,7 @@ class App {
         if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); this._urlsetModes = modes; break; }
         if (n.pano?.kind === 'generated') generated = true;
       }
-      if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow'];
+      if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
     }
     if (!modes) { group.hidden = true; return; }
     if (!modes.includes(this.displayMode)) this.displayMode = modes[0];
@@ -337,6 +337,7 @@ class App {
         night: { timeOfDay: 'night', weather: 'clear', sunElevationDeg: 38 },
         dawn:  { timeOfDay: 'golden', weather: 'clear' },
         snow:  { timeOfDay: 'overcast', weather: 'snow' },
+        storm: { timeOfDay: 'overcast', weather: 'storm' },
       };
       this.setEnvironment(ENV[mode] ?? ENV.day);
       this._syncModeGroup();
@@ -358,7 +359,8 @@ class App {
   setEnvironment(patch) {
     Object.assign(this.graph.environment, patch);
     const env = this.graph.environment;
-    this.viewer.immersion.rain = env.weather === 'rain';
+    this.viewer.immersion.rain = env.weather === 'rain' || env.weather === 'storm';
+    this.viewer.immersion.storm = env.weather === 'storm';
     this.viewer.immersion.snow = env.weather === 'snow';
     this.cache.clearDecoded();
     const id = this.movement?.currentNodeId;
@@ -477,6 +479,21 @@ class App {
     this.viewer.immersion.butterflies = animals.includes('butterflies') && clearSky && (tod === 'day' || tod === 'golden');
     this.viewer.immersion.sunrays = clearSky && (tod === 'day' || tod === 'golden');
     this.viewer.immersion.snow = envW.weather === 'snow';
+    // wave 2: storm, balloons, the night watch, dawn mist, meadow rabbits,
+    // and ripples on every patch of water the world coded in
+    this.viewer.immersion.rain = envW.weather === 'rain' || envW.weather === 'storm';
+    this.viewer.immersion.storm = envW.weather === 'storm';
+    this.viewer.immersion.balloon = clearSky && (tod === 'day' || tod === 'golden');
+    this.viewer.immersion.owl = tod === 'night' && clearSky;
+    this.viewer.immersion.mist = tod === 'golden' || tod === 'dusk';
+    this.viewer.immersion.rabbits = clearSky && tod === 'day';
+    const ppmW = this.graph.scale?.pixelsPerMeter ?? 2;
+    this._envWater = (envW.features || [])
+      .filter(f => f.type === 'region' && f.kind === 'water')
+      .slice(0, 4)
+      .map(f => f.shape === 'circle'
+        ? { xM: (f.cx ?? 0) / ppmW, yM: (f.cy ?? 0) / ppmW, spreadM: ((f.radiusPx ?? 8) / ppmW) * 1.4 }
+        : { xM: ((f.x ?? 0) + (f.w ?? 0) / 2) / ppmW, yM: ((f.y ?? 0) + (f.h ?? 0) / 2) / ppmW, spreadM: Math.min(f.w ?? 0, f.h ?? 0) / ppmW * 0.8 });
     // animated actors: hand the viewer this node's position (meters) so it can
     // project the coded walkers of environment.actors into the live view
     const ppmA = this.graph.scale?.pixelsPerMeter ?? 2;
@@ -486,6 +503,7 @@ class App {
       actors: envW.actors ?? [],
       timeOfDay: tod,
       sun: { azDeg: envW.sunAzimuthDeg ?? 118, elDeg: envW.sunElevationDeg ?? 34 },
+      water: this._envWater ?? [],
     };
     this.bus.emit('debug:node', nodeId);
     this.mapRenderer.setCurrent(nodeId, this.viewer.view.yawDeg);

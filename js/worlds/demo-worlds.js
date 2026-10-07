@@ -289,7 +289,7 @@ export function buildChapelLane() {
     tests: {
       church: { zoneId: 'zone_church_vicinity', boundaryMeters: 500, streetPrefix: 'way_' },
     },
-    blurb: 'Small living parish: the 520 m way, 8×8 plaza, cottage lane, green loop with pond, woodland walk to the Old Oak and Home Farm with grazing sheep — god rays and soft shadows trace the sun, water glints, windows glow at night, and villagers, a bounding dog, a prowling cat, birds, clouds and butterflies move through it. After dark: stars, fireflies and the odd shooting star. Day / Dawn / Rain / Night / Snow re-render live.',
+    blurb: 'Small living parish: the 520 m way, 8×8 plaza, cottage lane, green loop with pond, woodland walk to the Old Oak and Home Farm with grazing sheep — god rays and soft shadows trace the sun, water glints, windows glow at night, and villagers, a bounding dog, a prowling cat, birds, clouds and butterflies move through it. After dark: stars, fireflies and the odd shooting star. Day / Dawn / Rain / Storm / Night / Snow re-render live.',
   };
 }
 
@@ -382,7 +382,7 @@ export function buildMillbrook() {
   return {
     graph: g,
     startNodeId: start.id,
-    blurb: 'Golden-hour town — market square, church approach, mill road and riverside loop, alive with shoppers, a market dog, a church-avenue cat, birds and butterflies. Day / Dawn / Rain / Night / Snow re-render live.',
+    blurb: 'Golden-hour town — market square, church approach, mill road and riverside loop, alive with shoppers, a market dog, a church-avenue cat, birds and butterflies. Day / Dawn / Rain / Storm / Night / Snow re-render live.',
   };
 }
 
@@ -471,7 +471,7 @@ export function buildGreatVale() {
   return {
     graph: g,
     startNodeId: g.nearestNode(W * 0.5, H * 0.5, 30 * PXM).id,
-    blurb: `Large world — ${g.nodes.size}+ panorama nodes over an 8×6 block town with wandering walkers, a market dog, a boulevard cat, birds and butterflies. Demonstrates lazy generation, LRU caching and spatial indexing. Day / Dawn / Rain / Night / Snow re-render live.`,
+    blurb: `Large world — ${g.nodes.size}+ panorama nodes over an 8×6 block town with wandering walkers, a market dog, a boulevard cat, birds and butterflies. Demonstrates lazy generation, LRU caching and spatial indexing. Day / Dawn / Rain / Storm / Night / Snow re-render live.`,
   };
 }
 

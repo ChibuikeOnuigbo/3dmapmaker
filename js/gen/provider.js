@@ -72,8 +72,8 @@ export class ProceduralWorldProvider extends GenerationProvider {
     // clone the preset — weather must never mutate SKY_PRESETS, or the next
     // regeneration (mode flip) would inherit stale overcast colors
     const sky = { ...(SKY_PRESETS[env.timeOfDay] || SKY_PRESETS.day) };
-    if (env.weather === 'overcast' || env.weather === 'rain' || env.weather === 'snow') Object.assign(sky, SKY_PRESETS.overcast);
-    const weatherFog = env.weather === 'rain' ? 0.75 : env.weather === 'snow' ? 0.85 : env.weather === 'overcast' ? 0.6 : 0.5;
+    if (['overcast', 'rain', 'snow', 'storm'].includes(env.weather)) Object.assign(sky, SKY_PRESETS.overcast);
+    const weatherFog = env.weather === 'rain' ? 0.75 : env.weather === 'storm' ? 0.9 : env.weather === 'snow' ? 0.85 : env.weather === 'overcast' ? 0.6 : 0.5;
     this._envNow = env;                     // painters read sun/shadow/window state from here
 
     this._paintSky(ctx, W, H, sky, env);
