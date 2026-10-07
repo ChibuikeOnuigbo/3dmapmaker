@@ -903,3 +903,118 @@ input:not([type="checkbox"]):not([type="radio"]), textarea, select, [contentedit
 
 /* armed tools (add node / rubber-band select) get the FPS crosshair */
 .sg-surface.armed, .sg-surface.selecting { cursor: var(--cur-cross); }
+
+/* ==========================================================================
+   MOTION SYSTEM — gamified micro-interactions across every control
+   GPU-only properties (transform/opacity/filter/box-shadow); the global
+   reduced-motion kill-switch above neutralises all of it for those users.
+   ========================================================================== */
+:root {
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-back: cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes fxRise { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+@keyframes fxPop { 0% { opacity: 0; transform: scale(.9); } 60% { opacity: 1; transform: scale(1.02); } }
+@keyframes fxFocusRing { from { outline-offset: 6px; outline-color: rgba(26, 102, 232, .15); } }
+@keyframes fxCTAPulse {
+  0%, 100% { box-shadow: 0 10px 26px rgba(61, 116, 240, .45); }
+  50% { box-shadow: 0 14px 34px rgba(61, 116, 240, .68), 0 0 0 7px rgba(99, 178, 255, .16); }
+}
+@keyframes toastIn { 0% { opacity: 0; transform: translateY(16px) scale(.92); } 60% { opacity: 1; transform: translateY(-2px) scale(1.01); } }
+@keyframes toastOK { 35% { box-shadow: 0 0 0 7px rgba(28, 138, 77, .22), var(--sh-2); } }
+@keyframes toastERR { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+
+/* ---- every pressable: hover lift + icon spring + press squash ---------- */
+.tb-btn, .mode-btn, .iconbtn, .seg button, .chip, .tab, .card-slot, .wchip,
+.mbtn, .sec > .sec-h, .land-btn, .land-ck, .sr-item, #debugToggle button,
+.lp-opt, .lp-cancel, .nm-build, .nm-save, .mseg button, .mw-head button {
+  transition: transform .12s var(--ease-out), box-shadow .16s var(--ease-out),
+              background .14s ease, border-color .14s ease, color .14s ease,
+              filter .14s ease, opacity .14s ease;
+}
+.tb-btn:hover, .mode-btn:hover, .iconbtn:hover, .seg button:hover, .chip:hover,
+.tab:hover, .card-slot:hover, .wchip:hover, .mbtn:hover, .land-btn:hover,
+.sr-item:hover, .lp-opt:hover, .mseg button:hover, .mw-head button:hover {
+  transform: translateY(-1.5px);
+  filter: brightness(1.045);
+}
+.tb-btn:active, .mode-btn:active, .iconbtn:active, .seg button:active, .chip:active,
+.tab:active, .card-slot:active, .wchip:active, .mbtn:active, .land-btn:active,
+.sr-item:active, .lp-opt:active, .mseg button:active, .mw-head button:active {
+  transform: translateY(0) scale(.94);
+  transition-duration: .05s;
+}
+/* icons inside pressables pop with a spring */
+.tb-btn svg, .mode-btn svg, .iconbtn svg, .seg button svg, .chip svg, .tab svg,
+.land-btn svg, .sr-item svg, .mseg button svg, .mw-head button svg {
+  transition: transform .18s var(--ease-back);
+}
+.tb-btn:hover svg, .mode-btn:hover svg, .iconbtn:hover svg, .seg button:hover svg,
+.chip:hover svg, .tab:hover svg, .land-btn:hover svg, .sr-item:hover svg,
+.mseg button:hover svg, .mw-head button:hover svg { transform: scale(1.16); }
+.tb-btn:active svg, .iconbtn:active svg, .seg button:active svg, .land-btn:active svg { transform: scale(.9); }
+
+/* dropdown menu items: diagonal slide instead of a lift */
+.mi { transition: transform .12s var(--ease-out), background .14s, color .14s; }
+.mi:hover { transform: translateX(3px); }
+
+/* focus rings draw in from outside — keyboard users feel it too */
+:focus-visible { animation: fxFocusRing .22s var(--ease-out); }
+
+/* segmented control: the active segment lights up with a one-shot ping */
+.seg button.on, .mseg button.on { animation: fxStatePing .34s var(--ease-out); }
+@keyframes fxStatePing { 0% { box-shadow: 0 0 0 0 rgba(26, 102, 232, .5); } 100% { box-shadow: 0 0 0 9px rgba(26, 102, 232, 0); } }
+
+/* slider thumb grows + glows under the finger */
+#speedRange::-webkit-slider-thumb { transition: transform .14s var(--ease-back), box-shadow .14s ease; }
+#speedRange::-webkit-slider-thumb:hover { transform: scale(1.18); }
+#speedRange:active::-webkit-slider-thumb { transform: scale(1.34); box-shadow: 0 0 0 7px rgba(26, 102, 232, .18); }
+#speedRange::-moz-range-thumb { transition: transform .14s var(--ease-back), box-shadow .14s ease; }
+#speedRange::-moz-range-thumb:hover { transform: scale(1.18); }
+#speedRange:active::-moz-range-thumb { transform: scale(1.34); box-shadow: 0 0 0 7px rgba(26, 102, 232, .18); }
+
+/* toggle switch: track tints, knob springs, checked state pings */
+.tswitch .track { transition: background .18s ease, box-shadow .18s ease; }
+.tswitch .knob { transition: transform .18s var(--ease-back), box-shadow .18s ease; }
+.tswitch input:checked ~ .track { box-shadow: 0 0 0 4px rgba(26, 102, 232, .12); }
+.tswitch:hover .knob { box-shadow: var(--sh-1), 0 0 8px rgba(26, 102, 232, .35); }
+
+/* toasts: spring in, contextual flourish, graceful exit (.leaving set in JS) */
+.toast { animation: toastIn .34s var(--ease-back); will-change: transform, opacity; }
+.toast.ok { animation: toastIn .34s var(--ease-back), toastOK .55s ease-out .1s; }
+.toast.err { animation: toastIn .3s var(--ease-back), toastERR .4s ease .08s; }
+.toast.leaving {
+  opacity: 0; transform: translateY(10px) scale(.94);
+  transition: opacity .3s ease, transform .3s var(--ease-out);
+}
+
+/* landing: hero waterfall + CTA heartbeat + card hover immersion */
+.land-brand { animation: fxRise .5s var(--ease-out) backwards; }
+.land-grid { animation: fxRise .55s var(--ease-out) .08s backwards; }
+.land-cta { animation: fxRise .55s var(--ease-out) .16s backwards; }
+.land-skip { animation: fxRise .55s var(--ease-out) .24s backwards; }
+.land-grid .land-card { animation: fxRise .45s var(--ease-out) backwards; }
+.land-grid .land-card:nth-child(1) { animation-delay: .12s; }
+.land-grid .land-card:nth-child(2) { animation-delay: .19s; }
+.land-grid .land-card:nth-child(3) { animation-delay: .26s; }
+.land-grid .land-card:nth-child(4) { animation-delay: .33s; }
+.land-grid .land-card:nth-child(n+5) { animation-delay: .4s; }
+.land-btn.primary { animation: fxCTAPulse 2.6s ease-in-out infinite; }
+.land-card { transition: transform .16s var(--ease-out), box-shadow .16s ease, border-color .16s ease; }
+.land-card:hover { transform: translateY(-4px) scale(1.012); }
+.land-pop { animation: fxPop .3s var(--ease-back); }
+
+/* popups & search results cascade */
+.pop { animation-duration: .22s; animation-timing-function: var(--ease-back); }
+.sr-item { animation: fxRise .26s var(--ease-out) backwards; }
+.sr-item:nth-child(2) { animation-delay: .05s; }
+.sr-item:nth-child(3) { animation-delay: .1s; }
+.sr-item:nth-child(4) { animation-delay: .15s; }
+.sr-item:nth-child(n+5) { animation-delay: .2s; }
+#debugOverlay { animation: fxRise .3s var(--ease-out); }
+#debugOverlay:hover { opacity: 1; }
+
+/* map markers & compass live on the same spring */
+#compass { transition: transform .2s var(--ease-back); }
+#compass:hover { transform: scale(1.08) rotate(-6deg); }
+#compass:active { transform: scale(.94); }

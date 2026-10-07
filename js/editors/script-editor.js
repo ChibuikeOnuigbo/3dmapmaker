@@ -310,6 +310,7 @@ class NodeCardView {
     THUMB_STATE.set(`${this.node.id}:${this.owner.studio.variant}`, state);
     this.thumbStateEl.textContent = state === 'ok' ? '' : (state === 'missing' ? 'no image' : '…');
     this.el.classList.toggle('missing', state === 'missing');
+    this.el.classList.toggle('loading', state === 'loading');   // drives the shimmer
     this.owner.studio.onThumbState();
   }
 
@@ -576,11 +577,20 @@ class GraphCanvas {
   rebuild() {
     for (const c of this.cards.values()) c.el.remove();
     this.cards.clear();
-    for (const n of this.studio.app.graph.nodes.values()) {
+    // entrance waterfall — runs only on structural rebuilds (open/add/undo),
+    // and is skipped on huge worlds where 2k concurrent anims would jank
+    const nodes = [...this.studio.app.graph.nodes.values()];
+    const pop = nodes.length <= 600;
+    nodes.forEach((n, i) => {
       const c = new NodeCardView(this, n);
+      if (pop) {
+        c.el.classList.add('spawn');
+        c.el.style.animationDelay = `${Math.min(i, 48) * 10}ms`;
+        c.el.addEventListener('animationend', () => { c.el.classList.remove('spawn'); c.el.style.animationDelay = ''; }, { once: true });
+      }
       this.cards.set(n.id, c);
       this.world.append(c.el);
-    }
+    });
     this.sync();
   }
 
@@ -898,6 +908,7 @@ class GraphCanvas {
   startCardDrag(card, e) {
     e.preventDefault(); e.stopPropagation();
     const g = this.studio.app.graph;
+    card.el.classList.add('dragging');         // hover-lift would desync the wires
     const start = this.toWorld(e.clientX, e.clientY);
     const orig = { x: card.node.x, y: card.node.y };
     const clampW = (v) => Math.min(20000, Math.max(-20000, v));   // work-area rule
@@ -971,6 +982,7 @@ class GraphCanvas {
         if (n) g.moveNode(it.id, Math.round(n.x / 5) * 5, Math.round(n.y / 5) * 5);
       }
       this.studio.mutated(group.length ? `Moved ${group.length + 1} nodes` : `Moved ${card.node.name}`);
+      card.el.classList.remove('dragging');
     };
     // pointercancel (touch stolen mid-drag): restore pre-drag positions EXACTLY,
     // no history entry — an aborted gesture must leave the graph untouched
@@ -986,6 +998,7 @@ class GraphCanvas {
       }
       this._showGuides(null);
       this.wires.refresh();
+      card.el.classList.remove('dragging');
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -1567,6 +1580,9 @@ export class ScriptStudio {
     if (!el) return;
     const n = this.selectedIds?.size ?? 0;
     el.textContent = n > 1 ? `${n} selected` : '';
+    if (n > 1) el.animate(                       // enrolment feedback: chip pops
+      [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
+      { duration: 210, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
   }
 
   previewNode(id) { this.preview.open(id); }

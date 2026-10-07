@@ -437,3 +437,89 @@
 /* selection chip lights up while a multi-selection exists */
 .sg-stat.sel:not(:empty) { color: #8ec9ff; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .sg-marquee { animation: none; } }
+
+/* ==========================================================================
+   MOTION SYSTEM (studio) — spawn waterfalls, dock slides, socket springs
+   GPU-only properties; a reduced-motion kill-switch sits at the bottom.
+   ========================================================================== */
+@keyframes sgCardSpawn {
+  0% { opacity: 0; transform: translateY(16px) scale(.84); }
+  60% { opacity: 1; transform: translateY(-3px) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sgStudioIn { from { opacity: 0; transform: scale(.99); } }
+@keyframes sgDockIn { from { opacity: 0; transform: translateX(22px); } }
+@keyframes sgPanelFade { from { opacity: .2; transform: translateY(6px); } }
+@keyframes sgPreviewIn { 0% { opacity: 0; transform: scale(.96); } 100% { opacity: 1; transform: none; } }
+@keyframes sgShimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
+@keyframes sgFocusRingSg { from { outline-offset: 5px; outline-color: rgba(89,176,255,.15); } }
+
+/* opening the studio breathes in once */
+.sg-studio { animation: sgStudioIn .26s ease-out; }
+
+/* ---- cards: waterfall entrance (set in JS), hover lift, thumb zoom ----- */
+.sg-card { transition: transform .16s cubic-bezier(.16,1,.3,1), box-shadow .16s ease, border-color .16s ease, opacity .18s ease; }
+.sg-card.spawn { animation: sgCardSpawn .34s cubic-bezier(.34,1.56,.64,1) backwards; will-change: transform, opacity; }
+.sg-card:hover { border-color: rgba(99,212,255,.35); }
+.sg-card:active { transition-duration: .05s; }
+.sg-thumb img { transition: transform .32s cubic-bezier(.16,1,.3,1), filter .2s ease; }
+.sg-card:hover .sg-thumb img { transform: scale(1.06); }
+/* thumbnail skeleton shimmer while the pano downloads */
+.sg-card.loading .sg-thumb {
+  background: linear-gradient(100deg, var(--sg-elev) 32%, #28324a 50%, var(--sg-elev) 68%);
+  background-size: 400px 100%; animation: sgShimmer 1.15s linear infinite;
+}
+
+/* ---- sockets: spring-open + glow on hover ------------------------------ */
+.sg-sock::before { transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s ease, background .14s, border-color .14s; }
+.sg-sock:hover::before { transform: scale(1.4); box-shadow: 0 0 12px rgba(99,212,255,.85), 0 0 0 4px rgba(99,212,255,.18); }
+.sg-sock:active::before { transform: scale(1.15); }
+
+/* ---- toolbar / zoom / lists -------------------------------------------- */
+.sg-switch button, .sg-acts .btn, .sg-acts .iconbtn, .sg-zoom button, .sg-li:not(.none) {
+  transition: transform .12s cubic-bezier(.16,1,.3,1), background .14s ease, border-color .14s ease, color .14s ease, box-shadow .14s ease, filter .14s;
+}
+.sg-switch button:hover, .sg-acts .btn:hover, .sg-acts .iconbtn:hover, .sg-zoom button:hover { transform: translateY(-1.5px); filter: brightness(1.12); }
+.sg-switch button:active, .sg-acts .btn:active, .sg-acts .iconbtn:active, .sg-zoom button:active { transform: scale(.92); transition-duration: .05s; }
+.sg-switch button svg, .sg-acts .btn svg { transition: transform .16s cubic-bezier(.34,1.56,.64,1); }
+.sg-switch button:hover svg, .sg-acts .btn:hover svg { transform: scale(1.18); }
+.sg-li { transition: transform .12s cubic-bezier(.16,1,.3,1), background .14s, border-color .14s; }
+.sg-li:not(.none):hover { transform: translateX(4px); }
+.sg-li:active { transform: translateX(4px) scale(.97); }
+
+/* ---- tabs ping when switched ------------------------------------------- */
+.sg-switch button.on { position: relative; }
+.sg-switch button.on::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  animation: sgTabPing .4s ease-out;
+}
+@keyframes sgTabPing { 0% { box-shadow: inset 0 0 0 2px rgba(99,212,255,.65); opacity: 1; } 100% { box-shadow: inset 0 0 0 8px rgba(99,212,255,0); opacity: 0; } }
+
+/* ---- docks & panels slide/fade on reveal (hidden-attr restarts anim) --- */
+.sg-details { animation: sgDockIn .26s cubic-bezier(.16,1,.3,1); }
+.sg-code { animation: sgPanelFade .22s ease; }
+.sg-preview { animation: sgPreviewIn .24s cubic-bezier(.34,1.56,.64,1); }
+.sg-minimap { transition: box-shadow .18s ease, border-color .18s ease; cursor: var(--cur-target); }
+.sg-minimap:hover { box-shadow: 0 6px 22px rgba(0,0,0,.5), 0 0 0 2px rgba(99,212,255,.35); border-color: rgba(99,212,255,.5); }
+
+/* input focus inside the studio uses the same electric glow */
+.sg-studio :focus-visible { animation: sgFocusRingSg .2s ease; }
+.sg-details input:focus, .sg-code textarea:focus {
+  border-color: rgba(99,212,255,.65) !important;
+  box-shadow: 0 0 0 3px rgba(99,212,255,.22);
+  transition: box-shadow .16s ease, border-color .16s ease;
+}
+
+/* wire hover glow eases in now instead of snapping */
+.sg-wire { transition: opacity .18s ease, stroke-width .15s ease; }
+
+/* reduced motion: one kill-switch for the whole studio */
+@media (prefers-reduced-motion: reduce) {
+  .sg-studio, .sg-studio * { animation: none !important; transition-duration: .01ms !important; }
+}
+
+/* hover-lift is suppressed on the card being dragged — the wire endpoints
+   track model coords and would otherwise sit 3px off the card border */
+.sg-card.dragging { transition-duration: .05s; }
+.sg-card:not(.dragging):hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,.55), 0 0 0 1px rgba(99,212,255,.28); border-color: rgba(99,212,255,.45); }
+.sg-card.dragging { z-index: 6; box-shadow: 0 18px 40px rgba(0,0,0,.6), 0 0 0 1.5px rgba(99,212,255,.4); }

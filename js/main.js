@@ -1236,7 +1236,7 @@ class App {
     el._close = () => {
       if (!el.isConnected) { this._toasts.delete(el); return; }
       clearTimeout(el._t1); clearTimeout(el._t2);
-      el.style.opacity = '0'; el.style.transition = 'opacity .35s';
+      el.classList.add('leaving');                        // CSS owns the exit motion now
       setTimeout(() => { el.remove(); this._toasts.delete(el); }, 380);
     };
     el._arm = (t0) => { el._t1 = setTimeout(() => el._close(), t0); };
