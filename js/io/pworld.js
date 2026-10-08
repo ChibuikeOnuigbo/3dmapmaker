@@ -38,6 +38,31 @@ export const PWORLD_FORMAT = 'PanoramaMapsWorld';
 export const PWORLD_VERSION = 1;
 export const PWORLD_EXT = '.pworld';
 export const PWORLD_MIME = 'application/x-panorama-world';
+/**
+ * A world file can be wrong in a handful of ways, and each one has a different
+ * answer for the person holding it. Say which one it is in words they can act
+ * on — the technical reason stays in the sentence, because a bug report needs
+ * it, but it is no longer the whole message.
+ */
+export function worldFileProblem(err) {
+  const said = String(err?.message || err || 'unknown problem');
+  if (/not a zip archive/i.test(said)) {
+    return 'this is not a world file (not a zip archive) — “Save world file” writes the ones that open here';
+  }
+  if (/pworld\.json missing|not a Panorama World file/i.test(said)) {
+    return 'this file has no Panorama World data inside it';
+  }
+  if (/checksum mismatch/i.test(said)) {
+    const which = /:\s*([^\s:]+\.(?:jpe?g|png|webp|gif|bmp|avif|json))$/i.exec(said)?.[1];
+    return which
+      ? `the file is damaged — “${which}” no longer matches the checksum written when it was saved`
+      : 'the file is damaged — its contents no longer match the checksum written when it was saved (checksum mismatch)';
+  }
+  if (/needs a newer app/i.test(said)) return `${said} — update the app to open it`;
+  if (/world data missing/i.test(said)) return 'the file is incomplete — the world itself is not inside it';
+  return said;
+}
+
 export const PWORLD_LIMITS = {
   maxEntries: 40000,
   maxFileBytes: 4 * 1024 * 1024 * 1024,     // 4 GB — refuse to load beyond this

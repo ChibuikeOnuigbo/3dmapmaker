@@ -27,7 +27,7 @@ import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsS
 import { Desktop } from './io/desktop.js';
 import {
   exportPworld, importPworld, collectWorldAssets, inspectPworld,
-  pworldFilename, formatBytes,
+  pworldFilename, formatBytes, worldFileProblem,
 } from './io/pworld.js';
 import { WorldLibrary } from './ui/world-library.js';
 
@@ -1503,7 +1503,7 @@ class App {
       return info;
     } catch (err) {
       console.error(err);
-      this.worldLibrary?.showInspect(null, null, err.message);
+      this.worldLibrary?.showInspect(null, null, worldFileProblem(err));
       return null;
     }
   }
@@ -1531,7 +1531,7 @@ class App {
       this.toast(`Opened “${manifest.name}”${missing.length ? `, ${missing.length} panorama asset(s) missing, replaceable in the editor` : ''}`, missing.length ? 'err' : 'ok', 5000);
     } catch (err) {
       console.error(err);
-      this.toast('Could not open project: ' + err.message, 'err', 6000);
+      this.toast('Could not open project: ' + worldFileProblem(err), 'err', 6000);
     }
   }
 
@@ -1808,7 +1808,7 @@ class App {
       return true;
     } catch (err) {
       console.error(err);
-      this.toast(`Could not open the world file: ${err.message}`, 'err', 6500);
+      this.toast(`Could not open the world file: ${worldFileProblem(err)}`, 'err', 6500);
       return false;
     }
   }

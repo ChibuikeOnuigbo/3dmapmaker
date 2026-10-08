@@ -15,7 +15,7 @@ import { WorldGraph } from '../js/core/world-graph.js';
 import { MapScale } from '../js/core/scale.js';
 import {
   exportPworld, importPworld, verifyPworld, inspectPworld, collectWorldAssets,
-  pworldFilename, PWORLD_FORMAT, extForMime, formatBytes,
+  pworldFilename, PWORLD_FORMAT, extForMime, formatBytes, worldFileProblem,
 } from '../js/io/pworld.js';
 
 let passed = 0, failed = 0;
@@ -277,6 +277,34 @@ test('pworld: newer format versions ask for an app update instead of misreading'
     [...entries.entries()].map(([path, data]) => ({ path, data: path === 'pworld.json' ? te.encode(JSON.stringify(manifest)) : data })),
   );
   await assert.rejects(() => importPworld(patched), /newer app/);
+});
+
+/* ---------------- what the person holding the file is told ---------------- */
+
+test('pworld: every refusal explains itself in words a person can act on', () => {
+  const notAWorld = worldFileProblem(new Error('not a zip archive (EOCD not found)'));
+  assert.match(notAWorld, /not a world file/, 'a text file dressed up as .pworld says what it is');
+  assert.match(notAWorld, /Save world file/, 'and says how the real ones are made');
+
+  const damaged = worldFileProblem(new Error('world data is damaged (checksum mismatch)'));
+  assert.match(damaged, /damaged/);
+  assert.match(damaged, /checksum/, 'the technical reason survives, for a bug report');
+
+  const damagedImage = worldFileProblem(new Error('image is damaged (checksum mismatch): assets/day/a.jpg'));
+  assert.match(damagedImage, /a\.jpg/, 'a damaged image names the image');
+
+  const noData = worldFileProblem(new Error('pworld.json missing — not a Panorama World file'));
+  assert.match(noData, /no Panorama World data/, 'a foreign zip is not blamed on the user');
+
+  const tooNew = worldFileProblem(new Error('world file v99 needs a newer app'));
+  assert.match(tooNew, /update the app/, 'a newer format points at the fix');
+
+  const empty = worldFileProblem(new Error('world data missing'));
+  assert.match(empty, /incomplete/);
+
+  const unknown = worldFileProblem(new Error('HTTP 500'));
+  assert.equal(unknown, 'HTTP 500', 'an unknown failure is passed through, never swallowed');
+  assert.equal(worldFileProblem(null), 'unknown problem', 'and a missing error still says something');
 });
 
 /* ---------------- world JSON safety (untrusted input) ---------------- */

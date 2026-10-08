@@ -1204,7 +1204,8 @@ try {
     // one that a real visitor can reach without a drag
     const junkAsked = await openWorldFileThroughUI(page2, junk, { label: 'the junk file' });
     mark('junk offered');
-    const junkToast = await waitToast2(/could not open the world file/i, 20000).catch(() => null);
+    // the refusal has to read like a sentence a person can act on, not a stack trace
+    const junkToast = await waitToast2(/could not open the world file: this is not a world file/i, 20000).catch(() => null);
     mark('junk toast');
     check('a file that is not a world says so', junkAsked && !!junkToast, `offered ${junkAsked} · said “${junkToast}”`);
     check('the world you were in is untouched', await page2.evaluate((n) => globalThis.app.graph.nodes.size === n, demo.nodes));
@@ -1216,7 +1217,7 @@ try {
     fs.writeFileSync(damaged, broken);
     const damagedAsked = await openWorldFileThroughUI(page2, damaged, { label: 'the damaged file' });
     mark('damaged offered');
-    const damagedToast = await waitToast2(/could not open the world file|checksum|not a zip/i, 20000).catch(() => null);
+    const damagedToast = await waitToast2(/could not open the world file: the file is damaged|checksum mismatch/i, 20000).catch(() => null);
     mark('damaged toast');
     check('a damaged file is refused with a reason', damagedAsked && !!damagedToast, `offered ${damagedAsked} · said “${damagedToast}”`);
     check('the app is still alive after refusing twice',
