@@ -14,8 +14,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createDesktopApp } from '../desktop/server.mjs';
 import { WorldDatabase, defaultDataDir } from '../desktop/db.mjs';
+import { exportPworld } from '../js/io/pworld.js';
 
 let passed = 0, failed = 0;
 const tests = [];
@@ -332,6 +334,67 @@ test('db: the database refuses nothing it can survive (json path works too)', as
   assert.equal(reopened.listWorlds().length, 1, 'the plain database survives a restart');
   reopened.close();
   db.close();
+});
+
+test('desktop: CLI commands work end-to-end (stats, list, import, info, export, gc, delete)', async () => {
+  const cliDir = path.join(tmp, 'cli-test-dir');
+  const cli = (cmd, ...args) => execFileSync('node', ['desktop/cli.mjs', cmd, '--data-dir', cliDir, ...args], { encoding: 'utf8' });
+
+  // 1. stats on fresh dir
+  const statsOut = cli('stats');
+  assert.ok(statsOut.includes('Panorama Maps — worlds database'));
+  assert.ok(statsOut.includes(cliDir));
+
+  // 2. list empty
+  const listEmpty = cli('list');
+  assert.ok(listEmpty.includes('no worlds yet'));
+
+  // 3. create a sample .pworld file
+  const sample = smallWorld('CLI Town');
+  const pworldFile = path.join(tmp, 'cli-town.pworld');
+  const img = fakeImage(77, 2048);
+  const { bytes } = await exportPworld({
+    world: { name: 'CLI Town' },
+    worldJson: sample,
+    assets: [{ id: 'asset_testimg0001', original: img, mime: 'image/jpeg' }],
+  });
+  fs.writeFileSync(pworldFile, bytes);
+
+  // 4. import with name override
+  const importOut = cli('import', pworldFile, '--name', 'Renamed CLI Town');
+  assert.ok(importOut.includes('imported “Renamed CLI Town”'));
+
+  // 5. list now displays the imported world
+  const listOut = cli('list');
+  assert.ok(listOut.includes('Renamed CLI Town'));
+  const line = listOut.split('\n').find((l) => l.includes('Renamed CLI Town'));
+  assert.ok(line, 'world appears in table');
+  const worldId = line.split('\t')[1];
+  assert.ok(worldId, 'has valid world id');
+
+  // 6. info outputs valid JSON metadata
+  const infoOut = cli('info', worldId);
+  const parsed = JSON.parse(infoOut);
+  assert.equal(parsed.meta.name, 'Renamed CLI Town');
+  assert.equal(parsed.assets.length, 1);
+
+  // 7. export writes a valid .pworld file to the requested out directory
+  const exportDir = path.join(tmp, 'cli-exported');
+  const exportOut = cli('export', worldId, '--out', exportDir);
+  assert.ok(exportOut.includes('exported “Renamed CLI Town”'));
+  const exportedFiles = fs.readdirSync(exportDir);
+  assert.equal(exportedFiles.length, 1);
+  assert.ok(exportedFiles[0].endsWith('.pworld'));
+
+  // 8. gc removes unreferenced files
+  const gcOut = cli('gc');
+  assert.ok(gcOut.includes('unreferenced image file(s)'));
+
+  // 9. delete cleans up the world
+  const delOut = cli('delete', worldId);
+  assert.ok(delOut.includes('deleted “Renamed CLI Town”'));
+  const listAfterDel = cli('list');
+  assert.ok(listAfterDel.includes('no worlds yet'));
 });
 
 test('db: default data directory is a real per-OS location', () => {

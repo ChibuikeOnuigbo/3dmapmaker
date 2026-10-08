@@ -203,7 +203,7 @@ test('world file: the .pworld modules exist, load and are in the offline shell',
   for (const f of ['./js/io/pworld.js', './js/io/desktop.js', './js/ui/world-library.js']) {
     assert.ok(sw.includes(`'${f}'`), `service worker shell must cache ${f}`);
   }
-  assert.ok(/panorama-maps-shell-v\d+/.test(sw), 'shell cache must be versioned');
+  assert.ok(/panorama-maps-shell-v25/.test(sw), 'shell cache must be updated to v25');
 });
 
 test('world file: every world can be saved — all surfaces offer the button', () => {

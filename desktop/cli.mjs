@@ -20,15 +20,42 @@ import { defaultDataDir } from './db.mjs';
 
 const argv = process.argv.slice(2);
 const cmd = argv[0] || 'stats';
-const rest = argv.slice(1).filter(a => !a.startsWith('--'));
+
+const VALUED_FLAGS = new Set(['name', 'out', 'modes', 'data-dir']);
 const flag = (name, dflt = null) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 ? (argv[i + 1] !== undefined && !argv[i + 1].startsWith('--') ? argv[i + 1] : true) : dflt;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === `--${name}`) {
+      const next = argv[i + 1];
+      return next !== undefined && !next.startsWith('--') ? next : true;
+    }
+    if (a.startsWith(`--${name}=`)) {
+      return a.slice(name.length + 3);
+    }
+  }
+  return dflt;
 };
+
+const rest = [];
+for (let i = 1; i < argv.length; i++) {
+  const a = argv[i];
+  if (a.startsWith('--')) {
+    const eq = a.indexOf('=');
+    const name = eq >= 0 ? a.slice(2, eq) : a.slice(2);
+    if (eq < 0 && VALUED_FLAGS.has(name) && i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+      i++;
+    }
+    continue;
+  }
+  rest.push(a);
+}
 
 const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
 
-const app = await createDesktopApp({ root: APP_ROOT, dataDir: defaultDataDir(), quiet: true });
+const dirArg = flag('data-dir');
+const dataDir = dirArg ? path.resolve(String(dirArg)) : defaultDataDir();
+
+const app = await createDesktopApp({ root: APP_ROOT, dataDir, quiet: true });
 const db = app.db;
 
 try {
@@ -115,15 +142,15 @@ try {
     default:
       console.log(`Panorama Maps — worlds database CLI
 
-  node desktop/cli.mjs list
-  node desktop/cli.mjs info <worldId>
-  node desktop/cli.mjs import <file.pworld> [--name "Renamed"]
-  node desktop/cli.mjs export <worldId> [--out DIR] [--modes day,night]
-  node desktop/cli.mjs delete <worldId>
-  node desktop/cli.mjs gc
-  node desktop/cli.mjs stats
+  node desktop/cli.mjs list [--data-dir DIR]
+  node desktop/cli.mjs info <worldId> [--data-dir DIR]
+  node desktop/cli.mjs import <file.pworld> [--name "Renamed"] [--data-dir DIR]
+  node desktop/cli.mjs export <worldId> [--out DIR] [--modes day,night] [--data-dir DIR]
+  node desktop/cli.mjs delete <worldId> [--data-dir DIR]
+  node desktop/cli.mjs gc [--data-dir DIR]
+  node desktop/cli.mjs stats [--data-dir DIR]
 
-  database: ${defaultDataDir()}`);
+  database: ${dataDir}`);
   }
 } catch (err) {
   console.error(`error: ${err.message}`);

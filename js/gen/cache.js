@@ -57,16 +57,40 @@ export class PanoramaCache {
   _evict() {
     while (this.lru.size > this.capacity) {
       const oldest = this.lru.keys().next().value;
+      const entry = this.lru.get(oldest);
+      freeEntry(entry);
       this.lru.delete(oldest);
       this.busEmit?.('cache:evicted', { nodeId: oldest });
     }
   }
 
   /** Drop decoded canvases but keep metadata (world switch / memory pressure). */
-  clearDecoded() { this.lru.clear(); }
-  clearAll() { this.lru.clear(); this.meta.clear(); this._visitOrder.length = 0; }
+  clearDecoded() {
+    for (const v of this.lru.values()) freeEntry(v);
+    this.lru.clear();
+  }
+  clearAll() {
+    this.clearDecoded();
+    this.meta.clear();
+    this._visitOrder.length = 0;
+  }
 
   get decodedCount() { return this.lru.size; }
+}
+
+function freeCanvas(c) {
+  if (c && typeof c === 'object') {
+    try { c.width = 0; c.height = 0; } catch { /* ignore */ }
+  }
+}
+
+function freeEntry(entry) {
+  if (!entry) return;
+  freeCanvas(entry.canvas);
+  freeCanvas(entry.completedCanvas);
+  freeCanvas(entry._seam?.canvas);
+  freeCanvas(entry._smooth?.canvas);
+  freeCanvas(entry._sharpen?.canvas);
 }
 
 /**
