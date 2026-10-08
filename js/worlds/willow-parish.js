@@ -133,6 +133,16 @@ export function buildWillowParish() {
     groundBase: '#7d9b68',
     description: 'A photoreal village: the willow lane ending at St. Hilda’s church, with ten spurs around the green, forge, school and orchard. 57 photo spots dense enough to walk frame by frame. AI-generated panoramas, three scene modes.',
     features: [],
+    animals: ['birds', 'butterflies'],
+    actors: [
+      { id: 'willow_rector', kind: 'walker', x0: 2, y0: 80, x1: 0, y1: 10, speedMps: 1.1, phase: 0, tint: '#303038', name: 'Rector on Church Path' },
+      { id: 'willow_street_walker', kind: 'walker', x0: 0, y0: 160, x1: 0, y1: 340, speedMps: 1.25, phase: 14, tint: '#544638', name: 'Villager on Willow Street' },
+      { id: 'willow_green_walker', kind: 'walker', x0: -20, y0: 160, x1: -140, y1: 160, speedMps: 1.05, phase: 5, tint: '#425848', name: 'Stroller on Green Road' },
+      { id: 'willow_pond_dog', kind: 'dog', x0: -105, y0: 195, x1: -125, y1: 225, speedMps: 2.1, phase: 8, tint: '#5c4424', name: 'Terrier bounding by the pond' },
+      { id: 'willow_forge_cat', kind: 'cat', x0: -70, y0: 460, x1: -110, y1: 470, speedMps: 0.65, phase: 30, tint: '#282830', name: 'Forge cat sunning on Smithy Lane' },
+      { id: 'willow_orchard_walker', kind: 'walker', x0: 30, y0: 660, x1: 140, y1: 660, speedMps: 0.95, phase: 22, tint: '#3e5246', name: 'Gardener in the orchard' },
+      { id: 'willow_school_child', kind: 'walker', x0: -20, y0: 355, x1: -95, y1: 360, speedMps: 1.3, phase: 6, tint: '#664a50', name: 'Child on School Rise' },
+    ],
   };
   g.settings.nodeSpacingPx = 200;
 

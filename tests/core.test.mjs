@@ -15,6 +15,8 @@ import { aHash16, hammingHex, luminanceGrid16, rgbHist, histIntersect, expectedM
 import { crc32, writeZip, readZip, safeZipPath } from '../js/io/zipex.js';
 import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
+import { buildWillowParish } from '../js/worlds/willow-parish.js';
+import { MapRenderer } from '../js/map/map-renderer.js';
 import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset, CARD_MIN, CARD_MAX } from '../js/editors/script-editor.js';
 
 let passed = 0, failed = 0;
@@ -618,6 +620,71 @@ test('applyGraphSubset: a code-added node never borrows another node\'s image pa
   delete snap.nodes.find(n => n.id === id0).card;
   applyGraphSubset(g, JSON.parse(JSON.stringify(snap)));
   assert.equal(g.getNode(id0).card, undefined, 'a node without a card field resets to the default card size');
+});
+
+/* ---------------- animated maps ---------------- */
+test('animated maps: all demo worlds feature living animated actors with bounded routes', () => {
+  const worlds = [
+    { name: 'Chapel Lane', graph: buildChapelLane().graph },
+    { name: 'Millbrook', graph: buildMillbrook().graph },
+    { name: 'Great Vale', graph: buildGreatVale().graph },
+    { name: 'Willow Parish', graph: buildWillowParish().graph },
+  ];
+  for (const w of worlds) {
+    const actors = w.graph.environment.actors;
+    assert.ok(Array.isArray(actors), `${w.name} must define environment.actors`);
+    assert.ok(actors.length >= 6, `${w.name} has ${actors.length} actors, expected at least 6`);
+    for (const a of actors) {
+      assert.ok(a.id, 'actor has id');
+      assert.ok(['walker', 'dog', 'cat'].includes(a.kind), `unknown kind ${a.kind}`);
+      assert.ok(typeof a.name === 'string' && a.name.length > 0, 'actor has readable name');
+      assert.ok(Number.isFinite(a.x0) && Number.isFinite(a.y0), 'actor start coordinate');
+      assert.ok(Number.isFinite(a.x1) && Number.isFinite(a.y1), 'actor end coordinate');
+      assert.ok(a.speedMps > 0, 'speed must be positive');
+      const dist = Math.hypot(a.x1 - a.x0, a.y1 - a.y0);
+      assert.ok(dist >= 0.5, `actor ${a.id} route is too short (${dist} m)`);
+      assert.ok(typeof a.phase === 'number', 'actor phase must be numeric');
+    }
+    assert.ok(Array.isArray(w.graph.environment.animals) && w.graph.environment.animals.length > 0,
+      `${w.name} must have ambient animated animals`);
+  }
+});
+
+test('animated maps: MapRenderer renders living animated actors, water ripple and radar pulse', () => {
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(t, p) {
+      if (p === 'canvas') return canvas;
+      if (p === 'measureText') return () => ({ width: 40 });
+      if (p === 'createRadialGradient') return () => ({ addColorStop: () => {} });
+      return (...args) => { calls.push(p); return {}; };
+    }
+  });
+  const canvas = {
+    getContext: () => ctx,
+    clientWidth: 400, clientHeight: 300, width: 400, height: 300,
+    addEventListener: () => {}, style: {}
+  };
+  const bus = { emit: () => {}, on: () => {} };
+  const r = new MapRenderer(canvas, bus);
+  assert.equal(r.animated, true);
+  const g = buildWillowParish().graph;
+  r.setGraph(g);
+  const firstId = [...g.nodes.keys()][0];
+  const secondId = [...g.nodes.keys()][1];
+  r.setCurrent(firstId, 90);
+  r.setRoute([firstId, secondId]);
+  r.draw();
+
+  assert.ok(calls.includes('fillRect'), 'clears map background');
+  assert.ok(calls.includes('arc'), 'draws node dots and animated ripples');
+  assert.ok(calls.includes('stroke'), 'strokes roads and paths');
+  assert.ok(calls.includes('setLineDash'), 'sets animated marching dashes on active route');
+  assert.ok(calls.includes('fillText'), 'renders labels on map elements');
+  assert.ok(calls.includes('ellipse'), 'renders animated actor shadows');
+
+  r.setAnimated(false);
+  assert.equal(r.animated, false);
 });
 
 /* ---------------- runner ---------------- */

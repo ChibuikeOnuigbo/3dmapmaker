@@ -8,6 +8,15 @@
  * Styling follows familiar web-map conventions: light base, cased roads,
  * blue position dot with heading cone.
  */
+const DPR = () => (typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1);
+const RAF = (fn) => {
+  if (typeof requestAnimationFrame !== 'undefined') return requestAnimationFrame(fn);
+  const t = setTimeout(fn, 16);
+  t.unref?.();
+  return t;
+};
+const CAF = (id) => (typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame(id) : clearTimeout(id));
+
 export class MapRenderer {
   constructor(canvas, bus) {
     this.canvas = canvas;
@@ -27,10 +36,13 @@ export class MapRenderer {
     this._raf = 0;
     this._drag = null;
     this._walkPos = null;                        // interpolated walk position
+    this.animated = true;                        // animated route, radar pulse, water ripple, actors
+    this._t0 = Date.now();
     this._bind();
   }
 
   setGraph(graph) { this.graph = graph; this.visited.clear(); this.fit(); this.requestDraw(); }
+  setAnimated(on) { this.animated = !!on; this.requestDraw(); }
   setCurrent(nodeId, yawDeg) {
     this.currentNodeId = nodeId;
     if (yawDeg !== undefined) this.currentYawDeg = yawDeg;
@@ -82,7 +94,7 @@ export class MapRenderer {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(DPR(), 2);
     const w = Math.round(this.canvas.clientWidth * dpr), h = Math.round(this.canvas.clientHeight * dpr);
     if (w !== this.canvas.width || h !== this.canvas.height) { this.canvas.width = w; this.canvas.height = h; }
     this.requestDraw();
@@ -90,7 +102,7 @@ export class MapRenderer {
 
   requestDraw() {
     if (this._raf) return;
-    this._raf = requestAnimationFrame(() => { this._raf = 0; this.draw(); });
+    this._raf = RAF(() => { this._raf = 0; this.draw(); });
   }
 
   _bind() {
@@ -136,6 +148,8 @@ export class MapRenderer {
   draw() {
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
+    if (W === 0 || H === 0) return;
+    const t = (Date.now() - this._t0) / 1000;
     ctx.fillStyle = '#e9eee4';
     ctx.fillRect(0, 0, W, H);
     if (!this.graph) return;
@@ -175,10 +189,30 @@ export class MapRenderer {
         const a = this.worldToScreen(f.x, f.y);
         ctx.fillStyle = f.kind === 'water' ? '#aacdec' : f.kind === 'plaza' ? '#ddd8c9' : '#cfe0b4';
         ctx.fillRect(a.x, a.y, f.w * s, f.h * s);
+        if (this.animated && f.kind === 'water') {
+          const ripProg = (t * 0.45) % 1;
+          const rw = f.w * s, rh = f.h * s;
+          const cx = a.x + rw / 2, cy = a.y + rh / 2;
+          const maxR = Math.min(rw, rh) * 0.42;
+          if (maxR > 3) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - ripProg) * 0.32})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(cx, cy, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
+          }
+        }
       } else if (f.shape === 'circle') {
         const a = this.worldToScreen(f.cx, f.cy);
         ctx.fillStyle = f.kind === 'water' ? '#aacdec' : '#cfe0b4';
         ctx.beginPath(); ctx.arc(a.x, a.y, f.radiusPx * s, 0, Math.PI * 2); ctx.fill();
+        if (this.animated && f.kind === 'water') {
+          const ripProg = (t * 0.45) % 1;
+          const maxR = f.radiusPx * s;
+          if (maxR > 3) {
+            ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - ripProg) * 0.32})`;
+            ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.arc(a.x, a.y, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
+          }
+        }
       }
     }
 
@@ -218,7 +252,7 @@ export class MapRenderer {
           const a = this.worldToScreen(z.cx, z.cy);
           ctx.beginPath(); ctx.arc(a.x, a.y, z.radiusPx * s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
           ctx.fillStyle = 'rgba(160,110,30,0.9)';
-          ctx.font = `${Math.max(11, 11 * devicePixelRatio)}px system-ui`;
+          ctx.font = `${Math.max(11, 11 * DPR())}px system-ui`;
           ctx.fillText(`${z.name}${z.meta?.boundaryMeters ? ` · ${z.meta.boundaryMeters} m` : ''}`, a.x + 6, a.y - 6);
         } else if (z.shape === 'rect') {
           const a = this.worldToScreen(z.x, z.y);
@@ -252,10 +286,10 @@ export class MapRenderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // route highlight
+    // route highlight (casing + animated flow dashes)
     if (this.route?.length > 1) {
-      ctx.strokeStyle = 'rgba(51,116,230,0.85)';
-      ctx.lineWidth = Math.max(3, w2s(6, s));
+      ctx.strokeStyle = 'rgba(51,116,230,0.30)';
+      ctx.lineWidth = Math.max(5, w2s(8, s));
       ctx.beginPath();
       this.route.forEach((id, i) => {
         const n = g.getNode(id); if (!n) return;
@@ -263,13 +297,28 @@ export class MapRenderer {
         i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
       });
       ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(51,116,230,0.92)';
+      ctx.lineWidth = Math.max(2.8, w2s(4.5, s));
+      if (this.animated) {
+        ctx.setLineDash([9, 5]);
+        ctx.lineDashOffset = -t * 22;
+      }
+      ctx.beginPath();
+      this.route.forEach((id, i) => {
+        const n = g.getNode(id); if (!n) return;
+        const p = this.worldToScreen(n.x, n.y);
+        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+      });
+      ctx.stroke();
+      if (this.animated) ctx.setLineDash([]);
     }
 
     // nodes — dense 8 m waypoints render as faint small dots (the ground
     // truth for stride movement); only named spots are full-size/labeled
     const nodeR = Math.max(2.2, Math.min(7, 3.4 * Math.sqrt(s)));
     const showLabels = s > 0.35;
-    ctx.font = `${Math.max(10, 10 * (devicePixelRatio || 1))}px system-ui`;
+    ctx.font = `${Math.max(10, 10 * DPR())}px system-ui`;
     for (const n of g.nodes.values()) {
       if (!inView(n.x, n.y)) continue;
       const p = this.worldToScreen(n.x, n.y);
@@ -292,7 +341,7 @@ export class MapRenderer {
       this._landmarkGlyph(p.x, p.y, lm);
       if (s > 0.2) {
         ctx.fillStyle = 'rgba(52,60,72,0.9)';
-        ctx.font = `600 ${Math.max(10, 10 * (devicePixelRatio || 1))}px system-ui`;
+        ctx.font = `600 ${Math.max(10, 10 * DPR())}px system-ui`;
         ctx.fillText(lm.name, p.x + 8, p.y - 8);
       }
     }
@@ -311,15 +360,159 @@ export class MapRenderer {
       ctx.fillStyle = cone;
       ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 46 * Math.max(0.5, s), -0.5, 0.5); ctx.closePath(); ctx.fill();
       ctx.restore();
+
+      // animated radar pulse ring
+      if (this.animated) {
+        const pulse = (t % 1.8) / 1.8;
+        const pulseR = Math.max(5, nodeR + 1.5) + pulse * 20 * Math.max(0.6, Math.min(1.8, s));
+        const pulseAlpha = (1 - pulse) * 0.45;
+        ctx.strokeStyle = `rgba(66, 133, 244, ${pulseAlpha})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, pulseR, 0, Math.PI * 2); ctx.stroke();
+      }
+
       ctx.fillStyle = '#4285f4';
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(5, nodeR + 1.5), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
 
+    // animated actors (walkers, dogs, cats on coded routes)
+    this._drawActors(t, s, ppm2, inView);
+
     // scale bar (meters — Spec §4 correctness on screen)
     this._scaleBar();
 
     if (this.debug) this._debugGrid();
+
+    // keep animated layers moving when visible
+    this._scheduleNextFrame();
+  }
+
+  _drawActors(t, s, ppm2, inView) {
+    const actors = this.graph?.environment?.actors || [];
+    if (!actors.length) return;
+    const ctx = this.ctx;
+    const showLabels = s > 0.45;
+    ctx.save();
+    for (const act of actors) {
+      const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
+      const lenM = Math.max(0.5, Math.hypot(ax, ay));
+      const P = lenM / Math.max(0.2, act.speedMps || 1);
+      let k = 0, dir = 1;
+      if (act.kind === 'dog' || act.kind === 'cat') {
+        const d = act.kind === 'cat' ? 3.2 : 0;
+        const period = 2 * (d + P);
+        const st = (((t + (act.phase || 0)) % period) + period) % period;
+        if (st < d) { k = 0; }
+        else if (st < d + P) { k = (st - d) / P; }
+        else if (st < 2 * d + P) { k = 1; dir = -1; }
+        else { k = 1 - (st - 2 * d - P) / P; dir = -1; }
+      } else {
+        const period = 2 * P;
+        const st = (((t + (act.phase || 0)) % period) + period) % period;
+        k = st < P ? st / P : (2 * P - st) / P;
+        dir = st < P ? 1 : -1;
+      }
+      const mx = act.x0 + ax * k;
+      const my = act.y0 + ay * k;
+      const wx = mx * ppm2;
+      const wy = my * ppm2;
+      if (!inView(wx, wy, 40 / s)) continue;
+
+      const p = this.worldToScreen(wx, wy);
+      const angle = Math.atan2(ay * dir, ax * dir);
+      const r = Math.max(3.5, Math.min(8, 4.5 * Math.sqrt(s)));
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      if (act.kind === 'dog') {
+        ctx.fillStyle = act.tint || '#5c4424';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = act.tint || '#5c4424';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * r * 0.8, Math.sin(angle) * r * 0.8);
+        ctx.lineTo(Math.cos(angle) * (r * 1.5), Math.sin(angle) * (r * 1.5));
+        ctx.stroke();
+      } else if (act.kind === 'cat') {
+        ctx.fillStyle = act.tint || '#2c2c34';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        const cadence = 0.72;
+        const bob = Math.sin(t * (2 * Math.PI / cadence) + (act.phase || 0) * 3) * 1.2;
+
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        ctx.ellipse(0, 2, r * 1.1, r * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = act.tint || '#5a4632';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, -bob * 0.3, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = act.tint || '#5a4632';
+        ctx.beginPath();
+        const tipX = Math.cos(angle) * (r + 3.5);
+        const tipY = Math.sin(angle) * (r + 3.5);
+        const lX = Math.cos(angle + 2.4) * (r * 0.7);
+        const lY = Math.sin(angle + 2.4) * (r * 0.7);
+        const rX = Math.cos(angle - 2.4) * (r * 0.7);
+        const rY = Math.sin(angle - 2.4) * (r * 0.7);
+        ctx.moveTo(tipX, tipY);
+        ctx.lineTo(lX, lY);
+        ctx.lineTo(rX, rY);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      if (showLabels && act.name) {
+        ctx.font = `500 ${Math.max(9, 9 * DPR())}px system-ui`;
+        const tw = ctx.measureText(act.name).width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+        ctx.fillRect(-tw / 2 - 4, -r - 16, tw + 8, 13);
+        ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(-tw / 2 - 4, -r - 16, tw + 8, 13);
+        ctx.fillStyle = '#2c3440';
+        ctx.fillText(act.name, -tw / 2, -r - 6);
+      }
+
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  _scheduleNextFrame() {
+    if (!this.animated) return;
+    const canvas = this.canvas;
+    if (!canvas || canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+    const hasActors = (this.graph?.environment?.actors?.length ?? 0) > 0;
+    const hasRoute = (this.route?.length ?? 0) > 1;
+    const hasWater = this.graph?.environment?.features?.some(f => f.type === 'region' && f.kind === 'water') ?? false;
+    const hasWalk = !!this._walkPos;
+    if (hasActors || hasRoute || hasWater || hasWalk) {
+      if (this._raf) return;
+      this._raf = RAF(() => {
+        this._raf = 0;
+        this.draw();
+      });
+    }
   }
 
   _landmarkGlyph(x, y, lm) {
@@ -353,13 +546,13 @@ export class MapRenderer {
     const metersPerScreenPx = 1 / (this.cam.scale * g.scale.pixelsPerMeter);
     const want = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
     let chosen = want[0];
-    for (const w of want) { if (w / metersPerScreenPx <= 140 * (devicePixelRatio || 1)) chosen = w; }
+    for (const w of want) { if (w / metersPerScreenPx <= 140 * DPR()) chosen = w; }
     const lenPx = chosen / metersPerScreenPx;
-    const x = 14 * (devicePixelRatio || 1), y = canvas.height - 16 * (devicePixelRatio || 1);
+    const x = 14 * DPR(), y = canvas.height - 16 * DPR();
     ctx.fillStyle = 'rgba(40,48,58,0.85)';
     ctx.fillRect(x, y - 3, lenPx, 2.4);
     ctx.fillRect(x, y - 8, 2, 7); ctx.fillRect(x + lenPx - 2, y - 8, 2, 7);
-    ctx.font = `${11 * (devicePixelRatio || 1)}px system-ui`;
+    ctx.font = `${11 * DPR()}px system-ui`;
     ctx.fillText(chosen >= 1000 ? `${chosen / 1000} km` : `${chosen} m`, x + 4, y - 10);
   }
 

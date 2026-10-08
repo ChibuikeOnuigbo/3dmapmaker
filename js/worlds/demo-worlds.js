@@ -275,6 +275,8 @@ export function buildChapelLane() {
     { id: 'walker_green', kind: 'walker', x0: -22, y0: 206, x1: -56, y1: 230, speedMps: 0.8, phase: 27, tint: '#5c5c50', name: 'Stroller by the pond' },
     { id: 'dog_green', kind: 'dog', x0: -14, y0: 224, x1: -64, y1: 212, speedMps: 2.3, phase: 5, tint: '#4a3a28', name: 'Dog bounding round the green' },
     { id: 'cat_lane', kind: 'cat', x0: 14, y0: 320, x1: 46, y1: 318, speedMps: 0.7, phase: 41, tint: '#2c2c34', name: 'Cat prowling the cottage lane' },
+    { id: 'walker_church', kind: 'walker', x0: 0, y0: 20, x1: 20, y1: 50, speedMps: 0.9, phase: 15, tint: '#463c32', name: 'Churchyard visitor' },
+    { id: 'walker_oak', kind: 'walker', x0: -120, y0: 80, x1: -180, y1: 120, speedMps: 1.1, phase: 33, tint: '#344e3a', name: 'Stroller to the Old Oak' },
   ];
   g.environment.description = 'A rural parish: a stone church at the north end of a 520 m processional way, an 8×8 plaza grid (king-move demo), a side lane of cottages, a village-green loop with its pond, a woodland walk to the Old Oak, and Home Farm with its sheep pasture.';
 
@@ -375,6 +377,8 @@ export function buildMillbrook() {
     { id: 'mb_river_1', kind: 'walker', x0: -80, y0: 98, x1: 90, y1: 100, speedMps: 0.9, phase: 18, tint: '#38515e', name: 'Stroller on Riverside Walk' },
     { id: 'mb_market_dog', kind: 'dog', x0: -30, y0: 20, x1: 30, y1: 24, speedMps: 2.1, phase: 9, tint: '#54401f', name: 'Dog weaving through the market' },
     { id: 'mb_church_cat', kind: 'cat', x0: 62, y0: -8, x1: 88, y1: -70, speedMps: 0.7, phase: 26, tint: '#33323c', name: 'Cat climbing Church Avenue' },
+    { id: 'mb_bridge_walker', kind: 'walker', x0: -10, y0: 80, x1: -10, y1: 140, speedMps: 1.0, phase: 11, tint: '#483c52', name: 'Crossing the Mill Bridge' },
+    { id: 'mb_forge_dog', kind: 'dog', x0: -140, y0: 10, x1: -180, y1: 30, speedMps: 2.0, phase: 14, tint: '#42362a', name: 'Blacksmith terrier' },
   ];
 
   addZoneAssignments(g);
@@ -465,6 +469,8 @@ export function buildGreatVale() {
     { id: 'gv_st_walker', kind: 'walker', x0: 100, y0: 300, x1: 500, y1: 300, speedMps: 1.1, phase: 21, tint: '#43584a', name: 'Street 6 walker' },
     { id: 'gv_market_dog', kind: 'dog', x0: 560, y0: 180, x1: 640, y1: 220, speedMps: 2.4, phase: 2, tint: '#4a3a28', name: 'Dog at Vale Market' },
     { id: 'gv_blvd_cat', kind: 'cat', x0: 5, y0: 8, x1: 200, y1: 8, speedMps: 0.75, phase: 33, tint: '#2c2c34', name: 'Cat on the boulevard' },
+    { id: 'gv_lake_stroller', kind: 'walker', x0: 160, y0: 640, x1: 320, y1: 670, speedMps: 1.0, phase: 12, tint: '#3b4f5e', name: 'Vale Lake stroller' },
+    { id: 'gv_park_dog', kind: 'dog', x0: 220, y0: 120, x1: 290, y1: 150, speedMps: 2.2, phase: 16, tint: '#583e26', name: 'Park retriever' },
   ];
 
   addZoneAssignments(g);
