@@ -1,0 +1,45 @@
+{
+  "name": "panorama-maps-desktop",
+  "productName": "Panorama Maps",
+  "private": true,
+  "version": "1.1.0",
+  "description": "Panorama Maps desktop — a worlds database plus self-contained .pworld world files. Runs with no dependencies; the Electron wrapper is optional packaging.",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning main.mjs",
+    "start:window": "electron .",
+    "cli": "node cli.mjs",
+    "test": "node ../tests/desktop-api.test.mjs",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:win": "electron-builder --win nsis portable",
+    "dist:mac": "electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.panoramamaps.desktop",
+    "productName": "Panorama Maps",
+    "directories": {
+      "output": "../dist-desktop",
+      "buildResources": "electron"
+    },
+    "files": [
+      "desktop/**/*",
+      "!desktop/node_modules/**/*",
+      "index.html",
+      "manifest.webmanifest",
+      "sw.js",
+      "js/**/*",
+      "css/**/*",
+      "assets/landing-bg.jpg",
+      "assets/willow/**/*",
+      "docs/DESKTOP.md",
+      "docs/WORLD-FILE.md"
+    ],
+    "linux": { "target": ["AppImage", "deb"], "category": "Graphics", "icon": "electron/icon.png" },
+    "win": { "target": ["nsis", "portable"], "icon": "electron/icon.ico" },
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.graphics-design" }
+  }
+}

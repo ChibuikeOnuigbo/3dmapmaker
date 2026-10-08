@@ -1,8 +1,42 @@
 # MEMORY — Panorama Maps (3dmapmaker)
 
-Date: 2026-09-21 · Branch state: arena/01a0be25-3dmapmaker tip.
+Date: 2026-10-08 · Branch state: arena/373b11d1-3dmapmaker (desktop build + world files).
 
 ## SUPPORTED (implemented + covered by automated tests)
+
+### `.pworld` — one file holds a whole world, images included
+| Feature | State | Evidence |
+|---|---|---|
+| Save any world (demos, built, imported) to one self contained file | SUPPORTED + TESTED | `js/io/pworld.js`; `tests/pworld.test.mjs` 14/14; boot-harness saves the live app's world and reopens it |
+| Every image inside (uploads, bundled photo sets per scene mode, 2D map image, previews, thumbnails, cover) | SUPPORTED + TESTED | boot-harness: 12/12 images in the harness file; browser e2e: 12/12 real Willow frames; desktop export byte identical |
+| Opens with no network, no originals, no store | SUPPORTED + TESTED | browser e2e cuts the originals at the network layer and the world still renders and walks |
+| Integrity: sha256 per asset and per world, damaged files refused | SUPPORTED + TESTED | damaged image and damaged graph tests |
+| Scene modes travel inside the file (`pano.kind = "embedded"`) | SUPPORTED + TESTED | mode swap reads a different embedded image; cache key carries the mode |
+| Legacy `.pmap` still saves and opens; the extension decides the opener | SUPPORTED | `openAnyFile()`, `FILE_KINDS` |
+| One surface everywhere: toolbar Worlds, Panels menu, both map studios, the scripting studio, `Ctrl/Cmd+S` | SUPPORTED + TESTED | static smoke asserts each; browser e2e clicks the studio button and the panel button |
+| Live readout of what a save will contain (images, size, what still has to be fetched) | SUPPORTED | `WorldLibrary.measure()` |
+
+### Desktop build (Linux · Windows · macOS)
+| Feature | State | Evidence |
+|---|---|---|
+| The same app served from disk with a database behind it | SUPPORTED + TESTED | `desktop/server.mjs`; `tests/desktop-api.test.mjs` 16/16 |
+| Worlds database (SQLite via `node:sqlite`, JSON fallback): worlds, assets, revisions, events, settings | SUPPORTED + TESTED | schema + CRUD on both engines |
+| Images content addressed (identical image stored once) | SUPPORTED + TESTED | two rows, one file on disk |
+| Library columns: world, places, images, size, updated (updated sits under the name) | SUPPORTED + TESTED | library response + browser e2e assertions |
+| Version history: list, snapshot, restore (30 kept) | SUPPORTED + TESTED | `GET/POST /api/worlds/:id/revisions`, restore test, browser e2e snapshot |
+| Export from the database to `.pworld`, import back (import brings its cover) | SUPPORTED + TESTED | server side archive with real images; cover test; import never overwrites a world silently |
+| Save dialog stand in: `POST /api/save-file` writes into `<data>/exports` | SUPPORTED + TESTED | fresh directory test (folders are created at boot), traversal neutered, empty refused |
+| Library row actions: open · export · copy · delete | SUPPORTED + TESTED | browser e2e drives all four |
+| Launchers `start.sh` / `start.command` / `start.bat` / `main.mjs`; CLI list/info/import/export/delete/gc/stats | SUPPORTED (smoke) | CLI ran; server boot + health verified |
+| Optional Electron wrapper + electron-builder targets | PROVIDED (needs `cd desktop && npm install`) | `desktop/electron/main.cjs`, `desktop/package.json` |
+| The web build stays database free | SUPPORTED | the panel says so; `Desktop.probe()` fails soft |
+
+### Browser end to end (tools-render/world-e2e.mjs · 73 checks)
+| Feature | State | Evidence |
+|---|---|---|
+| A real browser saves the running world, blocks the originals, reopens the file on a clean machine | SUPPORTED + TESTED | web phase: 49 checks |
+| The same browser drives the desktop build: database save, library, versions, copy, delete, export, reopen, cross import | SUPPORTED + TESTED | desktop phase: 24 checks |
+| Screenshots of every step | PROVIDED | `qa/world-file/*.png` |
 
 ### World modes
 | Feature | State | Evidence |
@@ -11,6 +45,7 @@ Date: 2026-09-21 · Branch state: arena/01a0be25-3dmapmaker tip.
 | AI real demo worlds (Willow Wood, day/rain/night) | SUPPORTED + TESTED | `assets/stills/willow-*.png`; expanded to a 34 spot village graph (102 planned frames); generation grounded by identity chaining to the committed village style; day batch for nodes 8 to 27 done (41 of 102 frames present); remaining: day 28 to 34 then rain and night across all spots |
 | Void mode (empty world import) | SUPPORTED | start-null guard removed; move pads/keys toasts "this world has no places" |
 | Project open/save/export `.pmap` | SUPPORTED | ProjectArchive export/import round-trip, atomic staged import |
+| World save/open `.pworld` (self contained) | SUPPORTED + TESTED | see the world file table above |
 | Auto-save to IndexedDB | SUPPORTED | debounced persist on every world change |
 
 ### Navigation
@@ -71,5 +106,7 @@ Date: 2026-09-21 · Branch state: arena/01a0be25-3dmapmaker tip.
 ## Invariants that must hold
 - ONE WORLD STAYS ONE WORLD: reverse movement returns the cached original panorama; AI continuation chains off the last panorama as its reference.
 - No hyphens ever in user-facing text.
-- No localStorage for project/images; `.pmap` stays self-contained and portable.
+- No localStorage for project/images; `.pworld` stays self-contained and portable — an image that cannot be embedded is reported in `missing[]` and its link kept as a fallback, never silently dropped.
+- The web build never requires a server or a database; the desktop build never requires a network.
+- `js/io/desktop.js` speaks relative `api/...` URLs only — no hardcoded host.
 - Loader must clean up after module failure (coverage test exists).

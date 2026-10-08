@@ -1382,6 +1382,7 @@ export class ScriptStudio {
         <div class="sg-acts">
           <button class="iconbtn" data-undo title="Undo (Ctrl+Z)" aria-label="Undo"><svg><use href="#i-back"/></svg></button>
           <button class="iconbtn" data-redo title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg><use href="#i-right"/></svg></button>
+          <button class="btn" data-saveworld title="Write this whole world to one file — every place and every image inside it (Ctrl+S)"><svg class="ic"><use href="#i-db"/></svg>Save world</button>
           <button class="btn ghost" data-dock aria-pressed="true" title="Show / hide the details panel (clear space)"><svg class="ic"><use href="#i-panels"/></svg>Details</button>
           <button class="btn ghost" data-add title="Add a node — then click empty graph space"><svg class="ic"><use href="#i-plus"/></svg>Node</button>
           <button class="btn ghost" data-select title="Multi-select mode — drag a rubber band over empty space · then drag any selected card to move the group · Del deletes the group"><svg class="ic"><use href="#i-select"/></svg>Select</button>
@@ -1418,6 +1419,8 @@ export class ScriptStudio {
     this.el.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => this.setMode(b.dataset.mode)));
     this.el.querySelectorAll('[data-var]').forEach(b => b.addEventListener('click', () => this.setVariant(b.dataset.var)));
     q('[data-close]').addEventListener('click', () => this.app.closePanels());
+    // the studio covers the app toolbar, so the world file button lives here too
+    q('[data-saveworld]').addEventListener('click', () => this.app.saveWorldFile());
     q('[data-fit]').addEventListener('click', () => this.canvas.fit());
     q('[data-dock]').addEventListener('click', (e) => this.toggleDock(e.currentTarget));
     q('[data-undo]').addEventListener('click', () => this.undo());

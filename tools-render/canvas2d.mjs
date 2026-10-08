@@ -136,6 +136,29 @@ export class Canvas2D {
     this._path = savedPath; this._subStart = savedStart;
   }
   roundRect(x, y, w, h) { this.rect(x, y, w, h); }
+  /** Quadratic Bézier flattened into line segments (birds, wings, gusts). */
+  quadraticCurveTo(cx, cy, x, y) {
+    const start = this._path.length ? this._path[this._path.length - 1] : null;
+    const x0 = start ? start[1] : 0, y0 = start ? start[2] : 0;
+    const steps = Math.max(6, Math.min(32, Math.ceil(Math.hypot(x - x0, y - y0) / 6)));
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps, u = 1 - t;
+      this.lineTo(u * u * x0 + 2 * u * t * cx + t * t * x, u * u * y0 + 2 * u * t * cy + t * t * y);
+    }
+  }
+  /** Cubic Bézier, same treatment. */
+  bezierCurveTo(c1x, c1y, c2x, c2y, x, y) {
+    const start = this._path.length ? this._path[this._path.length - 1] : null;
+    const x0 = start ? start[1] : 0, y0 = start ? start[2] : 0;
+    const steps = Math.max(8, Math.min(40, Math.ceil(Math.hypot(x - x0, y - y0) / 6)));
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps, u = 1 - t;
+      this.lineTo(
+        u * u * u * x0 + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * x,
+        u * u * u * y0 + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * y);
+    }
+  }
+  arcTo(x1, y1, x2, y2) { this.lineTo(x1, y1); this.lineTo(x2, y2); }
   arc(cx, cy, r, a0 = 0, a1 = Math.PI * 2, ccw = false) { this.ellipse(cx, cy, r, r, 0, a0, a1, ccw); }
   ellipse(cx, cy, rx, ry, rot = 0, a0 = 0, a1 = Math.PI * 2, ccw = false) {
     let da = a1 - a0;
@@ -273,6 +296,17 @@ export class FakeCanvas {
   set width(v) { this._width = Math.max(1, v | 0); this._realloc(); }
   get height() { return this._height; }
   set height(v) { this._height = Math.max(1, v | 0); this._realloc(); }
+  /** Serialize the pixel buffer — the app uses this for covers and thumbnails. */
+  toBlob(cb, type = 'image/png') {
+    const blob = this._blob(type);
+    if (typeof cb === 'function') { cb(blob); return undefined; }
+    return Promise.resolve(blob);
+  }
+  toDataURL(type = 'image/png', quality = 0.9) { void type; void quality; return 'data:image/png;base64,'; }
+  _blob(type) {
+    const buf = this._buf || new Uint8ClampedArray(4);
+    return new Blob([Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength)], { type });
+  }
   _realloc() {
     if (this._width && this._height) {
       this._buf = new Uint8ClampedArray(this._width * this._height * 4);

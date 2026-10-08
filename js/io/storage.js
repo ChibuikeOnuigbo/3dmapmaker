@@ -279,15 +279,23 @@ export function validateWorldJson(w) {
 }
 
 /* ------------------------- File System Access ------------------------- */
+/* File flavours the app can write and read. `.pworld` is the self-contained
+   world file (every image embedded); `.pmap` is the older project archive. */
+export const FILE_KINDS = {
+  pworld: { description: 'Panorama World', accept: { 'application/zip': ['.pworld'] }, ext: '.pworld' },
+  pmap: { description: 'Panorama Maps Project', accept: { 'application/zip': ['.pmap'] }, ext: '.pmap' },
+};
+
 export const fsAccess = {
   get supported() { return typeof window !== 'undefined' && 'showSaveFilePicker' in window; },
 
-  async saveBlob(blob, suggestedName, handle = null) {
+  async saveBlob(blob, suggestedName, handle = null, kind = 'pmap') {
+    const type = FILE_KINDS[kind] || FILE_KINDS.pmap;
     if (this.supported) {
       try {
         const h = handle ?? await window.showSaveFilePicker({
           suggestedName,
-          types: [{ description: 'Panorama Maps Project', accept: { 'application/zip': ['.pmap'] } }],
+          types: [type, FILE_KINDS.pmap, FILE_KINDS.pworld].filter((t, i, a) => a.indexOf(t) === i),
         });
         const w = await h.createWritable();
         await w.write(blob); await w.close();
@@ -305,10 +313,11 @@ export const fsAccess = {
     return { ok: true, handle: null, download: true };
   },
 
-  async openFile(accept = '.pmap') {
+  async openFile(accept = '.pworld,.pmap') {
+    const kinds = accept.includes('pmap') ? [FILE_KINDS.pworld, FILE_KINDS.pmap] : [FILE_KINDS.pworld];
     if (this.supported) {
       try {
-        const [h] = await window.showOpenFilePicker({ types: [{ description: 'Panorama Maps Project', accept: { 'application/zip': ['.pmap'] } }] });
+        const [h] = await window.showOpenFilePicker({ types: kinds });
         return await h.getFile();
       } catch (err) {
         if (err?.name === 'AbortError') return null;

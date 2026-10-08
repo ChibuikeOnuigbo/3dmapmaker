@@ -24,6 +24,12 @@ import { AdvancedEditor } from './editors/advanced-editor.js';
 import { ScriptStudio } from './editors/script-editor.js';
 import { Landing } from './ui/landing.js';
 import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsSvc } from './io/storage.js';
+import { Desktop } from './io/desktop.js';
+import {
+  exportPworld, importPworld, collectWorldAssets, inspectPworld,
+  pworldFilename, formatBytes,
+} from './io/pworld.js';
+import { WorldLibrary } from './ui/world-library.js';
 
 /* Living-world accessories: every animated layer can follow the world
    ('auto'), or be forced ON/OFF by the user (persisted in prefs).       */
@@ -60,6 +66,9 @@ const SCENE_MODES = {
   snow:  { icon: 'i-snow',  label: 'Snow',  tip: 'Falling snow, bright drifts' },
 };
 
+/* panorama kinds that carry one photo per scene mode (day / rain / night) */
+const MODE_KINDS = new Set(['urlset', 'embedded']);
+
 const $ = (sel) => document.querySelector(sel);
 
 const PERF_PROFILES = {
@@ -86,6 +95,14 @@ class App {
     this._lastSim = null;
     this.selectedNodeId = null;
     this._saveHandle = null;
+    // desktop build? (a local database serving this app — probed at boot)
+    this.desktop = Desktop;
+    // images that arrived inside an opened `.pworld` file, before they are
+    // staged anywhere: assetId → {blob, mime, meta}. This is what makes a file
+    // walkable the moment it is opened, even on a machine that never saw it.
+    this._sessionAssets = new Map();
+    this._assetUrls = new Map();          // assetId → object URL (capped)
+    this._pworldBusy = false;
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
     this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
@@ -136,14 +153,35 @@ class App {
     this._registerServiceWorker();
     this._applyViewPrefs();
 
+    // desktop build: a real database behind this same app. Probe once; when it
+    // answers, the Worlds surface grows its library / versions / activity tabs.
+    await Desktop.probe();
+    if (Desktop.online) {
+      document.body.classList.add('desktop-build');
+      console.info(`[desktop] worlds database: ${Desktop.dbEngine} · ${Desktop.dbPath}`);
+    }
+    this.worldLibrary = new WorldLibrary(this);
+
     // start screen — pick a demo, a create-mode, or open a project
     this.landing = new Landing(this);
     if (!this.prefs.hideLanding) this.landing.show();
+    this._handleDeepLink();
 
     $('#panoLoading').classList.remove('show');
   }
 
   savePrefs(patch = {}) { prefsSvc.save(patch); }
+
+  /** Deep links, used by the desktop window's File menu and by anyone who
+      likes URLs: `#worlds`, `#save-world`, `#open-world`. */
+  _handleDeepLink() {
+    const link = (location.hash || '').replace(/^#/, '').toLowerCase();
+    if (!link) return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* file:// */ }
+    if (link === 'worlds') { this.landing?.hide(); this.worldLibrary?.open('library'); }
+    else if (link === 'save-world') { this.landing?.hide(); this.worldLibrary?.open('save'); }
+    else if (link === 'open-world') this.openAnyFile();
+  }
 
   _setWorldName(n) {
     document.title = `Panorama Maps · ${n}`;
@@ -184,7 +222,10 @@ class App {
     });
   }
 
-  async loadWorldJson(json, { project = null, name = null } = {}) {
+  async loadWorldJson(json, { project = null, name = null, sessionAssets = null } = {}) {
+    // images that came inside an opened file live for this session; anything
+    // else means a fresh world, so nothing stale may leak in
+    this._sessionAssets = new Map(sessionAssets || []);
     const graph = WorldGraph.fromJSON(json);
     this._setWorldName(name || graph.name);
     await this._adoptWorld(graph, {
@@ -203,6 +244,9 @@ class App {
 
     this.graph = graph;
     this.project = existingProject ?? { id: projectId, name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    this.project.author ??= '';
+    this.project.description ??= (blurb || '');
+    this.project.tags ??= [];
     this.project.id = projectId;
     this.assets = new AssetManager(this.storage, projectId);
     await this.assets.reindex().catch(() => {});
@@ -224,6 +268,9 @@ class App {
     this._applyMotion();
     prefsSvc.save({ lastProjectId: projectId });
     this.project.updatedAt = new Date().toISOString();
+    // every way a world becomes current ends here, so the Worlds panel always
+    // describes the world you are actually in
+    this.worldLibrary?.worldChanged();
     await this.storage.saveProjectMeta({ ...this.project, world: graph.toJSON() }).catch(() => {});
   }
 
@@ -243,11 +290,13 @@ class App {
       camera: { yawDeg: this.viewer.view.yawDeg, pitchDeg: this.viewer.view.pitchDeg, fovDeg: this.viewer.view.fovDeg, height: node.camera?.height ?? 1.7 },
     });
 
-    const cacheKey = node.pano?.kind === 'urlset' ? `${nodeId}@${this.displayMode}` : nodeId;
+    const cacheKey = MODE_KINDS.has(node.pano?.kind) ? `${nodeId}@${this.displayMode}` : nodeId;
     const entry = await this.cache.get(cacheKey, async (priorMeta) => {
       let produced;
       if (node.pano?.kind === 'urlset') {
         produced = await this._renderUrlPanorama(node, priorMeta);
+      } else if (node.pano?.kind === 'embedded' && node.pano.variants) {
+        produced = await this._renderEmbeddedPanorama(node, priorMeta);
       } else if (node.pano?.kind === 'asset' && node.pano.assetId) {
         produced = await this._renderAssetPanorama(node, priorMeta);
       } else {
@@ -341,16 +390,19 @@ class App {
      overlay, fog and wet light all come along for free (Spec §17, one switch). */
   _syncModeGroup() {
     const group = $('#modeGroup');
-    let modes = null;
-    this._urlsetModes = null;
+    let photo = null, generated = false;
+    this._photoModes = null;
     if (this.graph) {
-      let generated = false;
       for (const n of this.graph.nodes.values()) {
-        if (n.pano?.kind === 'urlset' && n.pano.variants) { modes = Object.keys(n.pano.variants); this._urlsetModes = modes; break; }
+        if (!photo && MODE_KINDS.has(n.pano?.kind) && n.pano.variants) photo = Object.keys(n.pano.variants);
         if (n.pano?.kind === 'generated') generated = true;
       }
-      if (!modes && generated) modes = ['day', 'rain', 'night', 'dawn', 'snow', 'storm'];
     }
+    // photographed worlds (bundled urlset or embedded photo sets) swap frames;
+    // coded worlds turn the same names into environment presets
+    this._photoModes = photo;
+    const modes = photo || (generated ? ['day', 'rain', 'night', 'dawn', 'snow', 'storm'] : null);
+    this._urlsetModes = photo;
     if (!modes?.length) {
       group.hidden = true; this._sceneModesList = [];
       const pop0 = $('#scenePop'); if (pop0) { pop0.classList.remove('open'); pop0.textContent = ''; }
@@ -393,7 +445,7 @@ class App {
     this.displayMode = mode;
     this._syncSceneFace?.();
     const id = this.movement?.currentNodeId;
-    if (!this._urlsetModes && id && this.graph?.environment) {
+    if (!this._photoModes && id && this.graph?.environment) {
       /* Coded world: mode ⇒ environment patch, then ONE regeneration pass.
          Sun rez raised at night so the crescent reads crisp in a dark sky. */
       const ENV = {
@@ -435,22 +487,98 @@ class App {
   }
 
   async _renderAssetPanorama(node, priorMeta) {
-    const rec = await this.storage.getAsset(this.project.id, `${node.pano.assetId}:display`)
-      ?? await this.storage.getAsset(this.project.id, node.pano.assetId);
-    if (!rec?.blob) {
+    const img = await this._imageFromAsset(node.pano.assetId);
+    if (!img) {
       node.pano.missing = true;
       const canvas = placeholderCanvas('Panorama image missing', 'Replace it in the advanced editor with Upload panorama');
-      return { canvas, meta: { nodeId: node.id, provider: 'asset', missing: true, seed: priorMeta?.seed ?? null, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
+      return { canvas, meta: { nodeId: node.id, provider: 'asset', assetId: node.pano.assetId, missing: true, seed: priorMeta?.seed ?? null, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
     }
-    const url = URL.createObjectURL(rec.blob);
+    return {
+      canvas: img.canvas,
+      meta: {
+        nodeId: node.id, provider: 'asset', assetId: node.pano.assetId,
+        seed: priorMeta?.seed ?? null, promptVersion: 1,
+        generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1,
+      },
+    };
+  }
+
+  /**
+   * A photo set that came INSIDE a `.pworld` file: one embedded image per
+   * scene mode. Reads the pixels from the file's assets (session store, the
+   * local mirror, or the desktop database) — never from the original website.
+   * A mode that could not be embedded while saving keeps its link as a
+   * fallback, so a partly embedded world still walks.
+   */
+  async _renderEmbeddedPanorama(node, priorMeta) {
+    const variants = node.pano?.variants || {};
+    const fallbacks = node.pano?.fallbackVariants || {};
+    let assetId = null, mode = null;
+    for (const m of [this.displayMode, ...Object.keys(variants)]) {
+      if (variants[m]) { assetId = variants[m]; mode = m; break; }
+    }
+    if (assetId) {
+      const img = await this._imageFromAsset(assetId);
+      if (img) {
+        return {
+          canvas: img.canvas,
+          meta: {
+            nodeId: node.id, provider: 'embedded', mode, assetId,
+            source: node.pano.origins?.[mode] || node.pano.source || null,
+            embedded: true, seed: priorMeta?.seed ?? null,
+            generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1,
+          },
+        };
+      }
+    }
+    for (const m of [this.displayMode, ...Object.keys(fallbacks)]) {
+      if (fallbacks[m]) {
+        return this._renderUrlPanorama({ ...node, pano: { kind: 'urlset', variants: { [m]: fallbacks[m] } } }, priorMeta);
+      }
+    }
+    const canvas = placeholderCanvas('Panorama image missing', 'This world file has no image for this scene mode');
+    return { canvas, meta: { nodeId: node.id, provider: 'embedded', missing: true, seed: priorMeta?.seed ?? null, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
+  }
+
+  /**
+   * The one place images come from, in order of freshness:
+   *   1. images that arrived inside an opened `.pworld` file (session)
+   *   2. the browser's local mirror of the project (IndexedDB)
+   *   3. the desktop database (any world it holds, worldId/assetId over HTTP)
+   * Returns null when the image genuinely is not on this machine any more.
+   */
+  async assetBlob(assetId, worldId = null) {
+    if (!assetId) return null;
+    const pid = worldId || this.project?.id;
+    for (const key of [`${assetId}:display`, assetId]) {
+      const inSession = this._sessionAssets.get(key);
+      if (inSession?.blob) return inSession.blob;
+      const rec = await this.storage.getAsset(pid, key).catch(() => null);
+      if (rec?.blob) return rec.blob;
+    }
+    if (this.desktop?.online && pid) {
+      for (const kind of ['display', null]) {
+        try {
+          const res = await fetch(this.desktop.assetUrl(pid, assetId, kind), { cache: 'force-cache' });
+          if (res.ok) return await res.blob();
+        } catch { /* database unreachable — treat as missing */ }
+      }
+    }
+    return null;
+  }
+
+  /** Decode any stored image straight to a canvas (pixel-exact, no scaling). */
+  async _imageFromAsset(assetId) {
+    const blob = await this.assetBlob(assetId);
+    if (!blob) return null;
     try {
-      const bmp = await createImageBitmap(rec.blob);
+      const bmp = await createImageBitmap(blob);
       const canvas = document.createElement('canvas');
       canvas.width = bmp.width; canvas.height = bmp.height;
       canvas.getContext('2d').drawImage(bmp, 0, 0, bmp.width, bmp.height);
-      bmp.close();
-      return { canvas, meta: { nodeId: node.id, provider: 'asset', assetId: node.pano.assetId, seed: priorMeta?.seed ?? null, promptVersion: 1, generationAttempt: (priorMeta?.generationAttempt ?? 0) + 1 } };
-    } finally { URL.revokeObjectURL(url); }
+      bmp.close?.();
+      return { canvas, blob };
+    } catch { return null; }
   }
 
   /** Apply AutoComplete presentation choice + pitch limits + Sharpen for the CURRENT node. */
@@ -660,6 +788,8 @@ class App {
     on('#homeBtn', 'click', () => { this.landing?.show(); this.closePanels(); });
     on('#backBtn', 'click', () => { this.landing?.show(); this.closePanels(); });
     on('#studioBtn', 'click', () => this._studioClicked());
+    $('#worldsBtn')?.addEventListener('click', () => this.worldLibrary?.toggle());
+    this._syncWorldsBtn?.();
     this._syncStudioBtn();
     on('#compass', 'click', () => { this.viewer.view.yawDeg = 0; });
 
@@ -944,8 +1074,8 @@ class App {
         <span class="grow">${label}${hint ? `<small>${hint}</small>` : ''}</span>
         <span class="track"><span class="knob"></span></span>
       </button>`;
-    const act = (icon, label, hint = '') =>
-      `<button class="mi" role="menuitem"><svg class="ic"><use href="${icon}"/></svg><span class="grow">${label}${hint ? `<small>${hint}</small>` : ''}</span></button>`;
+    const act = (icon, label, hint = '', id = '') =>
+      `<button class="mi" ${id ? `id="${id}" ` : ''}role="menuitem"><svg class="ic"><use href="${icon}"/></svg><span class="grow">${label}${hint ? `<small>${hint}</small>` : ''}</span></button>`;
     mm.innerHTML = `
       <div class="lab">Image</div>
       <button class="mi sw ${sh.on ? 'on' : ''}" data-sharpen role="menuitemcheckbox" aria-checked="${!!sh.on}">
@@ -982,13 +1112,15 @@ class App {
         <span class="track"><span class="knob"></span></span>
       </button>
       <div class="sep"></div><div class="lab">World</div>
-      ${act('#i-save', 'Save project', 'portable .pmap file')}
-      ${act('#i-open', 'Open project')}
-      ${act('#i-route', 'Route to landmark')}
-      ${act('#i-home', 'Start screen', 'demos and create')}`;
+      ${act('#i-save', 'Save world file…', 'name it · every image inside one .pworld', 'miSaveWorld')}
+      ${act('#i-open', 'Open world file', '.pworld opens anywhere', 'miOpenWorld')}
+      ${act('#i-db', Desktop.online ? 'Worlds database' : 'Worlds', Desktop.online ? 'library · versions · activity' : 'web build: files, no database', 'miWorlds')}
+      <div class="sep"></div>
+      ${act('#i-save', 'Save project (.pmap)', 'legacy archive, images linked', 'miSavePmap')}
+      ${act('#i-open', 'Open project (.pmap)', '', 'miOpenPmap')}
+      ${act('#i-route', 'Route to landmark', '', 'miRoute')}
+      ${act('#i-home', 'Start screen', 'demos and create', 'miHome')}`;
     const rebuild = () => { const was = mm.classList.contains('open'); this._buildMainMenu(); if (was) mm.classList.add('open'); };
-    const items = mm.querySelectorAll('.mi');
-    const save = items[items.length - 5], open = items[items.length - 4], route = items[items.length - 3], home = items[items.length - 2];
     mm.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.sw;
       this.viewPrefs[k] = !this.viewPrefs[k];
@@ -1034,10 +1166,18 @@ class App {
       clearTimeout(this._smT);
       this._smT = setTimeout(() => this.reloadCurrentPanorama().catch(() => {}), 240);
     });
-    save.addEventListener('click', () => { mm.classList.remove('open'); this.saveProject(true); });
-    open.addEventListener('click', () => { mm.classList.remove('open'); this.openProject(); });
-    route.addEventListener('click', () => { mm.classList.remove('open'); this.routeToNearestLandmark(); });
-    home.addEventListener('click', () => { mm.classList.remove('open'); this.closePanels(); this.landing?.show(); });
+    /* named bindings, never positional: menu rows can be added freely */
+    const wire = (id, fn) => {
+      const el = mm.querySelector(`#${id}`);
+      el?.addEventListener('click', () => { mm.classList.remove('open'); fn(); });
+    };
+    wire('miSaveWorld', () => { this.landing?.hide(); this.worldLibrary?.open('save'); });
+    wire('miOpenWorld', () => this.openWorldFile());
+    wire('miWorlds', () => { this.closePanels(); this.worldLibrary?.open('library'); });
+    wire('miSavePmap', () => this.saveProject(true));
+    wire('miOpenPmap', () => this.openProject());
+    wire('miRoute', () => this.routeToNearestLandmark());
+    wire('miHome', () => { this.closePanels(); this.landing?.show(); });
   }
 
   /** Map slider 0..100 into 0.5..14 m/s (exponential, fine control at low end).
@@ -1134,6 +1274,7 @@ class App {
     this.simpleEditor.close();
     this.advancedEditor.close();
     this.scriptStudio.close();
+    this.worldLibrary?.close();
     this._syncStudioBtn();
   }
 
@@ -1298,8 +1439,17 @@ class App {
     }
   }
 
-  async openProject() {
-    const file = await fsAccess.openFile('.pmap');
+  /** One entry point for both file flavours: `.pworld` (self-contained) and
+      the older `.pmap` project archive. The extension decides, never a guess. */
+  async openAnyFile() {
+    const file = await fsAccess.openFile('.pworld,.pmap');
+    if (!file) return null;
+    const name = (file.name || '').toLowerCase();
+    return name.endsWith('.pmap') ? this.openProject(file) : this.openWorldFile(file);
+  }
+
+  async openProject(picked = null) {
+    const file = picked || await fsAccess.openFile('.pmap');
     if (!file) return;
     try {
       this.toast('Importing project…');
@@ -1322,6 +1472,391 @@ class App {
     } catch (err) {
       console.error(err);
       this.toast('Could not open project: ' + err.message, 'err', 6000);
+    }
+  }
+
+  /* ================= world files (.pworld) & the worlds database =================
+     ONE world, three homes, the same data everywhere:
+       .pworld file   portable — every image embedded inside the file
+       IndexedDB      the browser's local mirror (web build)
+       database       the desktop app's worlds library (SQLite, versioned)
+     All three are written from the SAME collected set, so a world saved one
+     way and opened another stays the world it was. */
+
+  /** The world card: name, maker, notes, tags — plus the modes to embed. */
+  _worldCard(overrides = {}) {
+    const p = this.project || {};
+    let tags = overrides.tags ?? p.tags ?? [];
+    if (typeof tags === 'string') tags = tags.split(',').map(t => t.trim()).filter(Boolean);
+    return {
+      id: overrides.id ?? p.id ?? this.graph?.id ?? ('world_' + Date.now().toString(36)),
+      name: String(overrides.name || this.graph?.name || p.name || 'Untitled world').trim(),
+      author: overrides.author ?? p.author ?? '',
+      description: overrides.description ?? p.description ?? '',
+      tags: Array.isArray(tags) ? tags : [],
+      modes: Array.isArray(overrides.modes) && overrides.modes.length ? overrides.modes : null,
+    };
+  }
+
+  /**
+   * Make the world's own data say what the card says, so an export made right
+   * after carries the name the user just typed (not the one it had before).
+   */
+  _adoptWorldCard(card) {
+    if (this.graph && card.name && this.graph.name !== card.name) this.graph.name = card.name;
+    if (this.graph) this.graph.updatedAt = new Date().toISOString();
+    this._applyWorldCard(card);
+  }
+
+  _applyWorldCard(card) {
+    if (!this.project) return;
+    this.project.author = card.author;
+    this.project.description = card.description;
+    this.project.tags = card.tags;
+    this.project.name = card.name;
+    prefsSvc.save({ lastProjectId: this.project.id });
+  }
+
+  /** Where the visitor stood, and how they like to look around. */
+  _sessionState() {
+    const v = this.viewer?.view || {};
+    return {
+      startNodeId: this.movement?.currentNodeId || this.movement?.startNodeId || null,
+      displayMode: this.displayMode,
+      yawDeg: v.yawDeg ?? 0, pitchDeg: v.pitchDeg ?? 0, fovDeg: v.fovDeg ?? 75,
+      walkSpeedMps: this.graph?.settings?.walkSpeedMps ?? 4,
+      distanceTravelledM: this.movement?.distanceTravelledM ?? 0,
+      view: { ...this.viewPrefs }, motion: { ...this.motion }, accessory: { ...this.accessory },
+      acEnabled: this.acEnabled,
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  _restoreSession(session) {
+    if (!session) return;
+    if (session.displayMode && (this._sceneModesList || []).includes(session.displayMode)) {
+      this.displayMode = session.displayMode;
+      this._syncSceneFace?.();
+    }
+    if (session.view && typeof session.view === 'object') Object.assign(this.viewPrefs, session.view);
+    if (session.motion) Object.assign(this.motion, session.motion);
+    if (session.accessory) Object.assign(this.accessory, session.accessory);
+    if (typeof session.acEnabled === 'boolean') this.acEnabled = session.acEnabled;
+    this._applyViewPrefs?.();
+    this._applyMotion?.();
+    this._applyAccessory?.();
+  }
+
+  /** Identity metadata (validation + completeness reports) for every node seen. */
+  _cacheMetaExport() {
+    const out = {};
+    for (const [id, meta] of this.cache.meta.entries()) {
+      out[id] = {
+        provider: meta.provider ?? null, mode: meta.mode ?? null,
+        generationAttempt: meta.generationAttempt ?? null,
+        seed: meta.seed ?? null, phash: meta.phash ?? null,
+        validation: meta.validation ?? null,
+        autoComplete: meta.autoComplete
+          ? { complete: !!meta.autoComplete.complete, topMissingPct: meta.autoComplete.topMissingPct, bottomMissingPct: meta.autoComplete.bottomMissingPct }
+          : null,
+      };
+    }
+    return out;
+  }
+
+  _restoreCacheMeta(cacheMeta) {
+    if (!cacheMeta) return;
+    for (const [id, meta] of Object.entries(cacheMeta)) {
+      if (!this.cache.meta.has(id)) this.cache.meta.set(id, { nodeId: id, ...meta });
+    }
+  }
+
+  /** How every stored image is read for an export (uploaded or embedded). */
+  _assetResolver() {
+    return async (assetId) => {
+      const record = await this.storage.getAsset(this.project?.id, assetId).catch(() => null);
+      const blob = await this.assetBlob(assetId).catch(() => null);
+      if (!blob) return null;
+      const meta = record?.meta || {};
+      const out = {
+        original: blob,
+        mime: blob.type || meta.mime || 'image/jpeg',
+        name: meta.originalName || meta.name || null,
+        width: meta.width ?? this._sessionAssets.get(assetId)?.meta?.width ?? null,
+        height: meta.height ?? this._sessionAssets.get(assetId)?.meta?.height ?? null,
+        role: meta.role || 'panorama',
+      };
+      const disp = await this.storage.getAsset(this.project?.id, `${assetId}:display`).catch(() => null);
+      const thumb = await this.storage.getAsset(this.project?.id, `${assetId}:thumb`).catch(() => null);
+      if (disp?.blob) out.display = disp.blob;
+      else if (this._sessionAssets.get(`${assetId}:display`)?.blob) out.display = this._sessionAssets.get(`${assetId}:display`).blob;
+      if (thumb?.blob) out.thumbnail = thumb.blob;
+      else if (this._sessionAssets.get(`${assetId}:thumb`)?.blob) out.thumbnail = this._sessionAssets.get(`${assetId}:thumb`).blob;
+      return out;
+    };
+  }
+
+  /** A picture of the world for the library (the view you are standing in). */
+  async _coverJpeg() {
+    const id = this.movement?.currentNodeId;
+    if (!id) return null;
+    try {
+      const entry = await this._ensurePanorama(id, {});
+      const source = entry?.canvas || entry?.completedCanvas;
+      if (!source) return null;
+      const c = document.createElement('canvas');
+      c.width = 640; c.height = 320;
+      c.getContext('2d').drawImage(source, 0, 0, 640, 320);
+      return await new Promise((r) => c.toBlob((b) => r(b), 'image/jpeg', 0.72));
+    } catch { return null; }
+  }
+
+  _progressText(p) {
+    if (p.phase === 'fetch') return `Embedding images from the world folder ${p.done}/${p.total}`;
+    if (p.phase === 'assets') return `Packing images ${p.done}/${p.total}`;
+    if (p.phase === 'archive') return 'Assembling the world file…';
+    return 'Collecting the world…';
+  }
+
+  /**
+   * SAVE THE WORLD AS ONE FILE — all of it: places, connections, zones,
+   * landmarks, scale, environment, session, and every image embedded inside.
+   */
+  async saveWorldFile(cardIn = {}) {
+    if (this._pworldBusy) { this.toast('A world file is already being written…'); return false; }
+    if (!this.graph) return false;
+    const card = this._worldCard(cardIn);
+    // the card is the world's identity from here on: the file, the graph and
+    // the project all carry the same name / maker / notes
+    this._adoptWorldCard(card);
+    this._pworldBusy = true;
+    this.worldLibrary?.setProgress({ label: 'Collecting the world…', done: 0, total: 0 });
+    try {
+      const collected = await collectWorldAssets(this.graph, {
+        resolveAsset: this._assetResolver(),
+        modes: card.modes,
+        onProgress: (p) => this.worldLibrary?.setProgress({ label: this._progressText(p), done: p.done, total: p.total }),
+      });
+      const cover = await this._coverJpeg();
+      this.worldLibrary?.setProgress({ label: 'Assembling the world file…', done: 0, total: 0 });
+      const { bytes } = await exportPworld({
+        world: { ...card, modes: collected.modes },
+        worldJson: collected.worldJson,
+        assets: collected.assets,
+        session: this._sessionState(),
+        cacheMeta: this._cacheMetaExport(),
+        cover,
+        missing: collected.missing,
+      });
+      const filename = pworldFilename(card.name);
+      let savedPath = null;
+      if (this.desktop?.online) {
+        // desktop: a real file in the app's exports folder, no download needed
+        const out = await this.desktop.saveFileToDisk(filename, bytes);
+        savedPath = out?.saved || null;
+      }
+      if (!savedPath) {
+        const res = await fsAccess.saveBlob(new Blob([bytes], { type: 'application/zip' }), filename, this._saveHandle, 'pworld');
+        if (res?.handle) this._saveHandle = res.handle;
+        if (res?.aborted) { this.toast('Save cancelled'); return false; }
+        if (!res?.ok) throw new Error('the file could not be written');
+      }
+      this._setWorldName(card.name);
+      this.dirty = false;
+      const images = collected.images;
+      const missing = collected.missing.length;
+      this.toast(
+        `Saved ${filename} · ${formatBytes(bytes.length)} · ${images} image${images === 1 ? '' : 's'} inside the file`
+        + (missing ? ` · ${missing} image(s) could not be embedded` : '')
+        + (savedPath ? ` · ${savedPath}` : ''),
+        missing ? 'err' : 'ok', 7000);
+      return true;
+    } catch (err) {
+      console.error(err);
+      this.toast(`Could not save the world file: ${err.message}`, 'err', 6000);
+      return false;
+    } finally {
+      this._pworldBusy = false;
+      this.worldLibrary?.setProgress(null);
+    }
+  }
+
+  /** OPEN A WORLD FROM A FILE — images come out of the file itself. */
+  async openWorldFile(picked = null) {
+    try {
+      const file = picked || await fsAccess.openFile('.pworld,.pmap');
+      if (!file) return false;
+      this.toast('Opening world file…');
+      const imported = await importPworld(file);
+      const name = imported.manifest.world.name || 'Imported world';
+
+      // 1. the embedded images become the working set for this session, so the
+      //    world is walkable immediately — even on a machine that has never
+      //    seen these pictures before
+      const sessionAssets = new Map();
+      for (const a of imported.assets) {
+        if (a.original) sessionAssets.set(a.id, { blob: a.original, mime: a.mime, meta: a });
+        if (a.display) sessionAssets.set(`${a.id}:display`, { blob: a.display, mime: 'image/webp' });
+        if (a.thumbnail) sessionAssets.set(`${a.id}:thumb`, { blob: a.thumbnail, mime: 'image/webp' });
+      }
+
+      // 2. mirror them into the local store so the world survives a reload
+      const projectId = imported.manifest.world.id || imported.world.id || ('world_' + Date.now().toString(36));
+      imported.world.id = projectId;
+      const project = {
+        id: projectId, name, author: imported.manifest.world.author || '',
+        description: imported.manifest.world.description || '', tags: imported.manifest.world.tags || [],
+        createdAt: imported.manifest.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      await this.storage.saveProjectMeta({ ...project, world: imported.world }).catch(() => {});
+      for (const a of imported.assets) {
+        await this.storage.putAsset(projectId, a.id, a.original, {
+          id: a.id, mime: a.mime, originalName: a.name, sha256: a.sha256,
+          width: a.width, height: a.height, role: a.role, mode: a.mode, fromFile: file.name || 'world file',
+        }).catch(() => {});
+        if (a.display) await this.storage.putAsset(projectId, `${a.id}:display`, a.display, { of: a.id }).catch(() => {});
+        if (a.thumbnail) await this.storage.putAsset(projectId, `${a.id}:thumb`, a.thumbnail, { of: a.id }).catch(() => {});
+      }
+
+      // 3. desktop build: put it in the worlds database too, so the library
+      //    lists it and the images stop depending on this browser at all
+      let inDatabase = false;
+      if (this.desktop?.online) {
+        try {
+          const bytes = file.arrayBuffer ? new Uint8Array(await file.arrayBuffer()) : null;
+          if (bytes) {
+            await this.desktop.importPworldBytes(bytes, { name, source: file.name || null });
+            inDatabase = true;
+          }
+        } catch (err) { console.warn('desktop database import skipped', err); }
+      }
+
+      // 4. adopt the world, then put the visitor back where the file left them
+      await this.loadWorldJson(imported.world, { project, name, sessionAssets });
+      this._restoreSession(imported.session);
+      this._restoreCacheMeta(imported.cacheMeta);
+      const cover = imported.cover || null;
+      if (cover && inDatabase) {
+        const buf = new Uint8Array(await cover.arrayBuffer());
+        this.desktop.saveWorld({ id: projectId, name, author: project.author, description: project.description, tags: project.tags, worldJson: imported.world, coverBytes: [...buf], revision: false }).catch(() => {});
+      }
+      const warn = imported.warnings.length ? ` · ${imported.warnings[0]}` : '';
+      this.toast(`Opened “${name}” · ${imported.assets.length} image(s) came inside the file${inDatabase ? ' · added to the worlds database' : ''}${warn}`, imported.warnings.length ? 'err' : 'ok', 6500);
+      return true;
+    } catch (err) {
+      console.error(err);
+      this.toast(`Could not open the world file: ${err.message}`, 'err', 6500);
+      return false;
+    }
+  }
+
+  /** Quick look inside a file without opening it (size, counts, missing art). */
+  async inspectWorldFile(file) {
+    const info = await inspectPworld(file);
+    const m = info.manifest;
+    return {
+      name: m.world.name, author: m.world.author, nodes: m.stats.nodes, images: m.stats.images,
+      size: info.fileBytes, modes: m.scene?.modes || [], missing: m.missing?.length || 0,
+      version: m.formatVersion, createdAt: m.createdAt,
+    };
+  }
+
+  /** SAVE INTO THE DESKTOP DATABASE — worlds library, versions, activity. */
+  async saveWorldToDatabase(cardIn = {}) {
+    if (!this.desktop?.online) {
+      this.toast('The web build has no database by design — save a .pworld file instead', 'err', 5200);
+      return false;
+    }
+    if (this._pworldBusy) { this.toast('A save is already running…'); return false; }
+    const card = this._worldCard(cardIn);
+    this._adoptWorldCard(card);
+    this._pworldBusy = true;
+    this.worldLibrary?.setProgress({ label: 'Collecting the world…', done: 0, total: 0 });
+    try {
+      const collected = await collectWorldAssets(this.graph, {
+        resolveAsset: this._assetResolver(),
+        modes: card.modes,
+        onProgress: (p) => this.worldLibrary?.setProgress({ label: this._progressText(p), done: p.done, total: p.total }),
+      });
+      const cover = await this._coverJpeg();
+      const coverBytes = cover ? [...new Uint8Array(await cover.arrayBuffer())] : null;
+      await this.desktop.saveWorld({
+        id: card.id, name: card.name, author: card.author, description: card.description, tags: card.tags,
+        source: this.worldDef?.id || 'app', createdAt: this.project?.createdAt,
+        worldJson: collected.worldJson, session: this._sessionState(),
+        coverBytes, cacheMeta: this._cacheMetaExport(),
+        revisionLabel: 'saved', note: `${collected.images} image(s)`,
+      });
+      let done = 0;
+      for (const a of collected.assets) {
+        this.worldLibrary?.setProgress({ label: `Storing images ${++done}/${collected.assets.length}`, done, total: collected.assets.length });
+        const bytes = a.original instanceof Blob ? new Uint8Array(await a.original.arrayBuffer()) : a.original;
+        await this.desktop.putAsset(card.id, a.id, bytes, {
+          mime: a.mime, role: a.role, mode: a.mode, name: a.name,
+          sha256: a.sha256, width: a.width, height: a.height,
+        });
+        for (const [kind, blob] of [['display', a.display], ['thumb', a.thumbnail]]) {
+          if (!blob) continue;
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          await this.desktop.putAsset(card.id, a.id, buf, { mime: 'image/webp', role: a.role, mode: a.mode, name: a.name }, kind);
+        }
+      }
+      // the world in memory now points at the stored images: adopt it, so the
+      // walk continues without needing the original URLs
+      await this.loadWorldJson(collected.worldJson, { project: { ...this.project, ...card, id: card.id, updatedAt: new Date().toISOString() }, name: card.name });
+      this._setWorldName(card.name);
+      this.dirty = false;
+      this.toast(`Saved “${card.name}” to the worlds database · ${collected.images} image(s)`, 'ok', 5200);
+      await this.worldLibrary?.refresh();
+      return true;
+    } catch (err) {
+      console.error(err);
+      this.toast(`Database save failed: ${err.message}`, 'err', 6000);
+      return false;
+    } finally {
+      this._pworldBusy = false;
+      this.worldLibrary?.setProgress(null);
+    }
+  }
+
+  /** Open a world stored in the desktop database (images stream from it). */
+  async loadWorldFromDatabase(id) {
+    if (!this.desktop?.online) return false;
+    try {
+      this.toast('Opening from the worlds database…');
+      const rec = await this.desktop.getWorld(id);
+      if (!rec?.world) throw new Error('the database has no such world');
+      const project = {
+        id, name: rec.meta.name, author: rec.meta.author, description: rec.meta.description,
+        tags: rec.meta.tags, createdAt: rec.meta.createdAt, updatedAt: new Date().toISOString(),
+      };
+      await this.storage.saveProjectMeta({ ...project, world: rec.world }).catch(() => {});
+      await this.loadWorldJson(rec.world, { project, name: rec.meta.name });
+      this._restoreSession(rec.session);
+      const cacheMeta = await this.desktop.api(`api/settings`).catch(() => null);
+      void cacheMeta;
+      this.toast(`Opened “${rec.meta.name}” · ${rec.assets.length} image(s) from the database`, 'ok', 4600);
+      return true;
+    } catch (err) {
+      this.toast(`Could not open from the database: ${err.message}`, 'err', 6000);
+      return false;
+    }
+  }
+
+  /** Snapshot the open world's current state as a restorable version. */
+  async snapshotWorldVersion(cardIn = {}) {
+    if (!this.desktop?.online) { this.toast('Versions live in the desktop database', 'err'); return false; }
+    const card = this._worldCard(cardIn);
+    try {
+      const label = prompt('Label for this version:', `snapshot ${new Date().toLocaleString()}`);
+      if (label === null) return false;
+      await this.desktop.addRevision(card.id, { label: label || null, note: 'manual snapshot', worldJson: this.graph.toJSON() });
+      this.toast('Version saved', 'ok');
+      await this.worldLibrary?.refresh();
+      return true;
+    } catch (err) {
+      this.toast(`Version failed: ${err.message}`, 'err', 5000);
+      return false;
     }
   }
 
@@ -1459,6 +1994,17 @@ class App {
     document.addEventListener('keydown', (e) => {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {   // save the world
+        e.preventDefault();
+        if (this.worldLibrary?.isOpen) this.worldLibrary._cardNow && this.saveWorldFile(this.worldLibrary._cardNow());
+        else this.saveWorldFile();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {   // open a world
+        e.preventDefault();
+        this.openWorldFile();
+        return;
+      }
       if (e.key === 'Escape') { this.closePanels(); document.querySelectorAll('.pop.open').forEach(el => el.classList.remove('open')); return; }
       if (e.key === 'Enter' && this.simpleEditor.isOpen) { this.simpleEditor.onEnterKey(); return; }
       // Scripting studio is a full-screen work surface: walking keys stay off

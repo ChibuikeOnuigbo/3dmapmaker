@@ -76,9 +76,15 @@ export class AdvancedEditor {
           <button class="btn ghost block" data-act="applyWorld"><svg><use href="#i-check"/></svg>Apply name & scale</button>`)}
 
         ${sec('data', 'Data', false, `
+          <button class="btn block" data-act="saveWorld"><svg><use href="#i-db"/></svg>Save world file (.pworld)</button>
+          <div class="hint" style="margin-bottom:8px">One file with every place, connection, zone and image inside it — openable on any machine, online or off.</div>
           <div class="btnrow">
             <button class="btn ghost" data-act="exportJson"><svg><use href="#i-save"/></svg>World JSON</button>
             <button class="btn ghost" data-act="importJson"><svg><use href="#i-open"/></svg>Import JSON</button>
+          </div>
+          <div class="btnrow" style="margin-top:8px">
+            <button class="btn ghost" data-act="openWorld"><svg><use href="#i-open"/></svg>Open world file</button>
+            <button class="btn ghost" data-act="savePmap"><svg><use href="#i-save"/></svg>Project (.pmap)</button>
           </div>`)}
       </div>`;
     this.panel.addEventListener('click', (e) => {
@@ -90,6 +96,9 @@ export class AdvancedEditor {
       else if (act === 'validateNode') this.validateNode();
       else if (act === 'validateWorld') this.validateWorld();
       else if (act === 'applyWorld') this._applyWorld();
+      else if (act === 'saveWorld') this.app.saveWorldFile();
+      else if (act === 'openWorld') this.app.openWorldFile();
+      else if (act === 'savePmap') this.app.saveProject(true);
       else if (act === 'exportJson') this._exportJson();
       else if (act === 'importJson') this._importJson();
       else if (act === 'setCurrent') this.app.teleport(this.app.selectedNodeId);

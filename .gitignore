@@ -9,3 +9,6 @@ Thumbs.db
 .venv/
 __pycache__/
 *.pyc
+dist-desktop/
+desktop/.data/
+*.pworld

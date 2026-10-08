@@ -142,7 +142,18 @@ globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
 globalThis.fetch = async (url) => {
   const u = String(url);
   if (u.startsWith('assets/willow/')) {
-    return { ok: true, arrayBuffer: async () => new ArrayBuffer(8), blob: async () => new Blob([new Uint8Array(8)], { type: 'image/jpeg' }), url: u };
+    // one DISTINCT small payload per URL, so embedding + de-duplication are
+    // both exercised honestly (identical URLs still collapse, different do not)
+    let h = 2166136261;
+    for (let i = 0; i < u.length; i++) { h ^= u.charCodeAt(i); h = Math.imul(h, 16777619); }
+    const bytes = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) bytes[i] = (h >>> (i % 4 * 8)) & 255;
+    return {
+      ok: true, url: u,
+      headers: { get: (k) => (String(k).toLowerCase() === 'content-type' ? 'image/jpeg' : null) },
+      arrayBuffer: async () => bytes.buffer.slice(0),
+      blob: async () => new Blob([bytes], { type: 'image/jpeg' }),
+    };
   }
   throw new Error('fetch not expected in harness: ' + u);
 };
@@ -151,10 +162,10 @@ globalThis.createImageBitmap = async () => {
   for (let i = 0; i < w * h; i++) { const o = i * 4; buf[o] = 90; buf[o + 1] = 110; buf[o + 2] = 140; buf[o + 3] = 255; }
   return { width: w, height: h, _buf: buf, close() {} };
 };
-if (!globalThis.URL.createObjectURL) {
-  globalThis.URL.createObjectURL = () => 'blob:harness';
-  globalThis.URL.revokeObjectURL = () => {};
-}
+/* the blob handed to the last download is kept: that IS the saved world file */
+let lastCreatedBlob = null;
+globalThis.URL.createObjectURL = (b) => { lastCreatedBlob = b; return 'blob:harness'; };
+globalThis.URL.revokeObjectURL = () => {};
 
 /* ---------------- tools ---------------- */
 function canvasStats(canvas) {
@@ -177,6 +188,12 @@ async function waitFor(fn, what, timeoutMs = 30000) {
   }
   throw new Error(`timeout waiting for ${what}`);
 }
+
+const bearingTo = (fromId, toId) => {
+  const a = app.graph.getNode(fromId), b = app.graph.getNode(toId);
+  if (!a || !b) return 0;
+  return (Math.atan2(b.x - a.x, -(b.y - a.y)) * 180 / Math.PI + 360) % 360;
+};
 
 let pass = 0, fail = 0;
 const check = (name, cond, detail = '') => {
@@ -325,6 +342,92 @@ if (wT) {
   check('willow forward hop resolved', false, 'var no link from willow boot node');
 }
 check('willow pixels are the shim color, not a rainbow error image', pxDay.mean > 80 && pxDay.mean < 120, `mean=${pxDay.mean}`);
+
+/* ============================================================
+   THE WORLD FILE — save the whole world, images and all, then open
+   that file on a machine that never had the pictures. This walks the
+   REAL app: same save method the buttons call, same open method.
+   ============================================================ */
+console.log('\n=== DEMO 5 · the .pworld file (self-contained world) ===');
+{
+  const { readZip } = await import('../js/io/zipex.js');
+  const { WorldGraph } = await import('../js/core/world-graph.js');
+  const { MapScale } = await import('../js/core/scale.js');
+
+  // a photographed world whose images live only as URLs (like Willow Parish)
+  const g = new WorldGraph(new MapScale({ pixelsPerMeter: 2 }), { id: 'w_harness', name: 'File Hollow' });
+  for (let i = 0; i < 6; i++) {
+    g.addNode({
+      id: 'fh_' + i, x: i * 20, y: 0, name: 'Spot ' + i,
+      pano: { kind: 'urlset', variants: { day: `assets/willow/day/n${i + 1}.jpg`, night: `assets/willow/night/n${i + 1}.jpg` } },
+    });
+    if (i) g.connect('fh_' + (i - 1), 'fh_' + i);
+  }
+  g.addLandmark({ id: 'lm_fh', type: 'water', name: 'Half Moon Pond', x: 50, y: 10, importance: 0.4 });
+  g.zones.add({ id: 'z_fh', name: 'The Hollow', shape: 'circle', cx: 50, cy: 0, radiusPx: 120 });
+
+  await app.loadWorldJson({ ...g.toJSON(), startNodeId: 'fh_0' }, { name: 'File Hollow' });
+  await waitFor(() => app.cache.metaOf('fh_0@day'), 'file-hollow boot');
+
+  // SAVE — the very method the Save world file buttons call
+  const ok = await app.saveWorldFile({ name: 'File Hollow', author: 'Harness', description: 'self-contained', tags: ['test'] });
+  check('saveWorldFile() reported success', ok === true);
+  check('a world file was produced', !!lastCreatedBlob);
+  const bytes = new Uint8Array(await lastCreatedBlob.arrayBuffer());
+  check('world file is not empty', bytes.length > 200, `${bytes.length} bytes`);
+
+  const entries = await readZip(bytes);
+  check('world file carries its own header', entries.has('pworld.json'));
+  check('world file carries the full graph', entries.has('world/world.json'));
+  check('world file carries where the visitor stood', entries.has('world/session.json'));
+  const assets = [...entries.keys()].filter((k) => k.startsWith('assets/panoramas/'));
+  check('every panorama of the world is INSIDE the file', assets.length === 12, `${assets.length} embedded images`);
+  check('world file carries a cover picture', entries.has('cover.jpg'));
+
+  // OPEN IT — as if on another machine: no network, no original files
+  const { importPworld } = await import('../js/io/pworld.js');
+  const imported = await importPworld(new File([bytes], 'File-Hollow.pworld'));
+  check('the file imports cleanly', imported.world.nodes.length === 6);
+  check('imported nodes point at embedded images', imported.world.nodes.every((n) => n.pano.kind === 'embedded'));
+  const sessionAssets = new Map();
+  for (const a of imported.assets) {
+    sessionAssets.set(a.id, { blob: a.original, mime: a.mime, meta: a });
+    if (a.display) sessionAssets.set(`${a.id}:display`, { blob: a.display, mime: 'image/webp' });
+  }
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u) => { throw new Error('the app must not need the network after opening a world file: ' + u); };
+  try {
+    await app.loadWorldJson(imported.world, { project: { id: 'w_harness', name: 'File Hollow' }, name: 'File Hollow', sessionAssets });
+    await waitFor(() => app.cache.metaOf('fh_0@day'), 'embedded world render');
+    const day = await app.cache.get('fh_0@day', async () => { throw new Error('must be cached'); });
+    check('the world renders from the file pixels, offline', day.meta.provider === 'embedded' && canvasStats(day.canvas).mean > 10,
+      `provider=${day.meta.provider} mean=${canvasStats(day.canvas).mean}`);
+    check('the day frame came out of the file', !!day.meta.assetId && sessionAssets.has(day.meta.assetId));
+
+    // scene modes travel with the file: night is a different embedded image
+    app.displayMode = 'night';
+    await app._enterNode('fh_0', { teleport: true });
+    await waitFor(() => app.cache.metaOf('fh_0@night'), 'embedded night render');
+    const night = await app.cache.get('fh_0@night', async () => { throw new Error('must be cached'); });
+    check('scene modes are embedded too (night ≠ day frame)', night.meta.mode === 'night' && night.meta.assetId !== day.meta.assetId,
+      `night=${night.meta.assetId} day=${day.meta.assetId}`);
+    check('mode group offers the embedded modes', JSON.stringify(app._sceneModesList) === JSON.stringify(['day', 'night']), JSON.stringify(app._sceneModesList));
+    app.displayMode = 'day';
+
+    // walking a world that exists only inside the file
+    app.graph.settings.walkSpeedMps = 60;
+    app.viewer.view.yawDeg = bearingTo('fh_0', 'fh_1');
+    await app.tryMove('forward');
+    await waitFor(() => app.movement.currentNodeId === 'fh_1', 'walk forward in the file world', 15000).catch(() => null);
+    check('walking works inside the opened file', app.movement.currentNodeId === 'fh_1');
+    app.viewer.view.yawDeg = bearingTo('fh_1', 'fh_0');
+    await app.tryMove('forward');
+    await waitFor(() => app.movement.currentNodeId === 'fh_0', 'walk back', 15000).catch(() => null);
+    check('walking back returns the same file image (identity holds)', app.movement.currentNodeId === 'fh_0' && !!app.cache.metaOf('fh_0@day'));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
 
 /* 500 m zone sanity inside the live app */
 const chapel = DEMO_WORLDS.find((w) => w.id === 'demo_chapel_lane').build();

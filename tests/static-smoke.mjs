@@ -194,6 +194,107 @@ test('custom cursor set: black gamified family is complete and well-formed', () 
   }
 });
 
+/* ---------------- the world file + the worlds surface ---------------- */
+test('world file: the .pworld modules exist, load and are in the offline shell', () => {
+  for (const f of ['js/io/pworld.js', 'js/io/desktop.js', 'js/ui/world-library.js', 'desktop/db.mjs', 'desktop/server.mjs', 'desktop/main.mjs', 'desktop/cli.mjs']) {
+    assert.ok(exists(f), `missing ${f}`);
+  }
+  const sw = read('sw.js');
+  for (const f of ['./js/io/pworld.js', './js/io/desktop.js', './js/ui/world-library.js']) {
+    assert.ok(sw.includes(`'${f}'`), `service worker shell must cache ${f}`);
+  }
+  assert.ok(/panorama-maps-shell-v\d+/.test(sw), 'shell cache must be versioned');
+});
+
+test('world file: every world can be saved — all surfaces offer the button', () => {
+  const main = read('js/main.js');
+  const simple = read('js/editors/simple-editor.js');
+  const adv = read('js/editors/advanced-editor.js');
+  assert.ok(main.includes('saveWorldFile'), 'App must own saveWorldFile');
+  assert.ok(main.includes('async saveWorldFile'), 'saveWorldFile must be a real method');
+  assert.ok(/async saveWorldFile[\s\S]*collectWorldAssets/.test(main), 'saving a world must collect its images');
+  const script = read('js/editors/script-editor.js');
+  assert.ok(/data-saveworld/.test(script), 'the scripting studio must offer Save world');
+  assert.ok(/data-saveworld[\s\S]{0,400}saveWorldFile\(\)/.test(script), 'that button must call app.saveWorldFile');
+  for (const [name, src] of [['simple editor', simple], ['advanced editor', adv]]) {
+    assert.ok(/data-act="saveWorld"/.test(src), `${name} must offer Save world file`);
+    assert.ok(/saveWorld'\s*\)\s*this\.app\.saveWorldFile/.test(src.replace(/\n/g, ' ')), `${name} action must call app.saveWorldFile`);
+  }
+  // the Panels menu binds the world rows by id, never by position
+  assert.ok(main.includes("wire('miSaveWorld'"), 'menu must wire Save world file');
+  assert.ok(/wire\('miSaveWorld', \(\) => \{ this\.landing\?\.hide\(\); this\.worldLibrary\?\.open\('save'\)/.test(main),
+    'Save world file must open the save section of the worlds panel');
+  assert.ok(/link === 'save-world'\) \{ this\.landing\?\.hide\(\); this\.worldLibrary\?\.open\('save'\)/.test(main),
+    'the #save-world deep link (desktop menu) must open the save section');
+  assert.ok(main.includes("wire('miOpenWorld'"), 'menu must wire Open world file');
+  assert.ok(!/items\[items\.length - \d+\]/.test(main), 'menu rows must not be bound by position');
+});
+
+test('world file: opening a file makes its embedded images the working set', () => {
+  const main = read('js/main.js');
+  assert.ok(main.includes('_sessionAssets'), 'a session store for embedded images is required');
+  assert.ok(/loadWorldJson\(imported\.world, \{ project, name, sessionAssets \}\)/.test(main),
+    'opening a file must hand its images to the world before it is adopted');
+  assert.ok(main.includes('_renderEmbeddedPanorama'), 'the viewer must render embedded photo sets');
+  assert.ok(main.includes("kind === 'embedded'"), 'embedded panorama kind must be handled');
+  // desktop mirroring: a file opened in the desktop build lands in the database
+  assert.ok(/importPworldBytes/.test(main), 'the desktop build must mirror an opened file into the database');
+});
+
+test('world file: legacy .pmap still saves and opens, and the extensions are distinct', () => {
+  const storage = read('js/io/storage.js');
+  assert.ok(storage.includes("pworld: { description: 'Panorama World'"), 'fsAccess must know the .pworld flavour');
+  assert.ok(storage.includes("'application/zip': ['.pmap']"), 'the .pmap archive must stay supported');
+  const main = read('js/main.js');
+  assert.ok(main.includes('async openAnyFile'), 'one entry point must route by extension');
+  assert.ok(/\.endsWith\('\.pmap'\)\s*\?\s*this\.openProject\(file\)\s*:\s*this\.openWorldFile\(file\)/.test(main),
+    'the extension must decide which opener runs');
+});
+
+test('worlds panel: the save surface and the library exist in the DOM', () => {
+  const html = read('index.html');
+  assert.ok(html.includes('id="worldsPanel"'), 'the worlds panel host is missing');
+  assert.ok(html.includes('id="worldsBtn"'), 'the toolbar Worlds button is missing');
+  assert.ok(html.includes('symbol id="i-db"'), 'the database icon is missing');
+  const lib = read('js/ui/world-library.js');
+  for (const piece of ['Save new world', 'Save to worlds database', 'Save .pworld file', 'Worlds', 'Versions', 'Activity']) {
+    assert.ok(lib.includes(piece), `worlds panel must offer: ${piece}`);
+  }
+  assert.ok(lib.includes('no database by design'), 'the web build must say plainly that it has no database');
+  // the save card is the section a new world is named and saved from
+  for (const field of ['data-field="name"', 'data-field="author"', 'data-field="description"', 'data-field="tags"', 'data-mode=']) {
+    assert.ok(lib.includes(field), `the save card must offer ${field}`);
+  }
+  for (const act of ['saveDb', 'saveFile', 'saveBoth', 'openFile', 'refresh']) {
+    assert.ok(lib.includes(`data-act="${act}"`), `the worlds panel must offer ${act}`);
+  }
+  // the save card measures itself before writing (and follows the checkboxes)
+  assert.ok(lib.includes('id="wlEstimate"'), 'the save card must show what the file will contain');
+  assert.ok(/async measure\(/.test(lib), 'the panel must be able to measure a save');
+  assert.ok(lib.includes("worldChanged()"), 'the panel must redraw when the open world changes');
+  assert.ok(/addEventListener\('change', \(\) => \{[\s\S]{0,120}setEstimate\(/.test(lib),
+    'unticking a scene mode must re-measure');
+  const main = read('js/main.js');
+  assert.ok(/worldLibrary\?\.worldChanged\(\)/.test(main),
+    'every world that becomes current must tell the worlds panel');
+});
+
+test('desktop: the app is served by its own server and speaks relative URLs', () => {
+  const server = read('desktop/server.mjs');
+  for (const route of ['/api/health', '/api/worlds', '/api/import', '/api/save-file']) {
+    assert.ok(server.includes(route), `desktop server missing route ${route}`);
+  }
+  assert.ok(server.includes('safeJoin'), 'static serving must be confined to the app folder');
+  const db = read('desktop/db.mjs');
+  for (const t of ['worlds', 'assets', 'revisions', 'events', 'settings']) {
+    assert.ok(new RegExp(`CREATE TABLE IF NOT EXISTS ${t}`).test(db), `database table missing: ${t}`);
+  }
+  assert.ok(db.includes('content addressed') || db.includes('sha256'), 'images must be content addressed');
+  const bridge = read('js/io/desktop.js');
+  assert.ok(!/https?:\/\/(localhost|127\.0\.0\.1)/.test(bridge), 'the bridge must use relative URLs, never a hardcoded loopback host');
+  assert.ok(bridge.includes("fetch('api/health'"), 'the bridge probes the desktop backend');
+});
+
 (async () => {
   console.log('Panorama Maps — static smoke');
   for (const [name, fn] of tests) {

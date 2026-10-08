@@ -71,7 +71,8 @@ export class SimpleEditor {
         <button class="btn ghost block" data-act="uploadPano"><svg><use href="#i-image"/></svg>Upload panorama for selected</button>
         <button class="btn ghost block" data-act="uploadMap"><svg><use href="#i-map"/></svg>Upload custom 2D map image</button>
         <div class="divider"></div>
-        <button class="btn block" data-act="save"><svg><use href="#i-save"/></svg>Save project</button>
+        <button class="btn block" data-act="saveWorld"><svg><use href="#i-db"/></svg>Save world file</button>
+        <button class="btn ghost block" data-act="save"><svg><use href="#i-save"/></svg>Save project (.pmap)</button>
       </div>`;
     this.panel.addEventListener('click', (e) => this._click(e));
     document.addEventListener('click', (e) => {
@@ -113,6 +114,7 @@ export class SimpleEditor {
     else if (act === 'uploadPano') this.app.uploadPanoramaForNode(this.app.selectedNodeId || this.app.movement.currentNodeId);
     else if (act === 'uploadMap') this.app.uploadMapUnderlay();
     else if (act === 'save') this.app.saveProject(true);
+    else if (act === 'saveWorld') this.app.saveWorldFile();
   }
 
   async _mapClick(w, e) {

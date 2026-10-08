@@ -57,6 +57,7 @@
     <symbol id="i-sharpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/><path d="M19 2.5 20.5 5l2.5 1.5L20.5 8 19 10.5 17.5 8 15 6.5 17.5 5Z"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
     <symbol id="i-speed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M12 14l4-5"/><circle cx="12" cy="14" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="3.5"/><path d="M4 5.5v6c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-6"/><path d="M4 11.5v7c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-7"/></symbol>
     <symbol id="i-panels" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3.8 5.4 5.4l-1.52 7.58a2 2 0 0 0 1.5 2.14L7.4 15.7M8.6 3.8h7.2m-7.2 0-1.3 7m8.5-7 3 1.6 1.52 7.58a2 2 0 0 1-1.5 2.14l-2.02.58M15.8 3.8l1.3 7m-10 0v8.4a2 2 0 0 0 1.1 1.8l4 1.4a2 2 0 0 0 1.6 0l4-1.4a2 2 0 0 0 1.1-1.8V11m-10 0 5 1.6 5.1-1.6"/></symbol>
   </defs>
 </svg>
@@ -86,6 +87,7 @@
   </div>
 
   <div class="tb-group">
+    <button class="tb-btn" id="worldsBtn" title="Worlds — save this world, open your library" aria-label="Worlds — save this world, open your library" aria-haspopup="dialog"><svg class="ic"><use href="#i-db"/></svg><span class="tb-txt">Worlds</span></button>
     <button class="tb-btn" id="studioBtn" title="Studio: Simple · tap to switch" aria-label="Switch studio"><svg class="ic"><use href="#i-edit"/></svg><span class="tb-txt">Simple</span></button>
     <button class="tb-btn" id="menuBtn" title="Panels and options" aria-label="Panels and options" aria-haspopup="true"><svg class="ic"><use href="#i-panels"/></svg></button>
     <button class="tb-btn" id="fsBtn" title="Fullscreen" aria-label="Toggle fullscreen"><svg class="ic"><use href="#i-max"/></svg></button>
@@ -191,6 +193,7 @@
 <!-- ============ panels (editors render into these) ============ -->
 <aside class="panel" id="editorPanel" hidden></aside>
 <aside class="panel" id="advPanel" hidden></aside>
+<aside class="panel" id="worldsPanel" hidden aria-label="Worlds — save and manage worlds"></aside>
 
 <!-- ============ landing / start screen ============ -->
 <div id="landing" aria-modal="true" role="dialog" aria-label="Welcome to Panorama Maps"></div>

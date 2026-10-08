@@ -20,10 +20,13 @@ SAME WORLD + REAL DISTANCE + REAL POSITION + REAL GRAPH CONNECTION
 ## Quick start
 
 ```bash
-# any static file server works — no build, no install
+# WEB — any static file server works: no build, no install, no database
 cd 3dmapmaker
 python3 -m http.server 8080
 # open http://localhost:8080
+
+# DESKTOP — the same app with a worlds database (Linux · Windows · macOS)
+node desktop/main.mjs          # or double-click desktop/start.sh | start.command | start.bat
 ```
 
 Then:
@@ -40,8 +43,35 @@ Then:
    large map with pan/zoom and a real metric scale bar.
 5. Open the **map editor** (pencil) to add locations, connect them, drop
    landmarks, draw roads, and upload your own panoramas / 2D map image.
-6. **Save** exports one portable `.pmap` project file. **Open** imports it
-   back — on this or another computer — no account needed.
+6. **Save world file** writes one portable `.pworld` — the whole world, with
+   **every image embedded inside the file**. Open it anywhere, online or off.
+   The desktop build also keeps worlds in a database (see below).
+
+### The `.pworld` world file
+
+One file that *is* the world: every place, connection, zone, landmark, the map
+scale, the environment, the scene modes, where you were standing — and every
+panorama, every scene variant, the 2D map image, the previews and the cover,
+byte for byte inside the file. Delete the photos from the device that uploaded
+them, lose the website, go offline: the world still opens and still walks.
+
+Every world can be saved this way — the demos, worlds you built, worlds you
+imported — from the toolbar **Worlds** button, the Panels menu, either map
+studio, the scripting studio, or `Ctrl`/`Cmd`+`S`. Format, layout and integrity:
+[docs/WORLD-FILE.md](docs/WORLD-FILE.md).
+
+### The desktop build
+
+`node desktop/main.mjs` serves this same app from disk with a real database
+behind it — worlds, their images (content addressed, so duplicates cost
+nothing), version history and an activity log. Zero npm dependencies
+(`node:http` + `node:fs` + `node:sqlite`), with a plain-file fallback for
+older Node versions, and optional Electron installers if you want a packaged
+window instead of a browser tab. Full guide, including where your worlds are
+kept on each OS: [docs/DESKTOP.md](docs/DESKTOP.md).
+
+The web build stays deliberately database-free: files are the currency there,
+the database is the desktop convenience, and both speak the same `.pworld`.
 
 Full controls are in [docs/SETUP.md](docs/SETUP.md).
 
@@ -95,7 +125,12 @@ js/viewer/                  WebGL equirect renderer, viewer, AutoComplete
 js/gen/                     provider, context builder, LRU cache, utils
 js/map/                     2D canvas map renderer
 js/editors/                 simple + advanced editors
-js/io/                      .pmap archive (ZIP), IndexedDB storage, FS Access API
+js/io/                      .pworld world file, .pmap archive (ZIP),
+                            IndexedDB storage, FS Access, desktop bridge
+js/ui/                      landing page + the Worlds surface (save card,
+                            library, versions, activity)
+desktop/                    desktop app: database, API server, launchers, CLI
+                            (zero npm dependencies; Electron wrapper optional)
 js/worlds/                  four demo worlds (3 procedural + Willow Parish photo demo)
 assets/willow/              Willow Parish AI-photographed panoramas (day/rain/night × 7 nodes)
 js/viewer/sharpen.js          Sharpen: real unsharp mask clarity pass (menu switch)
@@ -103,20 +138,39 @@ tools/                      Python/OpenCV continuity validator + scene synth
 tools/tests/                pytest suite (OpenCV validation)
 tests/                      Node core tests + static integration smoke
 tools-render/               offline renderer used to verify real app panoramas
-docs/                       architecture, pipeline, validation, testing, setup
+docs/                       architecture, pipeline, validation, testing, setup,
+                            WORLD-FILE.md, DESKTOP.md
 legacy/                     the original CampusNav 360 code (preserved, unmodified)
 ```
 
 ## Tests
 
 ```bash
-node tests/core.test.mjs          # 33 tests: scale, graph, movement, 500 m zone,
+node tests/core.test.mjs          # 42 tests: scale, graph, movement, 500 m zone,
                                   # reverse-travel identity, autocomplete, archive
-node tests/static-smoke.mjs       # wiring: imports, DOM ids, icons, terminology
-node tools-render/boot-harness.mjs # 58 checks: boots the REAL app (fake DOM),
+node tests/pworld.test.mjs        # 14 tests: the .pworld file — export → verify →
+                                  # import with the pixels coming out of the file,
+                                  # offline embedding, damaged files refused
+node tests/desktop-api.test.mjs   # 16 tests: the desktop app end to end — real
+                                  # server, real database, uploads, de-duplication,
+                                  # library columns, versions, export and import
+node tests/static-smoke.mjs       # 19 tests: wiring: imports, DOM ids, icons,
+                                  # terminology, the worlds surface, the file kinds
+node tools-render/boot-harness.mjs # 74 checks: boots the REAL app (fake DOM),
                                   # walks all 4 demo worlds incl. the 1,125-node one,
-                                  # verifies Willow Parish mode spectra + cache identity
+                                  # saves a world to a .pworld, reopens it offline,
+                                  # switches modes and walks inside the file
 .venv/bin/python -m pytest tools/tests -q   # 15 tests: OpenCV continuity gate
+```
+
+The world file and the worlds database are also driven end to end **in a real
+browser** — a world is saved from the running app, the originals are cut off at
+the network layer, and the file is opened on a clean machine:
+
+```bash
+npm i playwright-core @sparticuz/chromium     # any folder; or use your own Chromium
+NODE_PATH=$PWD/node_modules node tools-render/world-e2e.mjs
+# writes screenshots to qa/world-file/ and 78 browser checks
 ```
 
 Spec-by-spec status (map worlds, demo worlds, generation rules, behavior):
@@ -130,6 +184,9 @@ renders **real app panoramas** and validates the whole chain with OpenCV.
 - Not a 3D world builder: mathematics (vectors, yaw/pitch, FOV, equirectangular
   projection) serves *panorama viewing*, the product is a panorama map platform.
 - No API keys in client code. No fake buttons: every toggle works.
-- Portable `.pmap` project = source of truth; IndexedDB is only a local mirror;
+- Portable `.pworld` world file = source of truth (all data, images embedded);
+  IndexedDB is only a local mirror; the desktop database is a convenience copy;
   `localStorage` only holds tiny preferences — never images.
+- The web build has no database and no server, by design; every world can still
+  be saved and opened, because the file carries everything.
 - Static-hosting friendly; offline shell via service worker.

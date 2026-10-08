@@ -58,7 +58,7 @@ export class Landing {
             <div class="land-cta">
               <button class="land-btn primary lg" data-act="demos"><svg><use href="#i-globe"/></svg>Explore demos<svg class="arr"><use href="#i-right"/></svg></button>
               <button class="land-btn lg" data-act="create"><svg><use href="#i-plus"/></svg>Create a world</button>
-              <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open project</button>
+              <button class="land-btn lg" data-act="open"><svg><use href="#i-open"/></svg>Open a world file</button>
             </div>
 
             <button class="land-skip" data-act="resume">Continue where I left off<svg class="arrow"><use href="#i-right"/></svg></button>
@@ -85,7 +85,7 @@ export class Landing {
     on('[data-act="demos"]', () => this._view('demos'));
     on('[data-act="back"]', () => this._view('hero'));
     on('[data-act="create"]', () => this._choice({ what: 'create' }));
-    on('[data-act="open"]', () => { this.hide(); this.app.openProject(); });
+    on('[data-act="open"]', () => { this.hide(); this.app.openAnyFile(); });
     on('[data-act="resume"]', () => { this.hide(); });
   }
 
