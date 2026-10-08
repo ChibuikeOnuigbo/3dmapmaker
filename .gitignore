@@ -6,3 +6,6 @@ build/
 .env.local
 .DS_Store
 Thumbs.db
+.venv/
+__pycache__/
+*.pyc

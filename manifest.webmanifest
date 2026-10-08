@@ -1,0 +1,18 @@
+{
+  "name": "Panorama Maps",
+  "short_name": "Panorama Maps",
+  "description": "Explore connected 360-degree panoramas on a real 2D map. Create worlds, place locations, connect them, and walk through continuous environments.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10131a",
+  "theme_color": "#10131a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='110' fill='%231a73e8'/%3E%3Ccircle cx='256' cy='226' r='110' fill='none' stroke='white' stroke-width='36'/%3E%3Ccircle cx='256' cy='226' r='38' fill='white'/%3E%3Cpath d='M150 400l78-96 64 64 48-48 32 80z' fill='white' opacity='.85'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
