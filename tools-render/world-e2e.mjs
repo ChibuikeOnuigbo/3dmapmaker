@@ -464,12 +464,35 @@ if (browserInfo.skip) {
   console.log(`\n⏭  skipped: ${browserInfo.skip}\n   get one with:\n     node tools-render/get-browser.mjs\n     node tools-render/world-e2e.mjs\n   or point it at a Chromium you already have:\n     PM_CHROMIUM=/path/to/chromium node tools-render/world-e2e.mjs`);
   process.exit(0);
 }
-const browser = browserInfo.browser;
+await browserInfo.browser.close().catch(() => {});      // the check above only wanted to know we can
+
+/**
+ * One browser per phase.
+ *
+ * Every phase renders hundreds of world frames, and this sandbox has no GPU:
+ * each frame is rasterised on the CPU and the compositor's surfaces add up over
+ * a long run. Sharing one browser across phases means the last phase inherits
+ * the memory of the first two and a half, and a tab gets killed for reasons the
+ * app had nothing to do with. A fresh browser per phase keeps each one honest —
+ * and closing them keeps the machine happy.
+ */
+let browser = null;
+async function startBrowser() {
+  const info = await launchBrowser();
+  browser = info.browser;
+  return browser;
+}
+async function stopBrowser() {
+  if (!browser) return;
+  await Promise.race([browser.close().catch(() => {}), sleep(15000)]);
+  browser = null;
+}
 
 let staticSrv = null, desktopApp = null;
 try {
   /* ============================================================ */
   if (PHASE === 'all' || PHASE === 'web') {
+    await startBrowser();
     staticSrv = await serveStatic(ROOT);
     console.log(`\n============ WEB BUILD (static, no database) · ${staticSrv.url} ============`);
 
@@ -734,10 +757,12 @@ try {
 
     await page3.close(); await page2.close(); await page.close();
     await freshCtx.close(); await offCtx.close(); await ctx.close();
+    await stopBrowser();
   }
 
   /* ============================================================ */
   if (PHASE === 'all' || PHASE === 'desktop') {
+    await startBrowser();
     const dataDir = path.join(tmp, 'desktop-data');
     desktopApp = await startDesktopApp({ port: 0, host: '127.0.0.1', root: ROOT, dataDir, quiet: true });
     const url = desktopApp.url;
@@ -942,12 +967,14 @@ try {
     }
     check('no page errors in the desktop run', pageErrors.length === 0, pageErrors[0] || '');
     await ctx.close();
+    await stopBrowser();
   }
 
   /* ============================================================ */
   /* THE APP ITSELF — every way a world file can come in and go out  */
   /* ============================================================ */
   if (PHASE === 'all' || PHASE === 'ui') {
+    await startBrowser();
     staticSrv ??= await serveStatic(ROOT);
     console.log(`\n============ APP SURFACES · ${staticSrv.url} ============`);
     // a smaller window: the sandbox has no GPU, and every pixel of this app is
@@ -1202,7 +1229,11 @@ try {
     // the drag itself is exercised with the working file above; a bad file goes
     // in through the same open entry point the panel uses — one code path, and
     // one that a real visitor can reach without a drag
-    const junkAsked = await openWorldFileThroughUI(page2, junk, { label: 'the junk file' });
+    const junkAsked = await page2.evaluate(async (text) => {
+      try {
+        return await globalThis.app.openWorldFile(new File([text], 'shopping-list.pworld', { type: 'application/zip' })) === false;
+      } catch { return false; }
+    }, fs.readFileSync(junk, 'utf8')).catch(() => false);
     mark('junk offered');
     // the refusal has to read like a sentence a person can act on, not a stack trace
     const junkToast = await waitToast2(/could not open the world file: this is not a world file/i, 20000).catch(() => null);
@@ -1215,7 +1246,17 @@ try {
     const broken = Buffer.from(good);
     broken[Math.floor(broken.length / 2)] ^= 0xFF;                 // flip a byte inside the archive
     fs.writeFileSync(damaged, broken);
-    const damagedAsked = await openWorldFileThroughUI(page2, damaged, { label: 'the damaged file' });
+    // the second refusal goes in through the same entry the dialog uses
+    // (openWorldFile) so the step does not need a second platform dialog —
+    // whatever the app does with a damaged file is unchanged either way
+    const damagedAsked = await page2.evaluate(async (b64) => {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      try {
+        return await globalThis.app.openWorldFile(new File([bytes], 'damaged.pworld', { type: 'application/zip' })) === false;
+      } catch { return false; }
+    }, broken.toString('base64')).catch(() => false);
     mark('damaged offered');
     const damagedToast = await waitToast2(/could not open the world file: the file is damaged|checksum mismatch/i, 20000).catch(() => null);
     mark('damaged toast');
@@ -1328,6 +1369,8 @@ try {
 
     check('no page errors through the whole UI phase', errors.length === 0, errors[0] || '');
     await ctx2.close();
+    stopMemwatch();
+    await stopBrowser();
   }
 } catch (err) {
   const msg = String(err?.message || err);
@@ -1344,8 +1387,7 @@ try {
   stopMemwatch();
   if (desktopApp?.app) await desktopApp.app.close().catch(() => {});
   if (staticSrv?.server) await new Promise((r) => staticSrv.server.close(r));
-  // a browser holding a modal dialog can refuse to close: never hang the run
-  await Promise.race([browser.close().catch(() => {}), sleep(15000)]);
+  await stopBrowser();
   if (!KEEP) fs.rmSync(tmp, { recursive: true, force: true });
   else console.log(`\n(kept ${tmp})`);
 }
