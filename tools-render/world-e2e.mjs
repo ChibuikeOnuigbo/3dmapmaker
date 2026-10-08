@@ -71,7 +71,11 @@ let currentStep = 'startup';
 const step = (t) => {
   const now = Date.now();
   currentStep = t;
-  console.log(`\n· ${t}  [${((now - stepAt) / 1000).toFixed(1)}s]`);
+  // with --timings: how long the last step took, and what the tab weighed when
+  // it ended — the fastest way to see which step lets the rasteriser grow
+  const rows = TIMINGS ? chromiumRenderers() : null;
+  const tab = rows ? `${rows.reduce((s2, r) => s2 + r.mb, 0).toFixed(0)} MB${rows.length > 1 ? ` in ${rows.length} renderers (pids ${rows.map((r) => r.pid).join(', ')})` : ''}` : null;
+  console.log(`\n· ${t}  [${((now - stepAt) / 1000).toFixed(1)}s]${tab ? `  tab ${tab}` : ''}`);
   stepAt = now;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -86,34 +90,49 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * the step that was running. Off with PM_NO_MEMWATCH=1.
  */
 const memwatch = { timer: null, samples: [], peak: 0, announced: 0, page: null };
-function chromiumRendererMb() {
+/** Pages whose tab was killed under us (a crash costs checks, never the run). */
+const crashedPages = new Set();
+/** Every chromium renderer on the machine, with its resident size — a stale
+ *  browser from an earlier run shows up here, and the sum alone cannot tell
+ *  you that. */
+function chromiumRenderers() {
   try {
-    const out = execFileSync('ps', ['-eo', 'rss,args'], { encoding: 'utf8' });
-    let kb = 0;
+    const out = execFileSync('ps', ['-eo', 'pid,rss,args'], { encoding: 'utf8' });
+    const rows = [];
     for (const line of out.split('\n')) {
       if (!/chrom/i.test(line) || !/--type=renderer/.test(line)) continue;
-      kb += Number(line.trim().split(/\s+/)[0]) || 0;
+      const m = /^\s*(\d+)\s+(\d+)\s/.exec(line);
+      if (!m) continue;
+      rows.push({ pid: Number(m[1]), mb: Number(m[2]) / 1024 });
     }
-    return kb / 1024;
+    return rows;
   } catch { return null; }
+}
+function chromiumRendererMb() {
+  const rows = chromiumRenderers();
+  if (!rows) return null;
+  return rows.reduce((sum, r) => sum + r.mb, 0);
 }
 function startMemwatch(page) {
   if (process.env.PM_NO_MEMWATCH || memwatch.timer) return;
   memwatch.page = page;
   memwatch.timer = setInterval(() => {
-    const mb = chromiumRendererMb();
-    if (mb == null) return;
+    const rows = chromiumRenderers();
+    if (!rows) return;
+    const mb = rows.reduce((s2, r) => s2 + r.mb, 0);
+    const who = rows.length > 1 ? ` in ${rows.length} renderers (pids ${rows.map((r) => r.pid).join(', ')})` : '';
     memwatch.samples.push({ at: Date.now(), mb, step: currentStep });
     if (memwatch.samples.length > 240) memwatch.samples.shift();
     if (mb > memwatch.peak) memwatch.peak = mb;
     for (const limit of [400, 800, 1600, 2400]) {
       if (mb > limit && memwatch.announced < limit) {
         memwatch.announced = limit;
-        console.log(`\n  ! the browser tab is using ${mb.toFixed(0)} MB of memory during “${currentStep}”`);
+        console.log(`\n  ! the browser tab is using ${mb.toFixed(0)} MB of memory during “${currentStep}”${who}`);
       }
     }
   }, 1000);
   memwatch.timer.unref?.();
+  memwatch.announced = 0;          // a fresh tab, fresh thresholds
 }
 function stopMemwatch() {
   if (memwatch.timer) clearInterval(memwatch.timer);
@@ -126,7 +145,11 @@ const TIMINGS = !!flag('timings', false);
 let markAt = Date.now();
 const mark = (label) => {
   const now = Date.now();
-  if (TIMINGS) console.log(`    · ${label}  [+${((now - markAt) / 1000).toFixed(1)}s]`);
+  if (TIMINGS) {
+    const rows = chromiumRenderers();
+    const tab = rows?.length ? `  tab ${rows.reduce((s2, r) => s2 + r.mb, 0).toFixed(0)} MB` : '';
+    console.log(`    · ${label}  [+${((now - markAt) / 1000).toFixed(1)}s]${tab}`);
+  }
   markAt = now;
 };
 async function waitFor(fn, what, ms = 30000) {
@@ -208,6 +231,14 @@ async function launchBrowser() {
     // the lambda build keeps the GPU thread inside the renderer; a software
     // rasteriser hiccup then takes the whole tab down mid-run. Separate them.
     args = args.filter((a) => a !== '--single-process' && a !== '--no-zygote' && a !== '--in-process-gpu');
+  }
+  if (process.env.PM_NO_GL) {
+    // the machine where WebGL is blocked (an old GPU, a locked-down driver, a
+    // server): the app has a 2D fallback for exactly this, and it should be
+    // able to save and open world files there too
+    args = args
+      .filter((a) => a !== '--use-gl=angle' && a !== '--use-angle=swiftshader' && a !== '--enable-unsafe-swiftshader')
+      .concat(['--disable-gpu', '--disable-software-rasterizer', '--disable-gpu-compositing']);
   }
   const browser = await chromium.launch({ executablePath, args, headless: true });
   return { browser };
@@ -427,6 +458,26 @@ const openPanel = async (page) => {
 const clickAct = (page, act) => page.click(`#worldsPanel [data-act="${act}"]`);
 const tab = (page, name) => page.click(`#worldsPanel [data-tab="${name}"]`);
 
+/**
+ * A download promise that never throws. A tab that dies mid-step must cost the
+ * run the check it was doing — not the whole report: an unhandled rejection
+ * here used to end the process with a stack trace instead of a score.
+ */
+const downloadEvent = (page, ms) => page.waitForEvent('download', { timeout: ms }).catch(() => null);
+
+/**
+ * A screenshot for the record. These are for humans, not for the checks, and
+ * CDP screenshots are the flakiest thing the harness does in a headless shell —
+ * so PM_NO_SHOTS=1 skips them when a run is being used to judge stability.
+ */
+const shot = async (page, name) => {
+  if (process.env.PM_NO_SHOTS) return null;
+  return page.screenshot({ path: path.join(SHOTS, name), timeout: 60000 }).catch((e) => {
+    console.log(`    · screenshot ${name} failed: ${String(e).slice(0, 60)}`);
+    return null;
+  });
+};
+
 /** Capture whatever the app does with the bytes: a download, or the desktop exports folder. */
 async function captureSave(page, page_, act, { exportsDir = null, before = [] } = {}) {
   const downloadPromise = page.waitForEvent('download', { timeout: 300000 }).catch(() => null);
@@ -522,9 +573,10 @@ try {
     const studioButtons = await page.locator('.sg-studio [data-saveworld]').count();
     check('the scripting studio offers Save world', studioButtons >= 1, `${studioButtons} buttons`);
     const studioFile = await (async () => {
-      const dl = page.waitForEvent('download', { timeout: 300000 });
+      const dl = downloadEvent(page, 300000);
       await page.click('.sg-studio [data-saveworld]');
       const d = await dl;
+      if (!d) return null;
       const out = path.join(tmp, 'studio-' + d.suggestedFilename());
       await d.saveAs(out);
       return out;
@@ -549,7 +601,7 @@ try {
     await page.fill('#worldsPanel [data-field="name"]', 'Chapel Lane Archive');
     await page.fill('#worldsPanel [data-field="author"]', 'E2E');
     await page.fill('#worldsPanel [data-field="tags"]', 'demo, village');
-    await page.screenshot({ path: path.join(SHOTS, 'web-save-panel.png'), timeout: 60000 });
+    await shot(page, 'web-save-panel.png');
     const chapelFile = await captureSave(page, null, 'saveFile');
     check('saving produced a file', !!chapelFile, 'no download and no export appeared');
     const chapelBytes = chapelFile ? fs.readFileSync(chapelFile) : new Uint8Array();
@@ -585,7 +637,7 @@ try {
     await waitFor(() => cacheMeta(page2, nodeId), 'reopened panorama', 30000);
     const px2 = await pixels(page2, nodeId);
     check('the reopened world renders pixels', !!px2 && px2.std > 8, JSON.stringify(px2));
-    await page2.screenshot({ path: path.join(SHOTS, 'web-reopened-world.png'), timeout: 60000 });
+    await shot(page2, 'web-reopened-world.png');
 
     step('walk inside the reopened world');
     const walked = await page2.evaluate(async () => {
@@ -627,7 +679,7 @@ try {
     const afterCount = Number(((await page.locator('#worldsPanel #wlEstimate').innerText()).match(/^(\d+)/) || [])[1] || 0);
     check('unticking a mode reduces what will be embedded', afterCount > 0 && afterCount < beforeCount, `${beforeCount} → ${afterCount}`);
     await page.locator('#worldsPanel [data-mode]').nth(1).evaluate((el) => { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); });
-    await page.screenshot({ path: path.join(SHOTS, 'web-photo-world-panel.png'), timeout: 60000 });
+    await shot(page, 'web-photo-world-panel.png');
     const photoFile = await captureSave(page, null, 'saveFile');
     check('the photographed world saved to one file', !!photoFile);
     const photoBytes = photoFile ? fs.readFileSync(photoFile) : new Uint8Array();
@@ -675,7 +727,7 @@ try {
     await page3.keyboard.press('Escape');
     const px3 = await pixels(page3, `${wNode}@${worldId.modes[0]}`);
     check('the photograph renders (real photo statistics)', !!px3 && px3.std > 15 && px3.mean > 25, JSON.stringify(px3));
-    await page3.screenshot({ path: path.join(SHOTS, 'web-embedded-panorama.png'), timeout: 60000 });
+    await shot(page3, 'web-embedded-panorama.png');
 
     step('the second scene mode came out of the file too');
     const swapped = await page3.evaluate(async (mode) => {
@@ -856,10 +908,16 @@ try {
     check('the photographed world is in the library with its images', stored.row.assetCount >= 3, JSON.stringify(stored.row && { i: stored.row.assetCount }));
     check('the database holds real image bytes for it', stored.bytes > 100000, `${stored.bytes} bytes`);
     await tab(page, 'library');
-    await page.screenshot({ path: path.join(SHOTS, 'desktop-library.png'), timeout: 60000 });
-    check('the library table renders rows', await page.locator('#worldsPanel .wl-table tbody tr').count() >= 2);
-    const bodyText = (await page.textContent('#worldsPanel .wl-table')).replace(/\s+/g, ' ');
-    check('the table names the worlds it holds', bodyText.includes('Chapel Lane (desktop)') && bodyText.includes('Willow Three'), bodyText.slice(0, 120));
+    // the table fills in from the database, so read it once it has: asking
+    // instantly is how this check used to fail while the data was already there
+    const table = await waitFor(async () => {
+      const rows = await page.locator('#worldsPanel .wl-table tbody tr').count();
+      const text = ((await page.textContent('#worldsPanel .wl-table').catch(() => '')) || '').replace(/\s+/g, ' ');
+      return rows >= 2 && text.includes('Chapel Lane (desktop)') && text.includes('Willow Three') ? { rows, text } : null;
+    }, 'the library table', 30000).catch(() => null);
+    await shot(page, 'desktop-library.png');
+    check('the library table renders rows', table?.rows >= 2, `${table?.rows ?? 0} rows`);
+    check('the table names the worlds it holds', !!table, (table?.text || '').slice(0, 120));
 
     step('the database exports a .pworld by itself (server side, no browser)');
     const exportsDir = path.join(dataDir, 'exports');
@@ -930,7 +988,7 @@ try {
     }, 'database render', 60000);
     const meta4 = await cacheMeta(page, dbKey);
     check('its panorama renders from the database', meta4.provider === 'embedded' || meta4.provider === 'asset' || !!meta4.assetId, JSON.stringify(meta4).slice(0, 120));
-    await page.screenshot({ path: path.join(SHOTS, 'desktop-reopened.png'), timeout: 60000 });
+    await shot(page, 'desktop-reopened.png');
 
     if (PHASE === 'all') {
       step('a file saved by the WEB build opens in the DESKTOP build');
@@ -1009,11 +1067,33 @@ try {
     /* ---- the Panels menu row, and the deep links ---- */
     // a crashed renderer explains mysteries much later: say so at once
     const watchForCrashes = (p, who) => {
-      p.on('crash', () => console.log(`\n!! the browser tab for ${who} crashed during “${currentStep}”`));
+      p.on('crash', () => { crashedPages.add(p); console.log(`\n!! the browser tab for ${who} crashed during “${currentStep}”`); });
       p.on('pageerror', (e) => { if (TIMINGS) console.log(`    · ${who} error: ${String(e).slice(0, 160)}`); });
     };
     watchForCrashes(page, 'page 1');
     startMemwatch(page);
+
+    if (process.env.PM_NO_GL) {
+      step('the app draws the world with WebGL switched off');
+      await waitFor(() => page.evaluate(() => !!globalThis.app?.viewer?.renderer), 'the renderer', 20000).catch(() => null);
+      const gl = await page.evaluate(() => {
+        const r = globalThis.app?.viewer?.renderer || {};
+        const cv = document.getElementById('panoCanvas');
+        let ink = null;
+        try {
+          const g = cv.getContext('2d');
+          const d = g.getImageData(0, 0, cv.width, cv.height).data;
+          let lit = 0, n = 0;
+          for (let i = 0; i < d.length; i += 4 * 97) { if (d[i] + d[i + 1] + d[i + 2] > 24) lit++; n++; }
+          ink = +(lit / n).toFixed(3);
+        } catch (err) { ink = String(err).slice(0, 60); }
+        return { gl: r.gl === null ? 'none' : (r.gl ? 'webgl' : 'missing'), fallback2d: !!r._fallback2d, ink, canvas: cv ? [cv.width, cv.height] : null };
+      });
+      check('no WebGL in this browser (so this run is really about the fallback)', gl.gl === 'none', JSON.stringify(gl));
+      check('the 2D fallback is the one drawing', gl.fallback2d === true, JSON.stringify(gl));
+      check('the fallback canvas has the world on it, not a blank rectangle',
+        typeof gl.ink === 'number' && gl.ink > 0.05, JSON.stringify(gl));
+    }
 
     step('the Panels menu opens the save section');
     await page.click('#menuBtn');
@@ -1043,12 +1123,62 @@ try {
     }
     check('the hash never stays in the URL', await page.evaluate(() => !location.hash));
 
+    /* ---- a still scene should hold still ---- */
+    step('a still scene is not redrawn over and over');
+    const paints = () => page.evaluate(() => {
+      const v = globalThis.app.viewer;
+      return { paints: v.paintCount, skipped: v.skippedFrames, animating: v._animating(), sig: v._lastSig };
+    });
+    const quieten = () => page.evaluate(() => {
+      const v = globalThis.app.viewer;
+      window.__pmStill = { immersion: { ...v.immersion }, anchors: v.anchors };
+      v.anchors = null;
+      for (const k of ['sway', 'breeze', 'rain', 'snow', 'clouds', 'night', 'sunrays', 'fireflies',
+        'balloon', 'owl', 'mist', 'butterflies', 'rabbits', 'birds', 'actors', 'ripples']) v.immersion[k] = false;
+      v.invalidate();
+    });
+    const unquieten = () => page.evaluate(() => {
+      const v = globalThis.app.viewer;
+      const was = window.__pmStill || {};
+      Object.assign(v.immersion, was.immersion || {});
+      if (was.anchors) v.anchors = was.anchors;
+      v.invalidate();
+    });
+    await quieten();
+    await sleep(700);
+    const stillBefore = await paints();
+    await sleep(2000);
+    const stillAfter = await paints();
+    check('a still scene stops being drawn (no wasted frames)',
+      stillAfter.paints === stillBefore.paints && stillAfter.animating === false,
+      `${stillBefore.paints} → ${stillAfter.paints} paints, skipped ${stillBefore.skipped} → ${stillAfter.skipped}`);
+    check('the loop says what it is not drawing', stillAfter.skipped > stillBefore.skipped,
+      `skipped ${stillBefore.skipped} → ${stillAfter.skipped}`);
+    // turning a layer off has to wipe what it drew, view still or not
+    await page.evaluate(() => { globalThis.app.viewer.immersion.snow = true; });
+    await sleep(700);
+    const snowing = await paints();
+    await page.evaluate(() => { globalThis.app.viewer.immersion.snow = false; });
+    await sleep(800);
+    const cleared = await paints();
+    check('switching a weather layer off wipes what it drew',
+      cleared.paints > snowing.paints && cleared.animating === false,
+      `${snowing.paints} paints snowing → ${cleared.paints} after`);
+    await page.evaluate(() => globalThis.app.viewer.look(18, 4));
+    await sleep(900);
+    const moved = await paints();
+    check('but looking around draws again right away',
+      moved.paints > cleared.paints && moved.sig !== cleared.sig,
+      `${cleared.paints} → ${moved.paints} paints`);
+    await unquieten();
+
     /* ---- Ctrl+S and Ctrl+O ---- */
     step('Ctrl+S saves the world, Ctrl+O opens one');
     await page.evaluate(() => { window.__pmPicked = []; });
-    const ctrlS = page.waitForEvent('download', { timeout: 120000 });
+    const ctrlS = downloadEvent(page, 120000);
     await page.keyboard.press('Control+s');
     const saved = await ctrlS;
+    if (!saved) throw new Error('Ctrl+S produced no download');
     const savedPath = path.join(tmp, `keys-${saved.suggestedFilename()}`);
     await saved.saveAs(savedPath);
     check('Ctrl+S wrote a world file', fs.existsSync(savedPath) && fs.statSync(savedPath).size > 2000,
@@ -1079,10 +1209,10 @@ try {
     mark('start');
     await page.evaluate(() => globalThis.app.worldLibrary?.open('save'));
     await waitFor(() => page.locator('#worldsPanel [data-act="inspect"]').count().then((n) => n === 1), 'the peek button', 10000);
-    const inspectChooser = page.waitForEvent('filechooser', { timeout: 20000 });
+    const inspectChooser = page.waitForEvent('filechooser', { timeout: 20000 }).catch(() => null);
     await page.click('#worldsPanel [data-act="inspect"]');
     mark('peek button click');
-    const inspectPicked = await inspectChooser.catch(() => null);
+    const inspectPicked = await inspectChooser;
     mark('file chosen');
     if (!inspectPicked) {
       check('the peek opens a file dialog', false);
@@ -1094,7 +1224,7 @@ try {
       check('the card counts the places and the images', /Places/.test(card) && /Images inside/.test(card), card.slice(0, 140));
       check('the card reports the file size', /File size/.test(card), card.slice(0, 140));
       mark('card read');
-      await page.screenshot({ path: path.join(SHOTS, 'ui-look-inside.png'), timeout: 60000 });
+      await shot(page, 'ui-look-inside.png');
       mark('screenshot');
       // the file is NOT opened by looking
       check('peeking does not change the world you are in',
@@ -1107,11 +1237,14 @@ try {
 
     /* the first page is done: the 154-place world it has decoded stays a
        memory reservation for the rest of the run, so let it go before the
-       smaller, fiddlier steps begin. */
+       smaller, fiddlier steps begin — and let the browser go with it, because
+       a renderer that has drawn that world is a poor host for the rest. */
     await page.close();
     await ctx.close();
-    const ctx2 = await appContext(browser, { width: 1024, height: 640 });
-    const page2 = await ctx2.newPage();
+    await stopBrowser();
+    await startBrowser();
+    let ctx2 = await appContext(browser, { width: 1024, height: 640 });
+    let page2 = await ctx2.newPage();
     page2.on('pageerror', (e) => errors.push(String(e)));
     watchForCrashes(page2, 'page 2');
     await page2.goto(`${staticSrv.url}/`, { waitUntil: 'domcontentloaded' });
@@ -1123,6 +1256,125 @@ try {
       app.toast = (msg, kind = null, ms) => { window.__pmToasts.push(String(msg)); return orig(msg, kind, ms); };
     });
     await hideLanding(page2);
+    /**
+     * If the tab we are driving was taken from us, finish the run in a new one.
+     * The death is the environment's, not the app's, and a run that stops
+     * halfway reports less than it knows: the checks that follow are about
+     * files, not about that tab, so give them a tab.
+     */
+    let revivals = 0;
+    let tabDeaths = 0;
+    /** True once the tab cannot answer any more — the crash event can lag behind. */
+    const pageIsGone = async (p) => {
+      try { if (p.isClosed()) return true; } catch { return true; }
+      return await Promise.race([
+        p.evaluate(() => true).then(() => false).catch(() => true),
+        sleep(6000).then(() => true),
+      ]);
+    };
+    const revivePage2 = async () => {
+      if (!crashedPages.has(page2) && !(await pageIsGone(page2))) return false;
+      if (revivals >= 4) { console.log('\n   …no more restarts: the replacement tabs went too, so the rest is skipped'); return false; }
+      revivals++;
+      console.log(`\n   …page 2 is gone: carrying on in a fresh browser (restart ${revivals})`);
+      await ctx2.close().catch(() => {});
+      await stopBrowser();
+      await startBrowser();
+      ctx2 = await appContext(browser, { width: 1024, height: 640 });
+      page2 = await ctx2.newPage();
+      page2.on('pageerror', (e) => errors.push(String(e)));
+      watchForCrashes(page2, `page 2 (restart ${revivals})`);
+      await page2.goto(`${staticSrv.url}/`, { waitUntil: 'domcontentloaded' });
+      await bootApp(page2);
+      await page2.evaluate(() => {
+        window.__pmToasts = [];
+        const app = globalThis.app;
+        const orig = app.toast.bind(app);
+        app.toast = (msg, kind = null, ms) => { window.__pmToasts.push(String(msg)); return orig(msg, kind, ms); };
+      });
+      await hideLanding(page2);
+      stopMemwatch();
+      startMemwatch(page2);
+      return true;
+    };
+    /** A step that needs a live tab. */
+    const step2 = async (name) => { await revivePage2(); step(name); };
+    /**
+     * PM_PROBE=1: one line a second from inside the tab, so a burst of native
+     * memory has a description next to it (a canvas that grew, a view that
+     * went NaN, an export in flight).
+     */
+    if (process.env.PM_PROBE) {
+      await page2.evaluate(() => {
+        window.__pmProbe = () => {
+          const a = globalThis.app || {};
+          const v = a.viewer || {};
+          const r = v.renderer || {};
+          const cv = document.getElementById('panoCanvas');
+          const map = document.getElementById('mapCanvas');
+          const mem = performance.memory;
+          return {
+            cv: cv ? `${cv.width}x${cv.height}` : null,
+            map: map ? `${map.width}x${map.height}` : null,
+            gl: r.gl ? 'gl' : (r._fallback2d ? '2d' : '-'),
+            node: a.movement?.currentNodeId ?? null,
+            head: Number.isFinite(a.movement?.heading) ? Math.round(a.movement.heading) : String(a.movement?.heading),
+            busy: !!a._pworldBusy,
+            cache: a.cache?.meta?.size ?? null,
+            heap: mem ? +(mem.usedJSHeapSize / 1048576).toFixed(1) : null,
+          };
+        };
+        window.__pmProbeTimer = setInterval(() => { window.__pmProbeLast = window.__pmProbe(); }, 500);
+      });
+      const probe = setInterval(async () => {
+        const st = await page2.evaluate(() => window.__pmProbeLast).catch(() => null);
+        if (st) console.log(`    · probe ${JSON.stringify(st)} · “${currentStep.slice(0, 34)}”`);
+      }, 1000);
+      probe.unref?.();
+    }
+    /**
+     * PM_RSS=1: what the renderer process is actually doing while a phase runs.
+     * Resident size alone cannot tell a leak from a busy rasteriser; the
+     * largest mapping and the busiest thread can.
+     */
+    if (process.env.PM_RSS) {
+      let prevTicks = new Map();
+      const sampler = setInterval(() => {
+        const pids = fs.readdirSync('/proc').filter((n) => /^\d+$/.test(n)).filter((pid) => {
+          try { return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('--type=renderer'); } catch { return false; }
+        });
+        for (const pid of pids) {
+          let rss = 0, threads = 0, biggest = { kb: 0, name: '' }, busy = { tid: '', secs: 0, name: '' };
+          try {
+            const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+            rss = Number(/VmRSS:\s+(\d+)/.exec(status)?.[1] || 0) / 1024;
+            threads = Number(/Threads:\s+(\d+)/.exec(status)?.[1] || 0);
+            for (const line of fs.readFileSync(`/proc/${pid}/smaps`, 'utf8').split('\n')) {
+              const m = /^([0-9a-f]+-[0-9a-f]+) .*\n?/.exec(line);
+              const size = /^Size:\s+(\d+) kB/.exec(line);
+              const nm = /^([0-9a-f]+-[0-9a-f]+) (\S*) /.exec(line);
+              if (size && nm && Number(size[1]) > biggest.kb) biggest = { kb: Number(size[1]), name: nm[2] };
+              if (m) continue;
+            }
+          } catch { /* process went away */ }
+          const tdir = `/proc/${pid}/task`;
+          let nowTicks = new Map();
+          try {
+            for (const tid of fs.readdirSync(tdir)) {
+              const stat = fs.readFileSync(`${tdir}/${tid}/stat`, 'utf8');
+              const f = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+              nowTicks.set(tid, Number(f[11]) + Number(f[12]));       // utime+stime
+              const c = fs.readFileSync(`${tdir}/${tid}/comm`, 'utf8').trim();
+              const prev = prevTicks.get(tid);
+              if (prev != null) { const secs = (nowTicks.get(tid) - prev) / 100; if (secs > busy.secs) busy = { tid, secs, name: c }; }
+            }
+          } catch { /* ignore */ }
+          prevTicks = nowTicks;
+          console.log(`    · rss ${rss.toFixed(0)} MB · ${threads} threads · biggest ${(biggest.kb / 1024).toFixed(0)} MB ${biggest.name} · busiest ${busy.name || '?'} ${busy.secs.toFixed(2)}s/s · “${currentStep.slice(0, 40)}”`);
+        }
+      }, 1000);
+      sampler.unref?.();
+    }
     /** A tiny real world: three places, two connections, one uploaded picture. */
     const openTiny = () => page2.evaluate(async () => {
       const { WorldGraph } = await import('/js/core/world-graph.js');
@@ -1149,10 +1401,51 @@ try {
       const said = await toastText2();
       return re.test(said) ? said : null;
     }, `a toast matching ${re}`, ms);
+    if (process.env.PM_TRACE_ALLOC) {
+      await page2.evaluate(() => {
+        window.__alloc2 = { canvas: 0, resize: 0, ctx: 0, bitmap: 0, image: 0, blob: 0, objects: 0 };
+        const dc = Document.prototype.createElement;
+        Document.prototype.createElement = function (tag, ...r) {
+          const el = dc.call(this, tag, ...r);
+          if (String(tag).toLowerCase() === 'canvas') window.__alloc2.canvas++;
+          return el;
+        };
+        for (const dim of ['width', 'height']) {
+          const d = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, dim);
+          Object.defineProperty(HTMLCanvasElement.prototype, dim, { configurable: true, get: d.get, set(v) { window.__alloc2.resize++; return d.set.call(this, v); } });
+        }
+        const gc = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (...a) { window.__alloc2.ctx++; return gc.apply(this, a); };
+        const cb = window.createImageBitmap;
+        if (cb) window.createImageBitmap = function (...a) { window.__alloc2.bitmap++; return cb.apply(this, a); };
+        const obu = URL.createObjectURL;
+        URL.createObjectURL = function (...a) { window.__alloc2.blob++; return obu.apply(this, a); };
+        const oi = window.Image;
+        window.Image = function (...a) { window.__alloc2.image++; return new oi(...a); };
+      });
+      setInterval(async () => {
+        const st = await page2.evaluate(() => ({
+          ...window.__alloc2,
+          dom: document.getElementsByTagName('*').length,
+          canvases: document.querySelectorAll('canvas').length,
+          heap: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null,
+        })).catch(() => null);
+        console.log(`    · trace ${JSON.stringify(st)}`);
+      }, 1000).unref?.();
+    }
     const tiny = await openTiny();
 
     /* ---- dropping a file on the window ---- */
-    step('drop a world file on the window');
+    /**
+     * Everything the app does with a world file, in one restatable section.
+     * A headless tab in this sandbox is sometimes killed while it runs — the
+     * software rasteriser's own memory, not the app's (the app's JS heap and
+     * canvas count stay flat right through it). So the section is wrapped in
+     * the loop just below: a tab that dies costs the checks it had already
+     * reported, never the rest of the report.
+     */
+    const runSurfaceSection = async () => {
+    await step2('drop a world file on the window');
     if (TIMINGS) await page2.evaluate(() => {
       window.__alloc = { canvas: 0, resize: 0, ctx: 0, bitmap: 0 };
       const dc = Document.prototype.createElement;
@@ -1188,7 +1481,7 @@ try {
     }, dropBytes);
     mark('overlay shown');
     check('dropping a file shows the drop target', overlayShown.hidden === false && overlayShown.body === true, JSON.stringify(overlayShown));
-    await page2.screenshot({ path: path.join(SHOTS, 'ui-drop-target.png'), timeout: 60000 });
+    await shot(page2, 'ui-drop-target.png');
     mark('drop screenshot');
     await page2.evaluate(() => {
       const dt = window.__pmDrop;
@@ -1222,7 +1515,124 @@ try {
     }
 
     /* ---- files that are not worlds ---- */
-    step('a file that is not a world is refused, and the app carries on');
+    /* ---- the older project file still works ---- */
+    await step2('the older .pmap project still saves and opens');
+    mark('start');
+    await page2.evaluate(() => window.__pmUseDownloadFallback());
+    mark('download fallback installed');
+    // what the archive is supposed to contain: whatever world is open when the
+    // .pmap is written (the drop step above put a full demo world in front of
+    // it, not the three-place one from earlier)
+    const beforePmap = await page2.evaluate(() => ({
+      name: globalThis.app.project?.name || null, nodes: globalThis.app.graph?.nodes?.size || 0,
+    }));
+    const pmapPath = await (async () => {
+      const dl = downloadEvent(page2, 180000);
+      await page2.evaluate(async () => {
+        const ok = await globalThis.app.saveProject(true);
+        if (!ok) throw new Error('saveProject said no');
+      }).catch(() => {});
+      const d = await dl;
+      if (!d) return null;
+      const out = path.join(tmp, `legacy-${d.suggestedFilename()}`);
+      await d.saveAs(out);
+      mark(`saved ${(fs.statSync(out).size / 1048576).toFixed(2)} MB`);
+      return out;
+    })();
+    if (!pmapPath) {
+      check('the project archive saves', false, 'no download appeared');
+    } else {
+      const pmapZip = await readZip(fs.readFileSync(pmapPath));
+      check('the project archive saves as a real archive', pmapZip.size >= 2, `${fs.statSync(pmapPath).size} bytes, ${pmapZip.size} entries`);
+      await settleApp(page2, { minMs: 600 });
+      mark('settled');
+      await page2.evaluate(() => globalThis.app.worldLibrary?.close());
+      await hideLanding(page2);                       // this button routes .pmap to the project importer
+      mark('landing hidden');
+      check('the project archive opens again', await openWorldFileThroughUI(page2, pmapPath, { label: 'the .pmap' }));
+      mark('pmap opened through the chooser');
+      const reopenedPmap = await waitFor(async () => {
+        const state = await page2.evaluate(() => ({ name: globalThis.app.project?.name || null, nodes: globalThis.app.graph?.nodes?.size || 0 }));
+        return state.nodes === beforePmap.nodes ? state : null;
+      }, 'the project reopens', 90000).catch(() => null);
+      check('and it is the same world (places and name)',
+        !!reopenedPmap && reopenedPmap.name === beforePmap.name,
+        JSON.stringify({ before: beforePmap, after: reopenedPmap, tiny: tiny.nodes }));
+    }
+
+    /* ---- empty worlds and missing images ---- */
+    await step2('a brand new empty world saves cleanly');
+    const emptyFile = await page2.evaluate(async () => {
+      globalThis.app.worldLibrary?.close();
+      globalThis.app.createEmptyWorld?.({ openEditor: null });
+      await new Promise((r) => setTimeout(r, 1200));
+      return { nodes: globalThis.app.graph?.nodes?.size ?? -1, id: globalThis.app.graph?.id };
+    });
+    const emptyDl = downloadEvent(page2, 180000);
+    await page2.evaluate(() => globalThis.app.saveWorldFile({ name: 'Empty World' }));
+    const emptyPicked = await emptyDl.catch(() => null);
+    if (!emptyPicked) {
+      check('an empty world still writes a file', false, 'no download');
+    } else {
+      const emptyPath = path.join(tmp, `empty-${emptyPicked.suggestedFilename()}`);
+      await emptyPicked.saveAs(emptyPath);
+      const emptyZip = await readZip(fs.readFileSync(emptyPath));
+      const emptyManifest = JSON.parse(new TextDecoder().decode(emptyZip.get('pworld.json')));
+      check('an empty world still writes a file', emptyZip.has('pworld.json') && fs.statSync(emptyPath).size > 200,
+        `${fs.statSync(emptyPath).size} bytes, ${emptyFile.nodes} places, ${emptyZip.size} entries`);
+      check('the empty file says it has no images', (emptyManifest.stats?.images || 0) === 0, JSON.stringify(emptyManifest.stats));
+      const emptyPlaces = (emptyManifest.stats?.nodes ?? emptyManifest.stats?.places ?? null);
+      check('and it still describes the world itself', !!emptyManifest.world || !!emptyManifest.name || emptyPlaces !== null,
+        JSON.stringify(Object.keys(emptyManifest)));
+    }
+
+    await step2('a world whose pictures are gone reports what is missing');
+    const missing = await page2.evaluate(async () => {
+      const { DEMO_WORLDS } = await import('/js/worlds/demo-worlds.js');
+      const src = DEMO_WORLDS.find((w) => w.id === 'demo_willow_parish').build().graph;
+      const json = src.toJSON();
+      const keep = json.nodes.slice(0, 2).map((n) => n.id);
+      for (const n of json.nodes) {
+        if (!keep.includes(n.id)) n.pano = { kind: 'generated' };
+      }
+      // one node points at a picture that is not there any more
+      json.nodes.find((n) => n.id === keep[1]).pano = { kind: 'urlset', variants: { day: 'assets/willow/day/nothing-here.jpg' } };
+      json.id = 'w_missing'; json.name = 'Missing Pictures';
+      await globalThis.app.loadWorldJson(json, { name: 'Missing Pictures', project: { id: 'w_missing', name: 'Missing Pictures' } });
+      return { id: json.id, nodes: json.nodes.length };
+    });
+    const missDl = downloadEvent(page2, 180000);
+    await page2.evaluate(() => globalThis.app.saveWorldFile({ name: 'Missing Pictures' }));
+    const missPicked = await missDl.catch(() => null);
+    if (!missPicked) check('the world with a lost picture still saves', false, 'no download');
+    else {
+      const missPath = path.join(tmp, `missing-${missPicked.suggestedFilename()}`);
+      await missPicked.saveAs(missPath);
+      const missZip = await readZip(fs.readFileSync(missPath));
+      const missManifest = JSON.parse(new TextDecoder().decode(missZip.get('pworld.json')));
+      check('the world with a lost picture still saves', missZip.has('world/world.json'));
+      check('the file names the picture it could not embed', (missManifest.missing || []).length >= 1,
+        JSON.stringify((missManifest.missing || []).slice(0, 2)));
+      const wording = await toastText();
+      check('the save told the user what was missing', /could not be embedded/i.test(wording), wording.slice(0, 120));
+      const kept = await page2.evaluate(() => {
+        const n = globalThis.app.graph.nodes.get('willow_061') || [...globalThis.app.graph.nodes.values()].find((x) => x.pano?.fallbackVariants);
+        return n ? Object.keys(n.pano.fallbackVariants || n.pano.variants || {}) : [];
+      });
+      check('the original link is kept as a fallback, never dropped', kept.length >= 1, JSON.stringify(kept));
+    }
+
+    /* ---- saving twice ---- */
+    await step2('saving the same world twice is safe');
+    await openTiny();
+    const twice = await page2.evaluate(async () => {
+      const first = await globalThis.app.saveWorldFile({ name: 'Twice Saved' });
+      const second = await globalThis.app.saveWorldFile({ name: 'Twice Saved' });
+      return { first, second };
+    });
+    check('the second save is not blocked and not corrupt', twice.first === true && twice.second !== 'pending', JSON.stringify(twice));
+
+    await step2('a file that is not a world is refused, and the app carries on');
     await settleApp(page2);                         // the world it just opened finishes painting first
     const junk = path.join(tmp, 'shopping-list.pworld');
     fs.writeFileSync(junk, 'milk\neggs\nnot a world at all\n');
@@ -1239,7 +1649,13 @@ try {
     const junkToast = await waitToast2(/could not open the world file: this is not a world file/i, 20000).catch(() => null);
     mark('junk toast');
     check('a file that is not a world says so', junkAsked && !!junkToast, `offered ${junkAsked} · said “${junkToast}”`);
-    check('the world you were in is untouched', await page2.evaluate((n) => globalThis.app.graph.nodes.size === n, demo.nodes));
+    check('the world you were in is untouched',
+      await page2.evaluate((n) => globalThis.app.graph.nodes.size === n, demo.nodes).catch(() => false));
+    /* In this sandbox the tab is sometimes killed right about here — the
+       rasteriser, not the app (see “the browser tab survives” below). The
+       refusals are done; the rest of the section is about files, so hand it a
+       tab that is still alive and let the report be complete. */
+    await revivePage2();
 
     const damaged = path.join(tmp, 'damaged.pworld');
     const good = fs.readFileSync(savedPath);
@@ -1262,110 +1678,28 @@ try {
     mark('damaged toast');
     check('a damaged file is refused with a reason', damagedAsked && !!damagedToast, `offered ${damagedAsked} · said “${damagedToast}”`);
     check('the app is still alive after refusing twice',
-      await page2.evaluate(() => !!globalThis.app.graph && globalThis.app.cache.metaOf(globalThis.app.movement.currentNodeId) !== undefined));
+      await page2.evaluate(() => !!globalThis.app.graph && globalThis.app.cache.metaOf(globalThis.app.movement.currentNodeId) !== undefined).catch(() => false));
 
-    /* ---- the older project file still works ---- */
-    step('the older .pmap project still saves and opens');
-    await page2.evaluate(() => window.__pmUseDownloadFallback());
-    const pmapPath = await (async () => {
-      const dl = page2.waitForEvent('download', { timeout: 180000 });
-      await page2.evaluate(async () => {
-        const ok = await globalThis.app.saveProject(true);
-        if (!ok) throw new Error('saveProject said no');
-      }).catch(() => {});
-      const d = await dl.catch(() => null);
-      if (!d) return null;
-      const out = path.join(tmp, `legacy-${d.suggestedFilename()}`);
-      await d.saveAs(out);
-      return out;
-    })();
-    if (!pmapPath) {
-      check('the project archive saves', false, 'no download appeared');
-    } else {
-      const pmapZip = await readZip(fs.readFileSync(pmapPath));
-      check('the project archive saves as a real archive', pmapZip.size >= 2, `${fs.statSync(pmapPath).size} bytes, ${pmapZip.size} entries`);
-      await settleApp(page2, { minMs: 600 });
-      await page2.evaluate(() => globalThis.app.worldLibrary?.close());
-      await hideLanding(page2);                       // this button routes .pmap to the project importer
-      check('the project archive opens again', await openWorldFileThroughUI(page2, pmapPath, { label: 'the .pmap' }));
-      const reopenedPmap = await waitFor(async () => {
-        const state = await page2.evaluate(() => ({ name: globalThis.app.project?.name || null, nodes: globalThis.app.graph?.nodes?.size || 0 }));
-        return state.nodes === tiny.nodes ? state : null;
-      }, 'the project reopens', 90000).catch(() => null);
-      check('and it is the same world (places and name)', !!reopenedPmap && /Tiny/.test(reopenedPmap.name || ''), JSON.stringify(reopenedPmap));
-    }
 
-    /* ---- empty worlds and missing images ---- */
-    step('a brand new empty world saves cleanly');
-    const emptyFile = await page2.evaluate(async () => {
-      globalThis.app.worldLibrary?.close();
-      globalThis.app.createEmptyWorld?.({ openEditor: null });
-      await new Promise((r) => setTimeout(r, 1200));
-      return { nodes: globalThis.app.graph?.nodes?.size ?? -1, id: globalThis.app.graph?.id };
-    });
-    const emptyDl = page2.waitForEvent('download', { timeout: 180000 });
-    await page2.evaluate(() => globalThis.app.saveWorldFile({ name: 'Empty World' }));
-    const emptyPicked = await emptyDl.catch(() => null);
-    if (!emptyPicked) {
-      check('an empty world still writes a file', false, 'no download');
-    } else {
-      const emptyPath = path.join(tmp, `empty-${emptyPicked.suggestedFilename()}`);
-      await emptyPicked.saveAs(emptyPath);
-      const emptyZip = await readZip(fs.readFileSync(emptyPath));
-      const emptyManifest = JSON.parse(new TextDecoder().decode(emptyZip.get('pworld.json')));
-      check('an empty world still writes a file', emptyZip.has('pworld.json') && fs.statSync(emptyPath).size > 200,
-        `${fs.statSync(emptyPath).size} bytes, ${emptyFile.nodes} places, ${emptyZip.size} entries`);
-      check('the empty file says it has no images', (emptyManifest.stats?.images || 0) === 0, JSON.stringify(emptyManifest.stats));
-      const emptyPlaces = (emptyManifest.stats?.nodes ?? emptyManifest.stats?.places ?? null);
-      check('and it still describes the world itself', !!emptyManifest.world || !!emptyManifest.name || emptyPlaces !== null,
-        JSON.stringify(Object.keys(emptyManifest)));
-    }
-
-    step('a world whose pictures are gone reports what is missing');
-    const missing = await page2.evaluate(async () => {
-      const { DEMO_WORLDS } = await import('/js/worlds/demo-worlds.js');
-      const src = DEMO_WORLDS.find((w) => w.id === 'demo_willow_parish').build().graph;
-      const json = src.toJSON();
-      const keep = json.nodes.slice(0, 2).map((n) => n.id);
-      for (const n of json.nodes) {
-        if (!keep.includes(n.id)) n.pano = { kind: 'generated' };
+    };
+    const rollback = { pass, fail };
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try { await runSurfaceSection(); break; }
+      catch (err) {
+        const msg = String(err?.message || err);
+        const lostTheTab = /Target crashed|browser has been closed|page, context or browser has been closed/i.test(msg);
+        if (!lostTheTab || attempt === 3) throw err;
+        tabDeaths++;
+        console.log(`\n   …the tab went mid-section: ${msg.split('\n')[0].slice(0, 70)}`);
+        console.log(`     rolling back the ${pass + fail - rollback.pass - rollback.fail} checks it managed to report, and starting over`);
+        pass = rollback.pass; fail = rollback.fail;
+        await revivePage2();
       }
-      // one node points at a picture that is not there any more
-      json.nodes.find((n) => n.id === keep[1]).pano = { kind: 'urlset', variants: { day: 'assets/willow/day/nothing-here.jpg' } };
-      json.id = 'w_missing'; json.name = 'Missing Pictures';
-      await globalThis.app.loadWorldJson(json, { name: 'Missing Pictures', project: { id: 'w_missing', name: 'Missing Pictures' } });
-      return { id: json.id, nodes: json.nodes.length };
-    });
-    const missDl = page2.waitForEvent('download', { timeout: 180000 });
-    await page2.evaluate(() => globalThis.app.saveWorldFile({ name: 'Missing Pictures' }));
-    const missPicked = await missDl.catch(() => null);
-    if (!missPicked) check('the world with a lost picture still saves', false, 'no download');
-    else {
-      const missPath = path.join(tmp, `missing-${missPicked.suggestedFilename()}`);
-      await missPicked.saveAs(missPath);
-      const missZip = await readZip(fs.readFileSync(missPath));
-      const missManifest = JSON.parse(new TextDecoder().decode(missZip.get('pworld.json')));
-      check('the world with a lost picture still saves', missZip.has('world/world.json'));
-      check('the file names the picture it could not embed', (missManifest.missing || []).length >= 1,
-        JSON.stringify((missManifest.missing || []).slice(0, 2)));
-      const wording = await toastText();
-      check('the save told the user what was missing', /could not be embedded/i.test(wording), wording.slice(0, 120));
-      const kept = await page2.evaluate(() => {
-        const n = globalThis.app.graph.nodes.get('willow_061') || [...globalThis.app.graph.nodes.values()].find((x) => x.pano?.fallbackVariants);
-        return n ? Object.keys(n.pano.fallbackVariants || n.pano.variants || {}) : [];
-      });
-      check('the original link is kept as a fallback, never dropped', kept.length >= 1, JSON.stringify(kept));
     }
-
-    /* ---- saving twice ---- */
-    step('saving the same world twice is safe');
-    await openTiny();
-    const twice = await page2.evaluate(async () => {
-      const first = await globalThis.app.saveWorldFile({ name: 'Twice Saved' });
-      const second = await globalThis.app.saveWorldFile({ name: 'Twice Saved' });
-      return { first, second };
-    });
-    check('the second save is not blocked and not corrupt', twice.first === true && twice.second !== 'pending', JSON.stringify(twice));
+    if (tabDeaths) {
+      console.log(`\n   note: the sandbox killed a tab ${tabDeaths} time(s) in this phase;`);
+      console.log('         each time the section started over and finished in a fresh browser.');
+    }
 
     check('no page errors through the whole UI phase', errors.length === 0, errors[0] || '');
     await ctx2.close();

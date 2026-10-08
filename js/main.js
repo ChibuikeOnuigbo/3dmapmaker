@@ -132,7 +132,7 @@ class App {
     this.viewer.immersion.transitionMs = 420;
     this.viewer.onFrame = (now) => this.movement?.tick(now);
     this.viewer.start();
-    window.addEventListener('resize', () => { this.viewer.renderer.resize(); this.editorResize(); });
+    window.addEventListener('resize', () => { this.viewer.renderer.resize(); this.viewer.invalidate(); this.editorResize(); });
 
     this.mapRenderer = new MapRenderer($('#mapCanvas'), this.bus);
     this.mapRenderer.onNodeClick = (n, e) => this._openNodeMenu(n, e);
@@ -148,6 +148,7 @@ class App {
     await this._restoreLastWorld();
 
     this.viewer.renderer.resize();
+    this.viewer.invalidate();
     this.mapRenderer.resize();
     this._wireNodeMenu();
     this._startDebugOverlay();

@@ -55,8 +55,35 @@ export class PanoramaViewer {
     this._wisps = null;                      // dawn low-mist banks
     this._rabbits = null;                    // meadow rabbits (world meters)
     this._t0 = performance.now();
+    // paint-on-demand: a still scene must not be redrawn (and re-rasterised)
+    // sixty times a second — on a laptop that is battery, and on a machine
+    // with a software rasteriser it is the difference between a page that
+    // holds still and one that grows until the tab is killed
+    this._dirty = true;
+    this._lastSig = '';
+    this.paintCount = 0;                 // frames actually drawn (tests read this)
+    this.skippedFrames = 0;              // frames where nothing had changed
 
     this._bindInput();
+  }
+
+  /** Something other than the view changed what a frame should look like
+      (a new image, a resize, a mode switch): draw again, even if the yaw and
+      pitch happen to be exactly where they were. */
+  invalidate() { this._dirty = true; }
+
+  /** True while the picture is changing on its own — a transition, inertia, a
+      dragged view, or a weather/world layer that is actually on screen. */
+  _animating() {
+    if (this._transition || this._drag) return true;
+    if (Math.abs(this._vel.x) > 0.001 || Math.abs(this._vel.y) > 0.001) return true;
+    const i = this.immersion;
+    const a = this.anchors;
+    return !!(i.sway || i.breeze || i.rain || i.snow || i.clouds || i.night
+      || i.sunrays || i.fireflies || i.balloon || i.owl || i.mist
+      || (i.actors && a?.actors?.length) || (i.butterflies && a)
+      || (i.rabbits && a) || (i.ripples && a?.water?.length)
+      || (i.birds && !i.rain));
   }
 
   /* ---------------- input ---------------- */
@@ -64,6 +91,7 @@ export class PanoramaViewer {
     const el = this.canvas;
     el.style.touchAction = 'none';
     el.addEventListener('pointerdown', (e) => {
+      this.invalidate();
       el.setPointerCapture(e.pointerId);
       this._drag = { x: e.clientX, y: e.clientY, yaw: this.view.yawDeg, pitch: this._rawPitch, moved: 0, id: e.pointerId };
       this._vel.x = this._vel.y = 0;
@@ -89,6 +117,7 @@ export class PanoramaViewer {
     el.addEventListener('pointercancel', endDrag);
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
+      this.invalidate();
       const f = Math.exp((e.deltaY > 0 ? 1 : -1) * 0.09);
       this.view.fovDeg = Math.min(this.view.maxFov, Math.max(this.view.minFov, this.view.fovDeg * f));
       this._emitView();
@@ -97,17 +126,20 @@ export class PanoramaViewer {
 
   /** External look control (keyboard arrows / nudge buttons). */
   look(deltaYawDeg, deltaPitchDeg) {
+    this.invalidate();
     this.view.yawDeg = ((this.view.yawDeg + deltaYawDeg) % 360 + 360) % 360;
     this._rawPitch += deltaPitchDeg;
     this._emitView();
   }
 
   setFov(fovDeg) {
+    this.invalidate();
     this.view.fovDeg = Math.min(this.view.maxFov, Math.max(this.view.minFov, fovDeg));
     this._emitView();
   }
 
   setPitchLimits(limits) {
+    this.invalidate();
     // never allow pole-viewing even with AutoComplete OFF (safety clamp)
     this.pitchLimits = { min: Math.max(-88, limits.min), max: Math.min(88, limits.max) };
     if (!limits.tight) { this.pitchLimits.min = Math.min(this.pitchLimits.min, -80); this.pitchLimits.max = Math.max(this.pitchLimits.max, 80); }
@@ -115,6 +147,7 @@ export class PanoramaViewer {
 
   /** Immediate (no transition) image swap — used for the very first frame. */
   setImageNow(source, headingDeg) {
+    this.invalidate();
     this.renderer.setImageA(source, headingDeg);
     this.view.mix = 0; this.view.hasB = false;
   }
@@ -125,6 +158,7 @@ export class PanoramaViewer {
    * @param {object} opts {direction:'forward'|'backward'|'left'|'right'|null, durationMs}
    */
   transitionTo(source, headingDeg, opts = {}) {
+    this.invalidate();
     let dur = this.motion.durMs ?? opts.durationMs ?? this.immersion.transitionMs ?? 420;
     if (this.motion.style === 'snap') dur = Math.min(dur, 110);
     const amt = Math.max(0, Math.min(1, this.motion.amount ?? 0.8));
@@ -232,6 +266,26 @@ export class PanoramaViewer {
       pitchOff += Math.sin(time * 1.7 + 1.3) * 0.16 * i;
     }
     if (this.immersion.breeze) yawOff += Math.sin(time * 0.32 + 2.1) * 0.15;
+
+    // Nothing is moving and nothing is new: leave the frame that is already on
+    // screen alone. (The canvas resize is part of the signature, so a window
+    // that changed size still repaints on the next frame.)
+    const cv = this.canvas;
+    // the weather/world layers are part of the picture too: switching rain off
+    // has to wipe the rain that is still drawn on the overlay, so a change in
+    // which layers are on counts as a change to the frame
+    const i2 = this.immersion, a2 = this.anchors;
+    let layers = 0, bit = 1;
+    for (const k of ['sway', 'breeze', 'rain', 'snow', 'clouds', 'night', 'sunrays', 'fireflies',
+      'balloon', 'owl', 'mist', 'butterflies', 'rabbits', 'birds']) { if (i2[k]) layers += bit; bit *= 2; }
+    if (a2) layers += bit;                       // anchors in play (world actors / water)
+    const sig = `${this.view.yawDeg.toFixed(4)}|${this.view.pitchDeg.toFixed(4)}|${this.view.fovDeg.toFixed(3)}`
+      + `|${this.view.mix.toFixed(4)}|${this.view.zoom.toFixed(4)}|${this.view.hasB ? 1 : 0}`
+      + `|${cv.clientWidth}x${cv.clientHeight}|${layers}`;
+    if (!this._dirty && sig === this._lastSig && !this._animating()) { this.skippedFrames++; return; }
+    this._dirty = false;
+    this._lastSig = sig;
+    this.paintCount++;
 
     this.renderer.render({
       yawDeg: this.view.yawDeg + yawOff,
