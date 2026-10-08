@@ -10,6 +10,9 @@
  *
  * Nothing here is required for the web build: `probe()` simply reports that
  * no desktop backend answered, and every caller falls back to the file path.
+ * The web build ships a static `api/health` marker ({"mode":"web"}), so that
+ * answer arrives as a 200 instead of a 404 in every visitor's console; the
+ * desktop server's own /api/health route answers first when it is the host.
  * All URLs are RELATIVE (`api/...`): whatever host serves the app also serves
  * its database, so the same code works in a browser tab, in a packaged window
  * and behind a proxy. No loopback address is ever hardcoded.

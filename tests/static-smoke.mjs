@@ -279,6 +279,48 @@ test('worlds panel: the save surface and the library exist in the DOM', () => {
     'every world that becomes current must tell the worlds panel');
 });
 
+test('the offline shell caches every module the shell itself needs', () => {
+  const sw = read('sw.js');
+  const i = sw.indexOf('const SHELL = [');
+  const list = sw.slice(i, sw.indexOf('];', i));
+  const shell = new Set([...list.matchAll(/'\.\/([^']*)'/g)].map((m) => m[1] || 'index.html'));
+  assert.ok(shell.size >= 20, `the shell list looks wrong (${shell.size} entries)`);
+  for (const p of shell) assert.ok(exists(p), `the shell caches ${p}, which is not there`);
+  // a shell file that imports a module the shell does not cache boots online
+  // and dies offline — exactly the bug this test exists for
+  const seen = new Set();
+  const walk = (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const src = read(file);
+    const specs = [
+      ...[...src.matchAll(/(?:import|export)[^'"]*from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]),
+      ...[...src.matchAll(/import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]),
+    ];
+    for (const spec of specs) {
+      let target = null;
+      if (spec.startsWith('.')) target = path.normalize(path.join(path.dirname(file), spec));
+      else if (spec.startsWith('/')) target = spec.slice(1);               // absolute: app root
+      if (!target) continue;
+      assert.ok(shell.has(target), `${target} is imported by ${file} but not cached by the offline shell`);
+      walk(target);
+    }
+  };
+  for (const p of shell) if (p.endsWith('.js')) walk(p);
+});
+
+test('the web build answers the desktop bridge instead of 404ing', () => {
+  assert.ok(exists('api/health'), 'the web build ships a static api/health marker');
+  const marker = JSON.parse(read('api/health'));
+  assert.equal(marker.mode, 'web', 'the static marker must say this is the web build');
+  assert.notEqual(marker.mode, 'desktop', 'the static marker must never claim the desktop build');
+  assert.equal(marker.database, null, 'the web build has no database, by design');
+  const server = read('desktop/server.mjs');
+  assert.ok(server.includes("'GET /api/health'"), 'the desktop server answers /api/health itself');
+  const bridge = read('js/io/desktop.js');
+  assert.ok(/mode !== 'desktop'/.test(bridge), 'the bridge decides by the answer, never by a request failing');
+});
+
 test('desktop: the app is served by its own server and speaks relative URLs', () => {
   const server = read('desktop/server.mjs');
   for (const route of ['/api/health', '/api/worlds', '/api/import', '/api/save-file']) {

@@ -1041,6 +1041,11 @@ try {
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
+    // nothing the app asks for on the way up should be missing: a 404 in the
+    // console is the first thing a curious visitor opens the dev tools to see
+    const missing = [];
+    const watchMisses = (r) => { if (r.status() >= 400) missing.push(`${r.status()} ${new URL(r.url()).pathname}`); };
+    page.on('response', watchMisses);
     const toastText = () => page.evaluate(() => (window.__pmToasts || []).join(' | '));
     const waitToast = (re, ms = 20000) => waitFor(async () => {
       const said = await toastText();
@@ -1057,6 +1062,8 @@ try {
       app.toast = (msg, kind = null, ms) => { window.__pmToasts.push(String(msg)); return orig(msg, kind, ms); };
     });
     await hideLanding(page);
+    page.off('response', watchMisses);
+    check('the boot asks for nothing the build does not have', missing.length === 0, missing.slice(0, 4).join(' · '));
     const demo = await page.evaluate(async () => {
       const { DEMO_WORLDS } = await import('/js/worlds/demo-worlds.js');
       const def = DEMO_WORLDS.find((w) => w.id === 'demo_chapel_lane');

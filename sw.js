@@ -20,6 +20,7 @@ const SHELL = [
   './js/core/movement.js',
   './js/viewer/pano-renderer.js',
   './js/viewer/viewer.js',
+  './js/viewer/walk-steps.js',
   './js/viewer/completion.js',
   './js/viewer/sharpen.js',
   './js/viewer/smooth.js',
