@@ -195,6 +195,15 @@
 <aside class="panel" id="advPanel" hidden></aside>
 <aside class="panel" id="worldsPanel" hidden aria-label="Worlds — save and manage worlds"></aside>
 
+    <!-- drop a world file on the window to open it -->
+    <div class="drop-zone" id="dropZone" hidden aria-hidden="true">
+      <div class="drop-card">
+        <svg class="ic"><use href="#i-db"/></svg>
+        <b>Drop a world file to open it</b>
+        <span><code>.pworld</code> — every image travels inside it · <code>.pmap</code> still opens</span>
+      </div>
+    </div>
+
 <!-- ============ landing / start screen ============ -->
 <div id="landing" aria-modal="true" role="dialog" aria-label="Welcome to Panorama Maps"></div>
 

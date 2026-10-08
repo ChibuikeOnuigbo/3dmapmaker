@@ -143,6 +143,7 @@ class App {
 
     this._bindChrome();
     this._bindKeyboard();
+    this._bindFileDrop();
     this._bindBus();
     await this._restoreLastWorld();
 
@@ -166,6 +167,9 @@ class App {
     this.landing = new Landing(this);
     if (!this.prefs.hideLanding) this.landing.show();
     this._handleDeepLink();
+    // ... and again whenever the address changes, so a link or the desktop
+    // window's menu works whether or not the app was already open
+    window.addEventListener('hashchange', () => this._handleDeepLink());
 
     $('#panoLoading').classList.remove('show');
   }
@@ -180,7 +184,7 @@ class App {
     try { history.replaceState(null, '', location.pathname + location.search); } catch { /* file:// */ }
     if (link === 'worlds') { this.landing?.hide(); this.worldLibrary?.open('library'); }
     else if (link === 'save-world') { this.landing?.hide(); this.worldLibrary?.open('save'); }
-    else if (link === 'open-world') this.openAnyFile();
+    else if (link === 'open-world') { this.landing?.hide(); this.openAnyFile(); }
   }
 
   _setWorldName(n) {
@@ -1440,12 +1444,68 @@ class App {
   }
 
   /** One entry point for both file flavours: `.pworld` (self-contained) and
-      the older `.pmap` project archive. The extension decides, never a guess. */
-  async openAnyFile() {
-    const file = await fsAccess.openFile('.pworld,.pmap');
+      the older `.pmap` project archive. The extension decides, never a guess.
+      The file can come from a dialog or from a drop on the window. */
+  async openAnyFile(picked = null) {
+    const file = picked || await fsAccess.openFile('.pworld,.pmap');
     if (!file) return null;
+    this.landing?.hide();                      // a dropped file must not land behind the start screen
     const name = (file.name || '').toLowerCase();
     return name.endsWith('.pmap') ? this.openProject(file) : this.openWorldFile(file);
+  }
+
+  /**
+   * DROP A WORLD FILE ON THE WINDOW. A file type you can save should be a file
+   * type you can drop back in — the whole point of a self-contained world.
+   */
+  _bindFileDrop() {
+    const zone = document.getElementById('dropZone');
+    if (!zone) return;
+    const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    let depth = 0;
+    const show = (on) => { zone.hidden = !on; document.body.classList.toggle('dropping', on); };
+
+    window.addEventListener('dragenter', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth += 1;
+      show(true);
+    });
+    window.addEventListener('dragover', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (!depth) show(false);
+    });
+    window.addEventListener('drop', async (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      show(false);
+      const files = [...(e.dataTransfer?.files || [])];
+      if (!files.length) return;
+      if (files.length > 1) this.toast(`Opening “${files[0].name}” — one world at a time`);
+      await this.openAnyFile(files[0]);
+    });
+  }
+
+  /** Look inside a world file before opening it (used by the Worlds panel). */
+  async inspectWorldFileFlow(picked = null) {
+    try {
+      const file = picked || await fsAccess.openFile('.pworld');
+      if (!file) return null;
+      const info = await this.inspectWorldFile(file);
+      this.worldLibrary?.showInspect(info, file);
+      return info;
+    } catch (err) {
+      console.error(err);
+      this.worldLibrary?.showInspect(null, null, err.message);
+      return null;
+    }
   }
 
   async openProject(picked = null) {
@@ -1686,6 +1746,9 @@ class App {
     try {
       const file = picked || await fsAccess.openFile('.pworld,.pmap');
       if (!file) return false;
+      // the picker also accepts the older project archive: hand it over rather
+      // than failing to read a manifest it never had
+      if ((file.name || '').toLowerCase().endsWith('.pmap')) return this.openProject(file);
       this.toast('Opening world file…');
       const imported = await importPworld(file);
       const name = imported.manifest.world.name || 'Imported world';
@@ -2002,7 +2065,7 @@ class App {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {   // open a world
         e.preventDefault();
-        this.openWorldFile();
+        this.openAnyFile();
         return;
       }
       if (e.key === 'Escape') { this.closePanels(); document.querySelectorAll('.pop.open').forEach(el => el.classList.remove('open')); return; }

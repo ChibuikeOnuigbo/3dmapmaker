@@ -12,3 +12,4 @@ __pycache__/
 dist-desktop/
 desktop/.data/
 *.pworld
+tools-render/.browser/

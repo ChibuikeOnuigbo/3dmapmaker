@@ -40,6 +40,7 @@ export class WorldLibrary {
     this._busy = false;
     this._progress = null;
     this._card = { author: '', description: '', tags: '' };
+    this._inspectFile = null;
     // one listener for the life of the panel: re-rendering replaces the
     // markup, never the handler (a per-render listener would double-fire)
     this.panel.addEventListener('click', (e) => this._click(e));
@@ -192,6 +193,8 @@ export class WorldLibrary {
       <button class="btn ${Desktop.online ? 'ghost ' : ''}block" data-act="saveFile"><svg><use href="#i-save"/></svg>Save ${PWORLD_EXT} file${Desktop.online ? ` <small>· written to the exports folder</small>` : ''}</button>
       ${Desktop.online ? '<button class="btn ghost block" data-act="saveBoth"><svg><use href="#i-check"/></svg>Save both — database + file</button>' : ''}
       <button class="btn ghost block" data-act="openFile"><svg><use href="#i-open"/></svg>Open a world file</button>
+      <button class="btn ghost block" data-act="inspect"><svg><use href="#i-search"/></svg>Look inside a world file first</button>
+      <div id="wlInspect"></div>
       <div class="divider"></div>
       <div class="hint">Also in the Panels menu, and on <kbd>Ctrl</kbd>+<kbd>S</kbd>.</div>`;
   }
@@ -286,7 +289,10 @@ export class WorldLibrary {
       case 'saveDb': return this.app.saveWorldToDatabase(this._cardNow());
       case 'saveFile': return this.app.saveWorldFile(this._cardNow());
       case 'saveBoth': return this.app.saveWorldToDatabase(this._cardNow()).then((ok) => ok && this.app.saveWorldFile(this._cardNow()));
-      case 'openFile': return this.app.openWorldFile();
+      case 'openFile': return this.app.openAnyFile();
+      case 'inspect': return this.app.inspectWorldFileFlow();
+      case 'inspectOpen': return this.app.openWorldFile(this._inspectFile);
+      case 'inspectClose': return this.showInspect(null);
       case 'snapshot': return this.app.snapshotWorldVersion(this._cardNow());
       default: return undefined;
     }
@@ -360,6 +366,40 @@ export class WorldLibrary {
   }
 
   setProgress(progress) { this.busy(progress); }
+
+  /**
+   * What is inside a world file, read from the file itself — before you open
+   * it. The file is not opened by this: it is reported, and you decide.
+   */
+  showInspect(info, file = null, error = null) {
+    this._inspectFile = info ? file : null;
+    const slot = this.panel.querySelector('#wlInspect');
+    if (!slot) return;
+    if (error) {
+      slot.innerHTML = `<div class="wl-inspect"><h4>That file could not be read</h4><div class="err">${esc(error)}</div>
+        <div class="acts"><button class="btn ghost" data-act="inspectClose">Close</button></div></div>`;
+      return;
+    }
+    if (!info) { slot.innerHTML = ''; return; }
+    const row = (k, v) => (v === undefined || v === null || v === '' ? '' : `<span>${esc(k)}</span><b>${esc(String(v))}</b>`);
+    slot.innerHTML = `<div class="wl-inspect">
+      <h4>${esc(info.name || 'Untitled world')}</h4>
+      <div class="rows">
+        ${row('Made by', info.author)}
+        ${row('Places', info.nodes?.toLocaleString())}
+        ${row('Images inside', info.images?.toLocaleString())}
+        ${row('Scene modes', info.modes?.join(', '))}
+        ${row('File size', formatBytes(info.size))}
+        ${row('Saved', info.createdAt ? when(info.createdAt) : null)}
+        ${row('Format', `version ${info.version}`)}
+      </div>
+      ${info.missing ? `<div class="err">${info.missing} image(s) were never embedded in this file</div>` : ''}
+      <div class="acts">
+        <button class="btn" data-act="inspectOpen"><svg><use href="#i-open"/></svg>Open it</button>
+        <button class="btn ghost" data-act="inspectClose">Close</button>
+      </div>
+    </div>`;
+  }
 
   /** Set the size readout line under the save card. */
   setEstimate(text) {

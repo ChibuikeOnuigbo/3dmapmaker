@@ -92,6 +92,22 @@ machine, the embedded pixels are rendered, the scene modes switch, the world
 is walked, and a reload proves the local mirror kept it. Screenshots land in
 `qa/world-file/`.
 
+## Getting a file into the app
+
+Four ways, one code path (`openAnyFile()` — the extension decides):
+
+| How | Where |
+|---|---|
+| **Drag the file onto the window** | anywhere; the whole screen becomes a drop target while you drag |
+| **Look inside a world file first** | Worlds panel → Save section — name, author, places, images, size, format, saved date, and anything the file is missing, before you commit to opening it |
+| **Open a world file** | the start screen, the Worlds panel, or `Ctrl`+`O` |
+| **The world's own window** | desktop builds route the File menu here: `#open-world`, `#worlds`, `#save-world` |
+
+A file that is not a world (or one whose bytes were changed on the way) is
+refused with a reason, and **the world you were in is left exactly as it
+was** — opening is atomic: the current world is only replaced once the new one
+has been read, verified and staged.
+
 ## Related formats
 
 | File | Contains | Status |

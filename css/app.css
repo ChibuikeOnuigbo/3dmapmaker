@@ -1111,3 +1111,33 @@ body.desktop-build #worldsBtn .ic { color: var(--accent); }
   .wl-table th:nth-child(3), .wl-table td:nth-child(3) { display: none; }
   .wl-table th:nth-child(1) { width: 46%; }
 }
+
+/* ================= dropping a world file on the window ================= */
+.drop-zone {
+  /* dim, do not blur: a full-screen backdrop-filter over the live panorama
+     costs a full-surface filter pass on every drag event — and in software
+     rendering (no GPU, remote desktops, some VMs) it can run the rasteriser
+     out of memory. A plain wash reads the same and stays cheap. */
+  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+  background: radial-gradient(120% 90% at 50% 45%, rgba(12, 20, 38, .34), rgba(9, 15, 30, .62));
+}
+.drop-zone[hidden] { display: none; }
+.drop-card {
+  display: grid; justify-items: center; gap: 8px; text-align: center;
+  padding: var(--s5) var(--s6); border-radius: var(--r-lg, 16px);
+  background: var(--surface); color: var(--ink);
+  border: 2px dashed var(--accent); box-shadow: var(--shadow-lg, 0 18px 50px rgba(10, 18, 35, .28));
+  max-width: min(420px, 86vw);
+}
+.drop-card .ic { width: 34px; height: 34px; color: var(--accent); }
+.drop-card b { font-size: 15px; }
+.drop-card span { color: var(--ink-3); font-size: 12px; line-height: 1.5; }
+.drop-card code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+
+/* the file card the “look inside” button fills in */
+.wl-inspect { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s3); margin-bottom: var(--s3); background: var(--surface-2); }
+.wl-inspect h4 { margin: 0 0 6px; font-size: 13px; }
+.wl-inspect .rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; color: var(--ink-2); }
+.wl-inspect .rows b { color: var(--ink); font-weight: 620; }
+.wl-inspect .err { color: var(--bad); font-size: 12px; }
+.wl-inspect .acts { display: flex; gap: 6px; margin-top: var(--s3); }
