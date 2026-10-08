@@ -1821,7 +1821,7 @@ class App {
     return {
       name: m.world.name, author: m.world.author, nodes: m.stats.nodes, images: m.stats.images,
       size: info.fileBytes, modes: m.scene?.modes || [], missing: m.missing?.length || 0,
-      version: m.formatVersion, createdAt: m.createdAt,
+      version: m.formatVersion, createdAt: m.createdAt, hasCover: info.hasCover ?? false,
     };
   }
 

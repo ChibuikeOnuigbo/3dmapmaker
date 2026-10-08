@@ -1599,9 +1599,8 @@ try {
       const src = DEMO_WORLDS.find((w) => w.id === 'demo_willow_parish').build().graph;
       const json = src.toJSON();
       const keep = json.nodes.slice(0, 2).map((n) => n.id);
-      for (const n of json.nodes) {
-        if (!keep.includes(n.id)) n.pano = { kind: 'generated' };
-      }
+      json.nodes = json.nodes.filter((n) => keep.includes(n.id));
+      json.edges = json.edges.filter((e) => keep.includes(e.a) && keep.includes(e.b));
       // one node points at a picture that is not there any more
       json.nodes.find((n) => n.id === keep[1]).pano = { kind: 'urlset', variants: { day: 'assets/willow/day/nothing-here.jpg' } };
       json.id = 'w_missing'; json.name = 'Missing Pictures';

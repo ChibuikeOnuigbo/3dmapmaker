@@ -78,7 +78,7 @@ export const IMAGE_EXT = {
   'image/gif': '.gif', 'image/bmp': '.bmp', 'image/avif': '.avif',
 };
 
-export function extForMime(mime = '') { return IMAGE_EXT[mime] || extOfName('') || '.img'; }
+export function extForMime(mime = '', fallbackName = '') { return IMAGE_EXT[mime] || extOfName(fallbackName) || '.img'; }
 function extOfName(name = '') {
   const m = /\.(jpe?g|png|webp|gif|bmp|avif)$/i.exec(name || '');
   return m ? '.' + m[1].toLowerCase().replace('jpeg', 'jpg') : '';
@@ -140,7 +140,7 @@ export async function exportPworld({
     if (!original || !original.length) { missing.push({ id: a.id, reason: 'empty image data' }); continue; }
     const sha = a.sha256 || await sha256Hex(original);
     const id = a.id || ('asset_' + sha.slice(0, 12));
-    const ext = extForMime(a.mime) || extOfName(a.name) || '.img';
+    const ext = extForMime(a.mime, a.name);
     const path = `assets/panoramas/${id}${ext}`;
     entries.push({ path, data: original });
 
@@ -402,10 +402,15 @@ export async function collectWorldAssets(graph, {
 }
 
 function mimeFromUrl(url = '') {
+  if (typeof url !== 'string') return null;
+  const dm = /^data:(image\/[a-zA-Z0-9.+_-]+)/i.exec(url);
+  if (dm) return dm[1].toLowerCase();
   const m = /\.(jpe?g|png|webp|gif|bmp|avif)(?:$|\?)/i.exec(url);
   return m ? `image/${m[1].toLowerCase().replace('jpg', 'jpeg')}` : null;
 }
 function nameFromUrl(url = '') {
+  if (typeof url !== 'string') return '';
+  if (url.startsWith('data:')) return 'inline-image';
   try { const u = String(url).split(/[?#]/)[0]; return decodeURIComponent(u.split('/').pop() || u); }
   catch { return url; }
 }
@@ -425,7 +430,7 @@ export async function inspectPworld(input) {
   if (!raw) throw new Error('pworld.json missing — not a Panorama World file');
   const manifest = JSON.parse(td.decode(raw));
   if (manifest.format !== PWORLD_FORMAT) throw new Error('this file is not a Panorama World file');
-  return { manifest, fileBytes: bytes.length, entryCount: entries.size };
+  return { manifest, fileBytes: bytes.length, entryCount: entries.size, hasCover: entries.has('cover.jpg') };
 }
 
 /** Verify header + every embedded asset hash. Throws on structural damage. */

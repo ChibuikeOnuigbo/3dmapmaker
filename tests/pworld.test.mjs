@@ -60,6 +60,9 @@ test('pworld: file name is safe and typed', () => {
   assert.equal(pworldFilename(''), 'panorama-world.pworld');
   assert.equal(extForMime('image/jpeg'), '.jpg');
   assert.equal(extForMime('image/png'), '.png');
+  assert.equal(extForMime('', 'sample.webp'), '.webp');
+  assert.equal(extForMime('image/avif'), '.avif');
+  assert.equal(extForMime('', 'unknown'), '.img');
   assert.equal(formatBytes(1536), '2 KB');
   assert.equal(formatBytes(5 * 1048576), '5.0 MB');
 });
@@ -87,6 +90,7 @@ test('pworld: export → verify → import keeps world AND pixels', async () => 
   const info = await inspectPworld(bytes);
   assert.equal(info.manifest.world.name, 'Test Hollow');
   assert.deepEqual(info.manifest.world.tags, ['test']);
+  assert.equal(info.hasCover, false);
 
   const imported = await importPworld(bytes);
   assert.equal(imported.world.name, 'Test Hollow');
@@ -211,6 +215,8 @@ test('pworld: cover picture is stored and readable', async () => {
   assert.ok(cover, 'cover.jpg present');
   assert.equal(cover.type, 'image/jpeg');
   assert.equal(await cover.arrayBuffer().then(b => b.byteLength), 512);
+  const inspected = await inspectPworld(bytes);
+  assert.equal(inspected.hasCover, true, 'inspect reports that cover is present');
 });
 
 /* ---------------- integrity ---------------- */
