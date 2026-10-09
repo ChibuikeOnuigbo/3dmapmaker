@@ -17,6 +17,39 @@ const RAF = (fn) => {
 };
 const CAF = (id) => (typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame(id) : clearTimeout(id));
 
+export const MAP_THEMES = {
+  day: {
+    bg: '#e9eee4', roadCase: '#ffffff', roadFill: '#f5f2ea', roadDirt: '#d9c8a6',
+    water: '#aacdec', plaza: '#ddd8c9', meadow: '#cfe0b4',
+    bldFill: '#d5d0c4', bldStroke: '#b8b2a4', churchFill: '#d9c5a0',
+    edge: 'rgba(84,110,140,0.28)', text: '#3c4654',
+  },
+  night: {
+    bg: '#181e29', roadCase: '#2a3447', roadFill: '#222b3b', roadDirt: '#302a22',
+    water: '#142a42', plaza: '#26242a', meadow: '#1b2920',
+    bldFill: '#222630', bldStroke: '#353c4d', churchFill: '#383226',
+    edge: 'rgba(110,140,180,0.35)', text: '#a0b0c8',
+  },
+  golden: {
+    bg: '#f3ece0', roadCase: '#fffaf0', roadFill: '#faefe0', roadDirt: '#d6b88d',
+    water: '#9bc2e2', plaza: '#e2d3be', meadow: '#d4dcab',
+    bldFill: '#dec8b2', bldStroke: '#c0a892', churchFill: '#e0b885',
+    edge: 'rgba(130,105,75,0.30)', text: '#504030',
+  },
+  snow: {
+    bg: '#f2f5f8', roadCase: '#ffffff', roadFill: '#e8edf3', roadDirt: '#d8dee8',
+    water: '#a8cbdf', plaza: '#e4e8ec', meadow: '#e0e8e4',
+    bldFill: '#dbe2e9', bldStroke: '#b8c4d2', churchFill: '#d4d8db',
+    edge: 'rgba(90,120,150,0.30)', text: '#384656',
+  },
+  rain: {
+    bg: '#d8dede', roadCase: '#eef2f2', roadFill: '#e2e7e7', roadDirt: '#c4bdae',
+    water: '#8dafc8', plaza: '#cac8c2', meadow: '#b8c8ba',
+    bldFill: '#bec4be', bldStroke: '#9ea6a2', churchFill: '#c4baa8',
+    edge: 'rgba(70,95,115,0.32)', text: '#303c44',
+  },
+};
+
 export class MapRenderer {
   constructor(canvas, bus) {
     this.canvas = canvas;
@@ -150,12 +183,27 @@ export class MapRenderer {
     const W = canvas.width, H = canvas.height;
     if (W === 0 || H === 0) return;
     const t = (Date.now() - this._t0) / 1000;
-    ctx.fillStyle = '#e9eee4';
-    ctx.fillRect(0, 0, W, H);
-    if (!this.graph) return;
+    if (!this.graph) {
+      ctx.fillStyle = MAP_THEMES.day.bg;
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
     const g = this.graph;
     const s = this.cam.scale;
     const ppm2 = g.scale.pixelsPerMeter;
+
+    const env = g.environment || {};
+    const tod = env.timeOfDay || 'day';
+    const weather = env.weather || 'clear';
+    let themeKey = 'day';
+    if (weather === 'snow') themeKey = 'snow';
+    else if (weather === 'rain' || weather === 'storm') themeKey = 'rain';
+    else if (tod === 'night') themeKey = 'night';
+    else if (tod === 'golden' || tod === 'dusk' || tod === 'dawn') themeKey = 'golden';
+    const theme = MAP_THEMES[themeKey] || MAP_THEMES.day;
+
+    ctx.fillStyle = theme.bg;
+    ctx.fillRect(0, 0, W, H);
 
     // optional user-uploaded 2D map underlay (simple editor feature)
     if (this.underlay?.img) {
@@ -187,7 +235,7 @@ export class MapRenderer {
       if (f.shape === 'rect') {
         if (f.x > br.x || f.x + f.w < tl.x || f.y > br.y || f.y + f.h < tl.y) continue;
         const a = this.worldToScreen(f.x, f.y);
-        ctx.fillStyle = f.kind === 'water' ? '#aacdec' : f.kind === 'plaza' ? '#ddd8c9' : '#cfe0b4';
+        ctx.fillStyle = f.kind === 'water' ? theme.water : f.kind === 'plaza' ? theme.plaza : theme.meadow;
         ctx.fillRect(a.x, a.y, f.w * s, f.h * s);
         if (this.animated && f.kind === 'water') {
           const ripProg = (t * 0.45) % 1;
@@ -202,7 +250,7 @@ export class MapRenderer {
         }
       } else if (f.shape === 'circle') {
         const a = this.worldToScreen(f.cx, f.cy);
-        ctx.fillStyle = f.kind === 'water' ? '#aacdec' : '#cfe0b4';
+        ctx.fillStyle = f.kind === 'water' ? theme.water : theme.meadow;
         ctx.beginPath(); ctx.arc(a.x, a.y, f.radiusPx * s, 0, Math.PI * 2); ctx.fill();
         if (this.animated && f.kind === 'water') {
           const ripProg = (t * 0.45) % 1;
@@ -222,10 +270,10 @@ export class MapRenderer {
       if (f.type !== 'road') continue;
       const pts = f.points.map(p => this.worldToScreen(p[0], p[1]));
       const wpx = Math.max(2, f.widthM * ppm2 * s);
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = theme.roadCase;
       ctx.lineWidth = wpx + 2.4;
       ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-      ctx.strokeStyle = f.surface === 'dirt' ? '#d9c8a6' : '#f5f2ea';
+      ctx.strokeStyle = f.surface === 'dirt' ? theme.roadDirt : theme.roadFill;
       ctx.lineWidth = wpx;
       ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
     }
@@ -235,8 +283,8 @@ export class MapRenderer {
       if (f.type !== 'building') continue;
       if (!inView(f.x, f.y, Math.max(f.w, f.d))) continue;
       const a = this.worldToScreen(f.x - f.w / 2, f.y - f.d / 2);
-      ctx.fillStyle = f.kind === 'church' ? '#d9c5a0' : '#d5d0c4';
-      ctx.strokeStyle = '#b8b2a4';
+      ctx.fillStyle = f.kind === 'church' ? theme.churchFill : theme.bldFill;
+      ctx.strokeStyle = theme.bldStroke;
       ctx.lineWidth = 1;
       const rw = Math.max(3, f.w * s), rh = Math.max(3, f.d * s);
       ctx.fillRect(a.x, a.y, rw, rh); ctx.strokeRect(a.x, a.y, rw, rh);
@@ -263,7 +311,7 @@ export class MapRenderer {
 
     // edges
     const edgeAlpha = Math.min(1, s * 3);
-    ctx.strokeStyle = `rgba(84,110,140,${0.28 * edgeAlpha})`;
+    ctx.strokeStyle = theme.edge;
     ctx.lineWidth = Math.max(1, 1.1 * s ** 0.4);
     ctx.beginPath();
     for (const e of g.edges.values()) {
@@ -329,7 +377,7 @@ export class MapRenderer {
       else ctx.fillStyle = n.zoneId?.includes('church') ? '#b99256' : (isWaypoint ? 'rgba(135,152,171,0.55)' : '#8798ab');
       ctx.beginPath(); ctx.arc(p.x, p.y, isWaypoint ? Math.max(1.3, nodeR * 0.45) : nodeR, 0, Math.PI * 2); ctx.fill();
       if (showLabels && n.id !== this.currentNodeId && s > 0.9 && !isWaypoint) {
-        ctx.fillStyle = 'rgba(60,70,84,0.85)';
+        ctx.fillStyle = theme.text;
         ctx.fillText(n.name, p.x + nodeR + 3, p.y - nodeR - 2);
       }
     }
@@ -340,7 +388,7 @@ export class MapRenderer {
       const p = this.worldToScreen(lm.x, lm.y);
       this._landmarkGlyph(p.x, p.y, lm);
       if (s > 0.2) {
-        ctx.fillStyle = 'rgba(52,60,72,0.9)';
+        ctx.fillStyle = theme.text;
         ctx.font = `600 ${Math.max(10, 10 * DPR())}px system-ui`;
         ctx.fillText(lm.name, p.x + 8, p.y - 8);
       }
@@ -378,6 +426,9 @@ export class MapRenderer {
 
     // animated actors (walkers, dogs, cats on coded routes)
     this._drawActors(t, s, ppm2, inView);
+
+    // atmospheric living weather (snowfall, fireflies, rain ripples)
+    this._drawWeatherParticles(t, W, H, weather, tod);
 
     // scale bar (meters — Spec §4 correctness on screen)
     this._scaleBar();
@@ -498,15 +549,81 @@ export class MapRenderer {
     ctx.restore();
   }
 
+  _drawWeatherParticles(t, W, H, weather, tod) {
+    if (!this.animated) return;
+    const ctx = this.ctx;
+
+    if (weather === 'snow') {
+      // Gentle drifting snowflakes
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      const count = 35;
+      for (let i = 0; i < count; i++) {
+        const seedX = (i * 97.13 + 17) % W;
+        const seedSpeed = 22 + ((i * 37) % 25);
+        const drift = Math.sin(t * 1.5 + i) * 14;
+        const y = ((t * seedSpeed + i * 29) % (H + 20)) - 10;
+        const x = (seedX + drift + W) % W;
+        const radius = 1.2 + ((i * 13) % 3) * 0.7;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (weather === 'rain' || weather === 'storm') {
+      // Slanted falling rain streaks
+      ctx.save();
+      ctx.strokeStyle = weather === 'storm' ? 'rgba(180, 205, 235, 0.45)' : 'rgba(160, 195, 230, 0.35)';
+      ctx.lineWidth = 1.2;
+      const count = weather === 'storm' ? 50 : 32;
+      const speed = weather === 'storm' ? 320 : 220;
+      const slant = 14;
+      for (let i = 0; i < count; i++) {
+        const seedX = (i * 73.17 + 11) % W;
+        const y = ((t * speed + i * 41) % (H + 40)) - 20;
+        const x = (seedX + (y / H) * slant + W) % W;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 4, y + 14);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (tod === 'night' || tod === 'dusk') {
+      // Lazy glowing fireflies / evening motes
+      ctx.save();
+      const count = 18;
+      for (let i = 0; i < count; i++) {
+        const seedX = (i * 113.3 + 23) % W;
+        const seedY = (i * 67.7 + 31) % H;
+        const pulse = 0.3 + 0.5 * Math.sin(t * 2.2 + i * 1.8);
+        if (pulse <= 0.05) continue;
+        const x = (seedX + Math.sin(t * 0.7 + i * 2.1) * 20 + W) % W;
+        const y = (seedY + Math.cos(t * 0.5 + i * 1.4) * 16 + H) % H;
+        const grad = ctx.createRadialGradient(x, y, 0.5, x, y, 5);
+        grad.addColorStop(0, `rgba(255, 235, 130, ${pulse})`);
+        grad.addColorStop(1, 'rgba(255, 235, 130, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
   _scheduleNextFrame() {
     if (!this.animated) return;
     const canvas = this.canvas;
     if (!canvas || canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
-    const hasActors = (this.graph?.environment?.actors?.length ?? 0) > 0;
+    const env = this.graph?.environment || {};
+    const weather = env.weather || 'clear';
+    const tod = env.timeOfDay || 'day';
+    const hasWeather = weather === 'snow' || weather === 'rain' || weather === 'storm' || tod === 'night' || tod === 'dusk';
+    const hasActors = (env.actors?.length ?? 0) > 0;
     const hasRoute = (this.route?.length ?? 0) > 1;
-    const hasWater = this.graph?.environment?.features?.some(f => f.type === 'region' && f.kind === 'water') ?? false;
+    const hasWater = env.features?.some(f => f.type === 'region' && f.kind === 'water') ?? false;
     const hasWalk = !!this._walkPos;
-    if (hasActors || hasRoute || hasWater || hasWalk) {
+    if (hasActors || hasRoute || hasWater || hasWalk || hasWeather) {
       if (this._raf) return;
       this._raf = RAF(() => {
         this._raf = 0;

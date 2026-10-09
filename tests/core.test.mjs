@@ -687,6 +687,49 @@ test('animated maps: MapRenderer renders living animated actors, water ripple an
   assert.equal(r.animated, false);
 });
 
+test('animated maps: MapRenderer renders dynamic themes and weather particles (snow, rain, night)', () => {
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(t, p) {
+      if (p === 'canvas') return canvas;
+      if (p === 'measureText') return () => ({ width: 40 });
+      if (p === 'createRadialGradient') {
+        calls.push('createRadialGradient');
+        return () => ({ addColorStop: () => {} });
+      }
+      return (...args) => { calls.push(p); return {}; };
+    }
+  });
+  const canvas = {
+    getContext: () => ctx,
+    clientWidth: 400, clientHeight: 300, width: 400, height: 300,
+    addEventListener: () => {}, style: {}
+  };
+  const bus = { emit: () => {}, on: () => {} };
+  const r = new MapRenderer(canvas, bus);
+  const g = buildWillowParish().graph;
+  r.setGraph(g);
+
+  // Weather: snow
+  g.environment.weather = 'snow';
+  calls.length = 0;
+  r.draw();
+  assert.ok(calls.includes('fill'), 'fills snowflakes in snow weather');
+
+  // Weather: rain
+  g.environment.weather = 'rain';
+  calls.length = 0;
+  r.draw();
+  assert.ok(calls.includes('stroke'), 'strokes rain streaks');
+
+  // Time of day: night
+  g.environment.weather = 'clear';
+  g.environment.timeOfDay = 'night';
+  calls.length = 0;
+  r.draw();
+  assert.ok(calls.includes('createRadialGradient'), 'creates glowing gradients for night fireflies');
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — core test suite');
