@@ -71,6 +71,8 @@ export class MapRenderer {
     this._walkPos = null;                        // interpolated walk position
     this.animated = true;                        // animated route, radar pulse, water ripple, actors
     this._t0 = Date.now();
+    this._pings = [];
+    this._panRaf = 0;
     this._bind();
   }
 
@@ -109,11 +111,38 @@ export class MapRenderer {
     this.requestDraw();
   }
 
-  panToNode(nodeId, { reset = false } = {}) {
+  panToNode(nodeId, { reset = false, animate = true } = {}) {
     const n = this.graph?.getNode(nodeId);
     if (!n) return;
-    this.cam.x = n.x; this.cam.y = n.y;
-    if (reset) this.cam.scale = Math.max(this.cam.scale, 0.8);
+    const targetScale = reset ? Math.max(this.cam.scale, 0.8) : this.cam.scale;
+    if (!animate || !this.animated || (Math.hypot(this.cam.x - n.x, this.cam.y - n.y) < 1)) {
+      this.cam.x = n.x; this.cam.y = n.y;
+      this.cam.scale = targetScale;
+      this.requestDraw();
+      return;
+    }
+    const startX = this.cam.x, startY = this.cam.y, startScale = this.cam.scale;
+    const t0 = Date.now(), dur = 320;
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - t0) / dur);
+      const ease = 1 - Math.pow(1 - p, 3);
+      this.cam.x = startX + (n.x - startX) * ease;
+      this.cam.y = startY + (n.y - startY) * ease;
+      this.cam.scale = startScale + (targetScale - startScale) * ease;
+      this.draw();
+      if (p < 1) {
+        this._panRaf = RAF(tick);
+      } else {
+        this._panRaf = 0;
+      }
+    };
+    if (this._panRaf) CAF(this._panRaf);
+    this._panRaf = RAF(tick);
+  }
+
+  ping(x, y, color = 'rgba(66, 133, 244, 0.85)') {
+    if (!this.animated) return;
+    this._pings.push({ x, y, t0: Date.now(), color });
     this.requestDraw();
   }
 
@@ -167,7 +196,10 @@ export class MapRenderer {
       if (this.onCanvasClick) { this.onCanvasClick(w, e); return; }
       // default: nearest node → teleport (Spec §35: map and viewer share state)
       const n = this.graph?.nearestNode(w.x, w.y, 18 / this.cam.scale);
-      if (n) this.onNodeClick ? this.onNodeClick(n, e) : this.bus.emit('map:nodeSelected', { nodeId: n.id });
+      if (n) {
+        this.ping(n.x, n.y);
+        this.onNodeClick ? this.onNodeClick(n, e) : this.bus.emit('map:nodeSelected', { nodeId: n.id });
+      }
     });
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -440,9 +472,36 @@ export class MapRenderer {
         ctx.beginPath(); ctx.arc(p.x, p.y, pulseR, 0, Math.PI * 2); ctx.stroke();
       }
 
+      // animated walking stride ripple when moving between nodes
+      if (this.animated && this._walkPos) {
+        const strideP = (t * 3.5) % 1;
+        ctx.strokeStyle = `rgba(66, 133, 244, ${(1 - strideP) * 0.55})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (nodeR + 2) + strideP * 14, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.fillStyle = '#4285f4';
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(5, nodeR + 1.5), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+
+    // animated user click pings
+    if (this.animated && this._pings?.length) {
+      const now = Date.now();
+      this._pings = this._pings.filter(pi => now - pi.t0 < 900);
+      for (const pi of this._pings) {
+        const prog = (now - pi.t0) / 900;
+        const sp = this.worldToScreen(pi.x, pi.y);
+        ctx.save();
+        ctx.strokeStyle = pi.color.replace(/[\d.]+\)$/, `${(1 - prog) * 0.85})`);
+        ctx.lineWidth = Math.max(1.5, 2.8 * (1 - prog));
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, 6 + prog * 36, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // animated actors (walkers, dogs, cats on coded routes)
@@ -773,7 +832,8 @@ export class MapRenderer {
     const hasWater = env.features?.some(f => f.type === 'region' && f.kind === 'water') ?? false;
     const hasFlocks = !!(env.animals?.includes('birds') || env.actors?.some(a => a.kind === 'birds'));
     const hasWalk = !!this._walkPos;
-    if (hasActors || hasRoute || hasWater || hasWalk || hasWeather || hasFlocks) {
+    const hasPings = (this._pings?.length ?? 0) > 0;
+    if (hasActors || hasRoute || hasWater || hasWalk || hasWeather || hasFlocks || hasPings) {
       if (this._raf) return;
       this._raf = RAF(() => {
         this._raf = 0;

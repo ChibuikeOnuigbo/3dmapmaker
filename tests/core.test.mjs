@@ -762,6 +762,17 @@ test('animated maps: MapRenderer renders cyclists, boats, bird flocks, destinati
   assert.ok(calls.includes('bezierCurveTo'), 'draws atmospheric wind streamlines');
   assert.ok(calls.includes('rotate'), 'rotates directional vehicles (bikes, boats)');
   assert.ok(calls.includes('arc'), 'draws route destination beacon and wheels');
+
+  // Test pings and walk stride ripple
+  r.ping(50, 50);
+  r.setWalkProgress({ x: 50, y: 50 });
+  calls.length = 0;
+  r.draw();
+  assert.ok(calls.includes('arc'), 'draws click ping rings and stride ripples');
+
+  // Test panToNode
+  r.panToNode(nodeIds[1], { animate: false });
+  assert.equal(r.cam.x, g.getNode(nodeIds[1]).x);
 });
 
 /* ---------------- runner ---------------- */
