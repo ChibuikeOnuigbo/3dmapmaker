@@ -360,6 +360,27 @@ export class MapRenderer {
       });
       ctx.stroke();
       if (this.animated) ctx.setLineDash([]);
+
+      // route destination beacon (pulsing arrival ring + glow)
+      const destId = this.route[this.route.length - 1];
+      const destNode = g.getNode(destId);
+      if (destNode && inView(destNode.x, destNode.y)) {
+        const dp = this.worldToScreen(destNode.x, destNode.y);
+        if (this.animated) {
+          const bp = (t % 1.5) / 1.5;
+          const bp2 = ((t + 0.75) % 1.5) / 1.5;
+          ctx.strokeStyle = `rgba(235, 87, 87, ${(1 - bp) * 0.65})`;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.arc(dp.x, dp.y, 7 + bp * 22, 0, Math.PI * 2); ctx.stroke();
+
+          ctx.strokeStyle = `rgba(235, 87, 87, ${(1 - bp2) * 0.65})`;
+          ctx.beginPath(); ctx.arc(dp.x, dp.y, 7 + bp2 * 22, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.fillStyle = '#eb5757';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.arc(dp.x, dp.y, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
     }
 
     // nodes — dense 8 m waypoints render as faint small dots (the ground
@@ -426,6 +447,9 @@ export class MapRenderer {
 
     // animated actors (walkers, dogs, cats on coded routes)
     this._drawActors(t, s, ppm2, inView);
+
+    // animated flying bird flocks across the map sky
+    this._drawFlocks(t, W, H, s);
 
     // atmospheric living weather (snowfall, fireflies, rain ripples)
     this._drawWeatherParticles(t, W, H, weather, tod);
@@ -500,6 +524,66 @@ export class MapRenderer {
         ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+      } else if (act.kind === 'cyclist' || act.kind === 'bike') {
+        ctx.save();
+        ctx.rotate(angle);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(0, 1, r * 1.5, r * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wheels
+        ctx.strokeStyle = '#222226';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.arc(-r * 0.85, 0, r * 0.45, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(r * 0.85, 0, r * 0.45, 0, Math.PI * 2); ctx.stroke();
+
+        // Bike Frame
+        ctx.strokeStyle = act.tint || '#c0392b';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-r * 0.85, 0); ctx.lineTo(0, -r * 0.2); ctx.lineTo(r * 0.85, 0);
+        ctx.moveTo(0, -r * 0.2); ctx.lineTo(r * 0.35, -r * 0.45);
+        ctx.stroke();
+
+        // Rider silhouette
+        ctx.fillStyle = act.riderTint || '#2c3e50';
+        ctx.beginPath();
+        ctx.arc(-r * 0.1, -r * 0.35, r * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (act.kind === 'boat') {
+        ctx.save();
+        ctx.rotate(angle);
+        // Wake trail
+        if (this.animated) {
+          const wakeP = (t * 2 + (act.phase || 0)) % 1;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-r * 1.1, 0);
+          ctx.lineTo(-r * (2.0 + wakeP * 1.4), -r * 0.7 * (1 + wakeP));
+          ctx.moveTo(-r * 1.1, 0);
+          ctx.lineTo(-r * (2.0 + wakeP * 1.4), r * 0.7 * (1 + wakeP));
+          ctx.stroke();
+        }
+        // Hull
+        ctx.fillStyle = act.tint || '#f7f9fa';
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(r * 1.5, 0);
+        ctx.quadraticCurveTo(0, -r * 0.75, -r * 1.1, -r * 0.5);
+        ctx.lineTo(-r * 1.1, r * 0.5);
+        ctx.quadraticCurveTo(0, r * 0.75, r * 1.5, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Wooden bench / deck
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(-r * 0.4, -r * 0.3, r * 0.8, r * 0.6);
+        ctx.restore();
       } else {
         const cadence = 0.72;
         const bob = Math.sin(t * (2 * Math.PI / cadence) + (act.phase || 0) * 3) * 1.2;
@@ -609,6 +693,71 @@ export class MapRenderer {
       }
       ctx.restore();
     }
+
+    // Subtle atmospheric wind / breeze streamlines drifting across the landscape
+    if (weather === 'clear' || weather === 'wind' || tod === 'golden' || tod === 'day') {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = 'round';
+      const streakCount = 8;
+      for (let i = 0; i < streakCount; i++) {
+        const seedX = (i * 157.3 + 47) % W;
+        const seedY = (i * 89.1 + 61) % H;
+        const speed = 35 + (i * 17) % 20;
+        const x = ((t * speed + seedX) % (W + 100)) - 50;
+        const y = seedY + Math.sin(t * 1.2 + i) * 6;
+        const len = 25 + (i * 7) % 20;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.bezierCurveTo(x + len * 0.4, y - 2, x + len * 0.7, y + 2, x + len, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  _drawFlocks(t, W, H, s) {
+    if (!this.animated) return;
+    const hasBirds = this.graph?.environment?.animals?.includes('birds') || (this.graph?.environment?.actors?.some(a => a.kind === 'birds'));
+    if (!hasBirds) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(40, 50, 62, 0.75)';
+    ctx.lineWidth = 1.3;
+
+    // Flying flocks with animated flapping wings in V-formation
+    const flocks = [
+      { count: 4, speed: 28, seed: 104.2, scale: 1 },
+      { count: 3, speed: 20, seed: 231.7, scale: 0.8 },
+    ];
+    for (const fl of flocks) {
+      const leaderX = ((t * fl.speed + fl.seed) % (W + 140)) - 70;
+      const leaderY = ((t * (fl.speed * 0.3) + fl.seed * 0.6) % (H + 140)) - 70;
+      const angle = Math.atan2(fl.speed * 0.3, fl.speed);
+
+      for (let i = 0; i < fl.count; i++) {
+        const vSide = i % 2 === 0 ? 1 : -1;
+        const vRow = Math.ceil(i / 2);
+        const bx = leaderX - Math.cos(angle) * (vRow * 15 * fl.scale) - Math.sin(angle) * (vSide * vRow * 11 * fl.scale);
+        const by = leaderY - Math.sin(angle) * (vRow * 15 * fl.scale) + Math.cos(angle) * (vSide * vRow * 11 * fl.scale);
+
+        if (bx < -20 || bx > W + 20 || by < -20 || by > H + 20) continue;
+
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(angle);
+        const flap = Math.sin(t * 8.5 + i * 1.4) * 3.8 * fl.scale;
+        const span = 5.5 * fl.scale;
+        ctx.beginPath();
+        ctx.moveTo(-span, flap);
+        ctx.quadraticCurveTo(-span * 0.4, -2 * fl.scale, 0, 0);
+        ctx.quadraticCurveTo(span * 0.4, -2 * fl.scale, span, flap);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    ctx.restore();
   }
 
   _scheduleNextFrame() {
@@ -618,12 +767,13 @@ export class MapRenderer {
     const env = this.graph?.environment || {};
     const weather = env.weather || 'clear';
     const tod = env.timeOfDay || 'day';
-    const hasWeather = weather === 'snow' || weather === 'rain' || weather === 'storm' || tod === 'night' || tod === 'dusk';
+    const hasWeather = weather === 'snow' || weather === 'rain' || weather === 'storm' || tod === 'night' || tod === 'dusk' || tod === 'golden' || tod === 'day';
     const hasActors = (env.actors?.length ?? 0) > 0;
     const hasRoute = (this.route?.length ?? 0) > 1;
     const hasWater = env.features?.some(f => f.type === 'region' && f.kind === 'water') ?? false;
+    const hasFlocks = !!(env.animals?.includes('birds') || env.actors?.some(a => a.kind === 'birds'));
     const hasWalk = !!this._walkPos;
-    if (hasActors || hasRoute || hasWater || hasWalk || hasWeather) {
+    if (hasActors || hasRoute || hasWater || hasWalk || hasWeather || hasFlocks) {
       if (this._raf) return;
       this._raf = RAF(() => {
         this._raf = 0;

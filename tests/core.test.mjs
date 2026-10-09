@@ -636,7 +636,7 @@ test('animated maps: all demo worlds feature living animated actors with bounded
     assert.ok(actors.length >= 6, `${w.name} has ${actors.length} actors, expected at least 6`);
     for (const a of actors) {
       assert.ok(a.id, 'actor has id');
-      assert.ok(['walker', 'dog', 'cat'].includes(a.kind), `unknown kind ${a.kind}`);
+      assert.ok(['walker', 'dog', 'cat', 'cyclist', 'boat'].includes(a.kind), `unknown kind ${a.kind}`);
       assert.ok(typeof a.name === 'string' && a.name.length > 0, 'actor has readable name');
       assert.ok(Number.isFinite(a.x0) && Number.isFinite(a.y0), 'actor start coordinate');
       assert.ok(Number.isFinite(a.x1) && Number.isFinite(a.y1), 'actor end coordinate');
@@ -728,6 +728,40 @@ test('animated maps: MapRenderer renders dynamic themes and weather particles (s
   calls.length = 0;
   r.draw();
   assert.ok(calls.includes('createRadialGradient'), 'creates glowing gradients for night fireflies');
+});
+
+test('animated maps: MapRenderer renders cyclists, boats, bird flocks, destination beacon and wind streamlines', () => {
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(t, p) {
+      if (p === 'canvas') return canvas;
+      if (p === 'measureText') return () => ({ width: 40 });
+      if (p === 'createRadialGradient') return () => ({ addColorStop: () => {} });
+      return (...args) => { calls.push(p); return {}; };
+    }
+  });
+  const canvas = {
+    getContext: () => ctx,
+    clientWidth: 400, clientHeight: 300, width: 400, height: 300,
+    addEventListener: () => {}, style: {}
+  };
+  const bus = { emit: () => {}, on: () => {} };
+  const r = new MapRenderer(canvas, bus);
+  const g = buildWillowParish().graph;
+  r.setGraph(g);
+
+  // Set an active route so destination beacon is triggered
+  const nodeIds = [...g.nodes.keys()];
+  r.setCurrent(nodeIds[0], 0);
+  r.setRoute([nodeIds[0], nodeIds[1]]);
+
+  calls.length = 0;
+  r.draw();
+
+  assert.ok(calls.includes('quadraticCurveTo'), 'draws boat hulls and bird wing arcs');
+  assert.ok(calls.includes('bezierCurveTo'), 'draws atmospheric wind streamlines');
+  assert.ok(calls.includes('rotate'), 'rotates directional vehicles (bikes, boats)');
+  assert.ok(calls.includes('arc'), 'draws route destination beacon and wheels');
 });
 
 /* ---------------- runner ---------------- */

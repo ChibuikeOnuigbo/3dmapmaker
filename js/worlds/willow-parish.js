@@ -142,6 +142,8 @@ export function buildWillowParish() {
       { id: 'willow_forge_cat', kind: 'cat', x0: -70, y0: 460, x1: -110, y1: 470, speedMps: 0.65, phase: 30, tint: '#282830', name: 'Forge cat sunning on Smithy Lane' },
       { id: 'willow_orchard_walker', kind: 'walker', x0: 30, y0: 660, x1: 140, y1: 660, speedMps: 0.95, phase: 22, tint: '#3e5246', name: 'Gardener in the orchard' },
       { id: 'willow_school_child', kind: 'walker', x0: -20, y0: 355, x1: -95, y1: 360, speedMps: 1.3, phase: 6, tint: '#664a50', name: 'Child on School Rise' },
+      { id: 'willow_cyclist', kind: 'cyclist', x0: 0, y0: 120, x1: 0, y1: 520, speedMps: 4.4, phase: 17, tint: '#e67e22', name: 'Post cyclist on Willow Street' },
+      { id: 'willow_pond_boat', kind: 'boat', x0: -115, y0: 200, x1: -135, y1: 230, speedMps: 0.4, phase: 2, tint: '#ffffff', name: 'Dinghy on Willow Pond' },
     ],
   };
   g.settings.nodeSpacingPx = 200;
