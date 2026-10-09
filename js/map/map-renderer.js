@@ -261,8 +261,14 @@ export class MapRenderer {
       ctx.setLineDash([]);
     }
 
-    const tl = this.screenToWorld(0, 0), br = this.screenToWorld(W, H);
-    const inView = (x, y, pad = 40 / s) => x >= tl.x - pad && x <= br.x + pad && y >= tl.y - pad && y <= br.y + pad;
+    const cx = this.cam.x, cy = this.cam.y;
+    const hw = W / 2, hh = H / 2;
+    const w2sX = (x) => (x - cx) * s + hw;
+    const w2sY = (y) => (y - cy) * s + hh;
+    const pad = 40 / s;
+    const minX = (0 - hw) / s + cx - pad, maxX = (W - hw) / s + cx + pad;
+    const minY = (0 - hh) / s + cy - pad, maxY = (H - hh) / s + cy + pad;
+    const inView = (x, y, extraPad = 0) => x >= minX - extraPad && x <= maxX + extraPad && y >= minY - extraPad && y <= maxY + extraPad;
 
     const feats = g.environment.features || [];
 
@@ -270,32 +276,33 @@ export class MapRenderer {
     for (const f of feats) {
       if (f.type !== 'region') continue;
       if (f.shape === 'rect') {
-        if (f.x > br.x || f.x + f.w < tl.x || f.y > br.y || f.y + f.h < tl.y) continue;
-        const a = this.worldToScreen(f.x, f.y);
+        if (f.x > maxX || f.x + f.w < minX || f.y > maxY || f.y + f.h < minY) continue;
+        const ax = w2sX(f.x), ay = w2sY(f.y);
         ctx.fillStyle = f.kind === 'water' ? theme.water : f.kind === 'plaza' ? theme.plaza : theme.meadow;
-        ctx.fillRect(a.x, a.y, f.w * s, f.h * s);
+        ctx.fillRect(ax, ay, f.w * s, f.h * s);
         if (this.animated && f.kind === 'water') {
-          const ripProg = (t * 0.45) % 1;
+          const ripProg = (t * 0.6) % 1;
           const rw = f.w * s, rh = f.h * s;
-          const cx = a.x + rw / 2, cy = a.y + rh / 2;
+          const cxP = ax + rw / 2, cyP = ay + rh / 2;
           const maxR = Math.min(rw, rh) * 0.42;
           if (maxR > 3) {
             ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - ripProg) * 0.32})`;
             ctx.lineWidth = 1.2;
-            ctx.beginPath(); ctx.arc(cx, cy, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cxP, cyP, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
           }
         }
       } else if (f.shape === 'circle') {
-        const a = this.worldToScreen(f.cx, f.cy);
+        if (!inView(f.cx, f.cy)) continue;
+        const ax = w2sX(f.cx), ay = w2sY(f.cy);
         ctx.fillStyle = f.kind === 'water' ? theme.water : theme.meadow;
-        ctx.beginPath(); ctx.arc(a.x, a.y, f.radiusPx * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ax, ay, f.radiusPx * s, 0, Math.PI * 2); ctx.fill();
         if (this.animated && f.kind === 'water') {
-          const ripProg = (t * 0.45) % 1;
+          const ripProg = (t * 0.6) % 1;
           const maxR = f.radiusPx * s;
           if (maxR > 3) {
             ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - ripProg) * 0.32})`;
             ctx.lineWidth = 1.2;
-            ctx.beginPath(); ctx.arc(a.x, a.y, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.arc(ax, ay, maxR * (0.25 + 0.7 * ripProg), 0, Math.PI * 2); ctx.stroke();
           }
         }
       }
@@ -305,26 +312,44 @@ export class MapRenderer {
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     for (const f of feats) {
       if (f.type !== 'road') continue;
-      const pts = f.points.map(p => this.worldToScreen(p[0], p[1]));
+      const pts = f.points;
+      if (!pts || pts.length < 2) continue;
+      let inAny = false;
+      for (let i = 0; i < pts.length; i++) {
+        if (inView(pts[i][0], pts[i][1], 20)) { inAny = true; break; }
+      }
+      if (!inAny) continue;
+
       const wpx = Math.max(2, f.widthM * ppm2 * s);
       ctx.strokeStyle = theme.roadCase;
       ctx.lineWidth = wpx + 2.4;
-      ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        const sx = w2sX(pts[i][0]), sy = w2sY(pts[i][1]);
+        i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+      }
+      ctx.stroke();
+
       ctx.strokeStyle = f.surface === 'dirt' ? theme.roadDirt : theme.roadFill;
       ctx.lineWidth = wpx;
-      ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < pts.length; i++) {
+        const sx = w2sX(pts[i][0]), sy = w2sY(pts[i][1]);
+        i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy);
+      }
+      ctx.stroke();
     }
 
     // building footprints
     for (const f of feats) {
       if (f.type !== 'building') continue;
       if (!inView(f.x, f.y, Math.max(f.w, f.d))) continue;
-      const a = this.worldToScreen(f.x - f.w / 2, f.y - f.d / 2);
+      const ax = w2sX(f.x - f.w / 2), ay = w2sY(f.y - f.d / 2);
       ctx.fillStyle = f.kind === 'church' ? theme.churchFill : theme.bldFill;
       ctx.strokeStyle = theme.bldStroke;
       ctx.lineWidth = 1;
       const rw = Math.max(3, f.w * s), rh = Math.max(3, f.d * s);
-      ctx.fillRect(a.x, a.y, rw, rh); ctx.strokeRect(a.x, a.y, rw, rh);
+      ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
     }
 
     // debug: zones
@@ -346,26 +371,62 @@ export class MapRenderer {
       }
     }
 
+    // collect visible nodes for zero-allocation edge & node rendering
+    const nodeR = Math.max(2.2, Math.min(7, 3.4 * Math.sqrt(s)));
+    const showLabels = s > 0.35;
+    const wpRadius = Math.max(1.3, nodeR * 0.45);
+
+    const nodePos = new Map();
+    const highlighted = [];
+    const visitedNodes = [];
+    const churchNodes = [];
+    const regularNodes = [];
+    const waypoints = [];
+    const labeledNodes = [];
+
+    for (const n of g.nodes.values()) {
+      if (!inView(n.x, n.y)) continue;
+      const px = w2sX(n.x), py = w2sY(n.y);
+      nodePos.set(n.id, { x: px, y: py });
+      if (n.id === this.currentNodeId) continue;
+      const isWaypoint = /(^|_)w\d+$/.test(n.id);
+      if (this.highlight.has(n.id)) { highlighted.push(px, py); }
+      else if (this.visited.has(n.id)) { visitedNodes.push(px, py); }
+      else if (n.zoneId?.includes('church')) { churchNodes.push(px, py); }
+      else if (isWaypoint) { waypoints.push(px, py); }
+      else { regularNodes.push(px, py); }
+
+      if (showLabels && s > 0.9 && !isWaypoint) {
+        labeledNodes.push(n.name, px, py);
+      }
+    }
+
     // edges
     const edgeAlpha = Math.min(1, s * 3);
     ctx.strokeStyle = theme.edge;
     ctx.lineWidth = Math.max(1, 1.1 * s ** 0.4);
     ctx.beginPath();
     for (const e of g.edges.values()) {
-      const a = g.getNode(e.a), b = g.getNode(e.b);
-      if (!inView(a.x, a.y) && !inView(b.x, b.y)) continue;
-      const pa = this.worldToScreen(a.x, a.y), pb = this.worldToScreen(b.x, b.y);
+      let pa = nodePos.get(e.a);
+      let pb = nodePos.get(e.b);
+      if (!pa && !pb) continue;
+      if (!pa) { const a = g.getNode(e.a); if (!a) continue; pa = { x: w2sX(a.x), y: w2sY(a.y) }; }
+      if (!pb) { const b = g.getNode(e.b); if (!b) continue; pb = { x: w2sX(b.x), y: w2sY(b.y) }; }
       ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
     }
     ctx.stroke();
+
     // blocked edges in red
     ctx.strokeStyle = 'rgba(200,60,50,0.55)';
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
     for (const e of g.edges.values()) {
       if (!e.blocked) continue;
-      const a = g.getNode(e.a), b = g.getNode(e.b);
-      const pa = this.worldToScreen(a.x, a.y), pb = this.worldToScreen(b.x, b.y);
+      let pa = nodePos.get(e.a);
+      let pb = nodePos.get(e.b);
+      if (!pa && !pb) continue;
+      if (!pa) { const a = g.getNode(e.a); if (!a) continue; pa = { x: w2sX(a.x), y: w2sY(a.y) }; }
+      if (!pb) { const b = g.getNode(e.b); if (!b) continue; pb = { x: w2sX(b.x), y: w2sY(b.y) }; }
       ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
     }
     ctx.stroke();
@@ -376,67 +437,76 @@ export class MapRenderer {
       ctx.strokeStyle = 'rgba(51,116,230,0.30)';
       ctx.lineWidth = Math.max(5, w2s(8, s));
       ctx.beginPath();
-      this.route.forEach((id, i) => {
-        const n = g.getNode(id); if (!n) return;
-        const p = this.worldToScreen(n.x, n.y);
+      for (let i = 0; i < this.route.length; i++) {
+        const id = this.route[i];
+        let p = nodePos.get(id);
+        if (!p) { const n = g.getNode(id); if (!n) continue; p = { x: w2sX(n.x), y: w2sY(n.y) }; }
         i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
-      });
+      }
       ctx.stroke();
 
       ctx.strokeStyle = 'rgba(51,116,230,0.92)';
       ctx.lineWidth = Math.max(2.8, w2s(4.5, s));
       if (this.animated) {
         ctx.setLineDash([9, 5]);
-        ctx.lineDashOffset = -t * 22;
+        ctx.lineDashOffset = -t * 32;
       }
       ctx.beginPath();
-      this.route.forEach((id, i) => {
-        const n = g.getNode(id); if (!n) return;
-        const p = this.worldToScreen(n.x, n.y);
+      for (let i = 0; i < this.route.length; i++) {
+        const id = this.route[i];
+        let p = nodePos.get(id);
+        if (!p) { const n = g.getNode(id); if (!n) continue; p = { x: w2sX(n.x), y: w2sY(n.y) }; }
         i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
-      });
+      }
       ctx.stroke();
       if (this.animated) ctx.setLineDash([]);
 
       // route destination beacon (pulsing arrival ring + glow)
       const destId = this.route[this.route.length - 1];
-      const destNode = g.getNode(destId);
-      if (destNode && inView(destNode.x, destNode.y)) {
-        const dp = this.worldToScreen(destNode.x, destNode.y);
+      const destPos = nodePos.get(destId);
+      if (destPos) {
         if (this.animated) {
           const bp = (t % 1.5) / 1.5;
           const bp2 = ((t + 0.75) % 1.5) / 1.5;
           ctx.strokeStyle = `rgba(235, 87, 87, ${(1 - bp) * 0.65})`;
           ctx.lineWidth = 1.8;
-          ctx.beginPath(); ctx.arc(dp.x, dp.y, 7 + bp * 22, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(destPos.x, destPos.y, 7 + bp * 22, 0, Math.PI * 2); ctx.stroke();
 
           ctx.strokeStyle = `rgba(235, 87, 87, ${(1 - bp2) * 0.65})`;
-          ctx.beginPath(); ctx.arc(dp.x, dp.y, 7 + bp2 * 22, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(destPos.x, destPos.y, 7 + bp2 * 22, 0, Math.PI * 2); ctx.stroke();
         }
         ctx.fillStyle = '#eb5757';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2.2;
-        ctx.beginPath(); ctx.arc(dp.x, dp.y, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(destPos.x, destPos.y, 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     }
 
     // nodes — dense 8 m waypoints render as faint small dots (the ground
     // truth for stride movement); only named spots are full-size/labeled
-    const nodeR = Math.max(2.2, Math.min(7, 3.4 * Math.sqrt(s)));
-    const showLabels = s > 0.35;
-    ctx.font = `${Math.max(10, 10 * DPR())}px system-ui`;
-    for (const n of g.nodes.values()) {
-      if (!inView(n.x, n.y)) continue;
-      const p = this.worldToScreen(n.x, n.y);
-      const isWaypoint = /(^|_)w\d+$/.test(n.id);
-      if (this.highlight.has(n.id)) { ctx.fillStyle = '#e8a33d'; }
-      else if (n.id === this.currentNodeId) { continue; }    // marker drawn later
-      else if (this.visited.has(n.id)) ctx.fillStyle = '#4d7fc0';
-      else ctx.fillStyle = n.zoneId?.includes('church') ? '#b99256' : (isWaypoint ? 'rgba(135,152,171,0.55)' : '#8798ab');
-      ctx.beginPath(); ctx.arc(p.x, p.y, isWaypoint ? Math.max(1.3, nodeR * 0.45) : nodeR, 0, Math.PI * 2); ctx.fill();
-      if (showLabels && n.id !== this.currentNodeId && s > 0.9 && !isWaypoint) {
-        ctx.fillStyle = theme.text;
-        ctx.fillText(n.name, p.x + nodeR + 3, p.y - nodeR - 2);
+    const batchDrawCircles = (coords, r, style) => {
+      if (!coords.length) return;
+      ctx.fillStyle = style;
+      ctx.beginPath();
+      for (let i = 0; i < coords.length; i += 2) {
+        const x = coords[i], y = coords[i + 1];
+        ctx.moveTo(x + r, y);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    };
+
+    batchDrawCircles(waypoints, wpRadius, 'rgba(135,152,171,0.55)');
+    batchDrawCircles(regularNodes, nodeR, '#8798ab');
+    batchDrawCircles(churchNodes, nodeR, '#b99256');
+    batchDrawCircles(visitedNodes, nodeR, '#4d7fc0');
+    batchDrawCircles(highlighted, nodeR, '#e8a33d');
+
+    if (labeledNodes.length) {
+      ctx.font = `${Math.max(10, 10 * DPR())}px system-ui`;
+      ctx.fillStyle = theme.text;
+      for (let i = 0; i < labeledNodes.length; i += 3) {
+        ctx.fillText(labeledNodes[i], labeledNodes[i + 1] + nodeR + 3, labeledNodes[i + 2] - nodeR - 2);
       }
     }
 
