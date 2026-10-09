@@ -70,6 +70,7 @@ export class MapRenderer {
     this._drag = null;
     this._walkPos = null;                        // interpolated walk position
     this.animated = true;                        // animated route, radar pulse, water ripple, actors
+    this.speedMultiplier = 1.4;                  // animation playback rate
     this._t0 = Date.now();
     this._pings = [];
     this._panRaf = 0;
@@ -78,6 +79,10 @@ export class MapRenderer {
 
   setGraph(graph) { this.graph = graph; this.visited.clear(); this.fit(); this.requestDraw(); }
   setAnimated(on) { this.animated = !!on; this.requestDraw(); }
+  setSpeedMultiplier(factor) {
+    this.speedMultiplier = Math.max(0.1, Math.min(10, Number(factor) || 1));
+    this.requestDraw();
+  }
   setCurrent(nodeId, yawDeg) {
     this.currentNodeId = nodeId;
     if (yawDeg !== undefined) this.currentYawDeg = yawDeg;
@@ -122,7 +127,7 @@ export class MapRenderer {
       return;
     }
     const startX = this.cam.x, startY = this.cam.y, startScale = this.cam.scale;
-    const t0 = Date.now(), dur = 320;
+    const t0 = Date.now(), dur = Math.max(120, Math.round(240 / (this.speedMultiplier || 1)));
     const tick = () => {
       const p = Math.min(1, (Date.now() - t0) / dur);
       const ease = 1 - Math.pow(1 - p, 3);
@@ -214,7 +219,7 @@ export class MapRenderer {
     const { ctx, canvas } = this;
     const W = canvas.width, H = canvas.height;
     if (W === 0 || H === 0) return;
-    const t = (Date.now() - this._t0) / 1000;
+    const t = ((Date.now() - this._t0) / 1000) * (this.speedMultiplier || 1);
     if (!this.graph) {
       ctx.fillStyle = MAP_THEMES.day.bg;
       ctx.fillRect(0, 0, W, H);

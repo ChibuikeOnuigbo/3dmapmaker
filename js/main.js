@@ -1193,6 +1193,8 @@ class App {
     if (this.graph) this.graph.settings.walkSpeedMps = mps;
     const lbl = $('#speedTxt');
     if (lbl) lbl.textContent = `${mps >= 10 ? mps.toFixed(0) : mps.toFixed(1)} m/s`;
+    const speedMult = +(Math.max(0.6, Math.min(3.0, (mps / 4) * 1.3))).toFixed(2);
+    this.mapRenderer?.setSpeedMultiplier?.(speedMult);
     this._applyMotion();
   }
 

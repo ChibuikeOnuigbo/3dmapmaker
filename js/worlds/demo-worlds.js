@@ -270,15 +270,15 @@ export function buildChapelLane() {
   // animated walkers — world-anchored routes in meters; the viewer projects
   // them into the live view every frame (ping-pong loop, seeded offsets)
   g.environment.actors = [
-    { id: 'walker_way', kind: 'walker', x0: 2, y0: 140, x1: -2, y1: 182, speedMps: 1.15, phase: 0, tint: '#6b4a34', name: 'Walker on the way' },
-    { id: 'walker_lane', kind: 'walker', x0: 8, y0: 318, x1: 70, y1: 322, speedMps: 1.05, phase: 12, tint: '#3a5468', name: 'Walker down the lane' },
-    { id: 'walker_green', kind: 'walker', x0: -22, y0: 206, x1: -56, y1: 230, speedMps: 0.8, phase: 27, tint: '#5c5c50', name: 'Stroller by the pond' },
-    { id: 'dog_green', kind: 'dog', x0: -14, y0: 224, x1: -64, y1: 212, speedMps: 2.3, phase: 5, tint: '#4a3a28', name: 'Dog bounding round the green' },
-    { id: 'cat_lane', kind: 'cat', x0: 14, y0: 320, x1: 46, y1: 318, speedMps: 0.7, phase: 41, tint: '#2c2c34', name: 'Cat prowling the cottage lane' },
-    { id: 'walker_church', kind: 'walker', x0: 0, y0: 20, x1: 20, y1: 50, speedMps: 0.9, phase: 15, tint: '#463c32', name: 'Churchyard visitor' },
-    { id: 'walker_oak', kind: 'walker', x0: -120, y0: 80, x1: -180, y1: 120, speedMps: 1.1, phase: 33, tint: '#344e3a', name: 'Stroller to the Old Oak' },
-    { id: 'cyclist_way', kind: 'cyclist', x0: 0, y0: 80, x1: 0, y1: 420, speedMps: 4.2, phase: 18, tint: '#2980b9', name: 'Cyclist down the Way' },
-    { id: 'boat_pond', kind: 'boat', x0: -36, y0: 218, x1: -52, y1: 226, speedMps: 0.45, phase: 0, tint: '#f4f6f8', name: 'Pond rowboat' },
+    { id: 'walker_way', kind: 'walker', x0: 2, y0: 140, x1: -2, y1: 182, speedMps: 1.6, phase: 0, tint: '#6b4a34', name: 'Walker on the way' },
+    { id: 'walker_lane', kind: 'walker', x0: 8, y0: 318, x1: 70, y1: 322, speedMps: 1.5, phase: 12, tint: '#3a5468', name: 'Walker down the lane' },
+    { id: 'walker_green', kind: 'walker', x0: -22, y0: 206, x1: -56, y1: 230, speedMps: 1.3, phase: 27, tint: '#5c5c50', name: 'Stroller by the pond' },
+    { id: 'dog_green', kind: 'dog', x0: -14, y0: 224, x1: -64, y1: 212, speedMps: 3.2, phase: 5, tint: '#4a3a28', name: 'Dog bounding round the green' },
+    { id: 'cat_lane', kind: 'cat', x0: 14, y0: 320, x1: 46, y1: 318, speedMps: 1.0, phase: 41, tint: '#2c2c34', name: 'Cat prowling the cottage lane' },
+    { id: 'walker_church', kind: 'walker', x0: 0, y0: 20, x1: 20, y1: 50, speedMps: 1.4, phase: 15, tint: '#463c32', name: 'Churchyard visitor' },
+    { id: 'walker_oak', kind: 'walker', x0: -120, y0: 80, x1: -180, y1: 120, speedMps: 1.6, phase: 33, tint: '#344e3a', name: 'Stroller to the Old Oak' },
+    { id: 'cyclist_way', kind: 'cyclist', x0: 0, y0: 80, x1: 0, y1: 420, speedMps: 5.8, phase: 18, tint: '#2980b9', name: 'Cyclist down the Way' },
+    { id: 'boat_pond', kind: 'boat', x0: -36, y0: 218, x1: -52, y1: 226, speedMps: 0.75, phase: 0, tint: '#f4f6f8', name: 'Pond rowboat' },
   ];
   g.environment.description = 'A rural parish: a stone church at the north end of a 520 m processional way, an 8×8 plaza grid (king-move demo), a side lane of cottages, a village-green loop with its pond, a woodland walk to the Old Oak, and Home Farm with its sheep pasture.';
 
@@ -375,14 +375,14 @@ export function buildMillbrook() {
 
   // animated souls: shoppers, a riverside stroller, a market dog, a church-ave cat
   g.environment.actors = [
-    { id: 'mb_main_1', kind: 'walker', x0: -100, y0: 2, x1: 80, y1: 2, speedMps: 1.2, phase: 3, tint: '#5a4632', name: 'Shopper on Main Street' },
-    { id: 'mb_river_1', kind: 'walker', x0: -80, y0: 98, x1: 90, y1: 100, speedMps: 0.9, phase: 18, tint: '#38515e', name: 'Stroller on Riverside Walk' },
-    { id: 'mb_market_dog', kind: 'dog', x0: -30, y0: 20, x1: 30, y1: 24, speedMps: 2.1, phase: 9, tint: '#54401f', name: 'Dog weaving through the market' },
-    { id: 'mb_church_cat', kind: 'cat', x0: 62, y0: -8, x1: 88, y1: -70, speedMps: 0.7, phase: 26, tint: '#33323c', name: 'Cat climbing Church Avenue' },
-    { id: 'mb_bridge_walker', kind: 'walker', x0: -10, y0: 80, x1: -10, y1: 140, speedMps: 1.0, phase: 11, tint: '#483c52', name: 'Crossing the Mill Bridge' },
-    { id: 'mb_forge_dog', kind: 'dog', x0: -140, y0: 10, x1: -180, y1: 30, speedMps: 2.0, phase: 14, tint: '#42362a', name: 'Blacksmith terrier' },
-    { id: 'mb_cyclist', kind: 'cyclist', x0: -160, y0: 0, x1: 140, y1: 0, speedMps: 4.5, phase: 8, tint: '#c0392b', name: 'Cyclist on Main Street' },
-    { id: 'mb_river_boat', kind: 'boat', x0: -120, y0: 104, x1: 120, y1: 104, speedMps: 0.7, phase: 4, tint: '#e8f0fe', name: 'Rowboat on the Mill River' },
+    { id: 'mb_main_1', kind: 'walker', x0: -100, y0: 2, x1: 80, y1: 2, speedMps: 1.65, phase: 3, tint: '#5a4632', name: 'Shopper on Main Street' },
+    { id: 'mb_river_1', kind: 'walker', x0: -80, y0: 98, x1: 90, y1: 100, speedMps: 1.45, phase: 18, tint: '#38515e', name: 'Stroller on Riverside Walk' },
+    { id: 'mb_market_dog', kind: 'dog', x0: -30, y0: 20, x1: 30, y1: 24, speedMps: 3.2, phase: 9, tint: '#54401f', name: 'Dog weaving through the market' },
+    { id: 'mb_church_cat', kind: 'cat', x0: 62, y0: -8, x1: 88, y1: -70, speedMps: 1.05, phase: 26, tint: '#33323c', name: 'Cat climbing Church Avenue' },
+    { id: 'mb_bridge_walker', kind: 'walker', x0: -10, y0: 80, x1: -10, y1: 140, speedMps: 1.5, phase: 11, tint: '#483c52', name: 'Crossing the Mill Bridge' },
+    { id: 'mb_forge_dog', kind: 'dog', x0: -140, y0: 10, x1: -180, y1: 30, speedMps: 3.0, phase: 14, tint: '#42362a', name: 'Blacksmith terrier' },
+    { id: 'mb_cyclist', kind: 'cyclist', x0: -160, y0: 0, x1: 140, y1: 0, speedMps: 6.0, phase: 8, tint: '#c0392b', name: 'Cyclist on Main Street' },
+    { id: 'mb_river_boat', kind: 'boat', x0: -120, y0: 104, x1: 120, y1: 104, speedMps: 1.1, phase: 4, tint: '#e8f0fe', name: 'Rowboat on the Mill River' },
   ];
 
   addZoneAssignments(g);
@@ -469,14 +469,14 @@ export function buildGreatVale() {
   // animated souls across the grid: avenue & street walkers, a market dog,
   // a boulevard cat — seeded, so every visitor sees the same living town
   g.environment.actors = [
-    { id: 'gv_ave_walker', kind: 'walker', x0: 150, y0: 50, x1: 150, y1: 380, speedMps: 1.25, phase: 7, tint: '#4c3f56', name: 'Avenue 3 walker' },
-    { id: 'gv_st_walker', kind: 'walker', x0: 100, y0: 300, x1: 500, y1: 300, speedMps: 1.1, phase: 21, tint: '#43584a', name: 'Street 6 walker' },
-    { id: 'gv_market_dog', kind: 'dog', x0: 560, y0: 180, x1: 640, y1: 220, speedMps: 2.4, phase: 2, tint: '#4a3a28', name: 'Dog at Vale Market' },
-    { id: 'gv_blvd_cat', kind: 'cat', x0: 5, y0: 8, x1: 200, y1: 8, speedMps: 0.75, phase: 33, tint: '#2c2c34', name: 'Cat on the boulevard' },
-    { id: 'gv_lake_stroller', kind: 'walker', x0: 160, y0: 640, x1: 320, y1: 670, speedMps: 1.0, phase: 12, tint: '#3b4f5e', name: 'Vale Lake stroller' },
-    { id: 'gv_park_dog', kind: 'dog', x0: 220, y0: 120, x1: 290, y1: 150, speedMps: 2.2, phase: 16, tint: '#583e26', name: 'Park retriever' },
-    { id: 'gv_cyclist_1', kind: 'cyclist', x0: 50, y0: 120, x1: 450, y1: 120, speedMps: 4.8, phase: 14, tint: '#27ae60', name: 'Commuter on Avenue 1' },
-    { id: 'gv_sailboat_lake', kind: 'boat', x0: 80, y0: 620, x1: 260, y1: 650, speedMps: 0.85, phase: 19, tint: '#fdfefe', name: 'Sailboat on Vale Lake' },
+    { id: 'gv_ave_walker', kind: 'walker', x0: 150, y0: 50, x1: 150, y1: 380, speedMps: 1.7, phase: 7, tint: '#4c3f56', name: 'Avenue 3 walker' },
+    { id: 'gv_st_walker', kind: 'walker', x0: 100, y0: 300, x1: 500, y1: 300, speedMps: 1.6, phase: 21, tint: '#43584a', name: 'Street 6 walker' },
+    { id: 'gv_market_dog', kind: 'dog', x0: 560, y0: 180, x1: 640, y1: 220, speedMps: 3.4, phase: 2, tint: '#4a3a28', name: 'Dog at Vale Market' },
+    { id: 'gv_blvd_cat', kind: 'cat', x0: 5, y0: 8, x1: 200, y1: 8, speedMps: 1.1, phase: 33, tint: '#2c2c34', name: 'Cat on the boulevard' },
+    { id: 'gv_lake_stroller', kind: 'walker', x0: 160, y0: 640, x1: 320, y1: 670, speedMps: 1.5, phase: 12, tint: '#3b4f5e', name: 'Vale Lake stroller' },
+    { id: 'gv_park_dog', kind: 'dog', x0: 220, y0: 120, x1: 290, y1: 150, speedMps: 3.2, phase: 16, tint: '#583e26', name: 'Park retriever' },
+    { id: 'gv_cyclist_1', kind: 'cyclist', x0: 50, y0: 120, x1: 450, y1: 120, speedMps: 6.2, phase: 14, tint: '#27ae60', name: 'Commuter on Avenue 1' },
+    { id: 'gv_sailboat_lake', kind: 'boat', x0: 80, y0: 620, x1: 260, y1: 650, speedMps: 1.25, phase: 19, tint: '#fdfefe', name: 'Sailboat on Vale Lake' },
   ];
 
   addZoneAssignments(g);

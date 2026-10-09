@@ -773,6 +773,10 @@ test('animated maps: MapRenderer renders cyclists, boats, bird flocks, destinati
   // Test panToNode
   r.panToNode(nodeIds[1], { animate: false });
   assert.equal(r.cam.x, g.getNode(nodeIds[1]).x);
+
+  // Test speed multiplier
+  r.setSpeedMultiplier(2.0);
+  assert.equal(r.speedMultiplier, 2.0);
 });
 
 /* ---------------- runner ---------------- */
