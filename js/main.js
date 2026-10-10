@@ -25,6 +25,7 @@ import { ScriptStudio } from './editors/script-editor.js';
 import { Landing } from './ui/landing.js';
 import { ProjectStorage, AssetManager, ProjectArchive, fsAccess, prefs as prefsSvc } from './io/storage.js';
 import { Desktop } from './io/desktop.js';
+import { Compass } from './ui/compass.js';
 import {
   exportPworld, importPworld, collectWorldAssets, inspectPworld,
   pworldFilename, formatBytes, worldFileProblem,
@@ -105,6 +106,7 @@ class App {
     this._pworldBusy = false;
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
+    this.compass = new Compass();
     this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
     // default 'walk': stride-by-stride dolly — same panorama 5 m closer,
     // repeated — so hops read as walking, never a jump (user directive)
@@ -677,7 +679,10 @@ class App {
       // chained walking (key held down)
       if (this._pendingDir) { const d = this._pendingDir; this._pendingDir = null; this.tryMove(d); }
     });
-    this.bus.on('view:changed', () => this._viewDirty = true);
+    this.bus.on('view:changed', ({ yawDeg } = {}) => {
+      this._viewDirty = true;
+      if (yawDeg != null) this.compass?.setHeading(yawDeg);
+    });
     this.bus.on('map:nodeSelected', ({ nodeId }) => this.teleport(nodeId));
   }
 
@@ -796,7 +801,14 @@ class App {
     $('#worldsBtn')?.addEventListener('click', () => this.worldLibrary?.toggle());
     this._syncWorldsBtn?.();
     this._syncStudioBtn();
-    on('#compass', 'click', () => { this.viewer.view.yawDeg = 0; });
+    this.compass?.bindElement($('#compass'), { onClickReset: false });
+    on('#compass', 'click', () => {
+      const targetHeading = this.compass?.defaultStartHeading ?? 0;
+      this.viewer.view.yawDeg = targetHeading;
+      this.compass?.setHeading(targetHeading);
+      this.mapRenderer?.setCurrent(this.movement?.currentNodeId, targetHeading);
+      this.viewer?.invalidate();
+    });
 
     // overflow menu (…)
     const mm = $('#mainMenu');
@@ -1979,9 +1991,12 @@ class App {
         + kv('cache', `${this.cache.decodedCount}/${this.cache.capacity} decoded`)
         + kv('AutoComplete', this.acEnabled ? (report?.complete === false ? `repaired T${report.topMissingPct.toFixed(1)}% B${report.bottomMissingPct.toFixed(1)}%` : 'on · complete') : 'OFF')
         + kv('render', `${meta?.renderMs ?? '—'} ms`);
-      // heading cone follows the live view
-      const needle = $('#compassNeedle');
-      if (needle && this._viewDirty) { needle.style.transform = `rotate(${(-v.yawDeg)}deg)`; this._viewDirty = false; this.refreshLocationUI(); }
+      // heading cone & dynamic cardinal compass follow the live view
+      if (this._viewDirty) {
+        this.compass?.setHeading(v.yawDeg);
+        this._viewDirty = false;
+        this.refreshLocationUI();
+      }
     }, 160);
   }
 

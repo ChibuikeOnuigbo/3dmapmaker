@@ -35,6 +35,7 @@
  */
 import { angleDelta, generateId } from '../core/world-graph.js';
 import { validateWorldJson } from '../io/storage.js';
+import { Compass } from '../ui/compass.js';
 
 /* Node-card size rules: every card lives between these bounds; the user can
    resize within them via the corner grip (world px, scaled by the view).
@@ -1200,51 +1201,560 @@ function escTxt(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g,
 function shortUrl(u) { return u.length > 30 ? '…' + u.slice(-28) : u; }
 /** 0° → N, 90° → E … — human-readable heading next to the number. */
 function compassOf(deg) {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  return dirs[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+  return Compass.cardinalOf(deg, 8);
 }
 
 /* ================================================================== */
-/* CodeView — plain-text graph editing (nodes/edges JSON)              */
+/* CodeView — VS Code-style IDE graph & compass editor with 3D preview  */
 /* ================================================================== */
 
 class CodeView {
   constructor(studio, host) {
     this.studio = studio;
+    this.currentFile = 'world.json';
+    this.previewNodeId = null;
+    this.previewRenderer = null;
+    this.previewView = { yawDeg: 0, pitchDeg: 0, fovDeg: 80 };
+    this.splitPreviewVisible = true;
+    this.sidebarVisible = true;
+    this._previewBuilt = false;
+
     this.el = h('div', 'sg-code'); host.append(this.el);
+    this._buildUI();
+    this.reload();
+  }
+
+  _buildUI() {
     this.el.innerHTML = `
-      <div class="sg-code-bar">
-        <span class="sg-note">World graph as data — full OOP structure = nodes + edges + heading. Distances and bearings are auto-calculated on Apply.</span>
-        <button class="btn ghost" data-format>Format</button>
-        <button class="btn ghost" data-copy>Copy</button>
-        <button class="btn ghost" data-reload>Reload from graph</button>
-        <button class="btn" data-apply>Apply changes</button>
-      </div>
-      <textarea spellcheck="false" aria-label="World graph JSON"></textarea>`;
+      <div class="sg-code-workspace">
+        <aside class="sg-code-actbar" aria-label="Activity Bar">
+          <button class="sg-code-actbtn active" data-act="explorer" title="Explorer" aria-label="Explorer">
+            <svg class="ic"><use href="#i-panels"/></svg>
+          </button>
+          <button class="sg-code-actbtn" data-act="compass" title="Compass & Orientation Config" aria-label="Compass Settings">
+            <svg class="ic"><use href="#i-globe"/></svg>
+          </button>
+          <button class="sg-code-actbtn" data-act="preview" title="Toggle Live Preview" aria-label="Toggle Live Preview">
+            <svg class="ic"><use href="#i-fit"/></svg>
+          </button>
+          <span class="grow"></span>
+          <button class="sg-code-actbtn" data-act="reload" title="Reload from world graph" aria-label="Reload">
+            <svg class="ic"><use href="#i-play"/></svg>
+          </button>
+        </aside>
+
+        <aside class="sg-code-sidebar" aria-label="Explorer">
+          <div class="sg-code-sb-sec">
+            <div class="sg-code-sb-head">
+              <span class="sg-code-sb-title">PROJECT EXPLORER</span>
+              <button class="sg-mini" data-sb-reload title="Reload graph" aria-label="Reload"><svg><use href="#i-panels"/></svg></button>
+            </div>
+            <div class="sg-code-files">
+              <button class="sg-code-file active" data-file="world.json">
+                <svg class="ic file-ic"><use href="#i-db"/></svg>
+                <span class="name">world.json</span>
+                <span class="badge">graph</span>
+              </button>
+              <button class="sg-code-file" data-file="compass.config.json">
+                <svg class="ic file-ic"><use href="#i-globe"/></svg>
+                <span class="name">compass.config.json</span>
+                <span class="badge">OOP</span>
+              </button>
+              <button class="sg-code-file" data-file="environment.json">
+                <svg class="ic file-ic"><use href="#i-sun"/></svg>
+                <span class="name">environment.json</span>
+                <span class="badge">env</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sg-code-sb-sec sg-code-outline-sec">
+            <div class="sg-code-sb-head">
+              <span class="sg-code-sb-title">NODES OUTLINE</span>
+              <span class="sg-code-node-count">0</span>
+            </div>
+            <div class="sg-code-outline-search">
+              <input type="search" placeholder="Filter nodes…" spellcheck="false" aria-label="Filter nodes">
+            </div>
+            <div class="sg-code-outline-list"></div>
+          </div>
+        </aside>
+
+        <div class="sg-code-main">
+          <div class="sg-code-tabs">
+            <div class="sg-code-tab-list">
+              <div class="sg-code-tab active" data-tab="active-file">
+                <svg class="ic"><use href="#i-db"/></svg>
+                <span class="sg-code-tab-title">world.json</span>
+              </div>
+            </div>
+            <span class="grow"></span>
+            <div class="sg-code-tab-actions">
+              <button class="sg-mini" data-toggle-pv title="Toggle Live Preview pane" aria-label="Toggle Live Preview"><svg><use href="#i-fit"/></svg></button>
+              <button class="sg-mini" data-toggle-sb title="Toggle Explorer Sidebar" aria-label="Toggle Sidebar"><svg><use href="#i-panels"/></svg></button>
+            </div>
+          </div>
+
+          <div class="sg-code-breadcrumbs">
+            <span class="sg-bc-item">world</span>
+            <span class="sg-bc-sep">/</span>
+            <span class="sg-bc-item" data-bc-file>world.json</span>
+            <span class="sg-bc-sep">/</span>
+            <span class="sg-bc-item" data-bc-node>nodes</span>
+          </div>
+
+          <div class="sg-code-bar">
+            <span class="sg-note">World graph as data — full OOP structure = nodes + edges + heading. Distances and bearings are auto-calculated on Apply.</span>
+            <button class="btn ghost" data-format>Format</button>
+            <button class="btn ghost" data-copy>Copy</button>
+            <button class="btn ghost" data-reload>Reload from graph</button>
+            <button class="btn" data-apply>Apply changes</button>
+          </div>
+
+          <div class="sg-code-body">
+            <div class="sg-code-editor-pane">
+              <div class="sg-code-gutter" aria-hidden="true"></div>
+              <textarea spellcheck="false" aria-label="World graph JSON"></textarea>
+            </div>
+
+            <div class="sg-code-preview-pane">
+              <div class="sg-code-pv-head">
+                <div class="sg-code-pv-title">
+                  <span class="dot"></span>
+                  <b>Live 3D Preview:</b>
+                  <select class="sg-code-pv-select" aria-label="Select preview node"></select>
+                </div>
+                <span class="grow"></span>
+                <div class="sg-code-pv-tools">
+                  <button class="sg-mini" data-pv-refresh title="Refresh preview" aria-label="Refresh preview"><svg><use href="#i-play"/></svg></button>
+                  <button class="sg-mini" data-pv-fs title="Fullscreen" aria-label="Fullscreen"><svg><use href="#i-max"/></svg></button>
+                </div>
+              </div>
+
+              <div class="sg-code-pv-viewport">
+                <canvas class="sg-code-pv-canvas"></canvas>
+                <div class="sg-code-pv-compass" title="Click to reset North">
+                  <svg class="needle" viewBox="0 0 24 24"><path d="M12 3l4 9-4 9-4-9z" fill="#eb5757"/><path d="M12 3l4 9h-4z" fill="#f4b3ac"/></svg>
+                  <span class="sg-code-pv-comp-text" data-comp-label>0° N</span>
+                </div>
+                <div class="sg-code-pv-chips"></div>
+                <div class="sg-code-pv-msg" hidden></div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="sg-code-statusbar" role="status">
+            <div class="sg-sb-item"><svg class="ic"><use href="#i-db"/></svg>main</div>
+            <div class="sg-sb-item" data-stat-pos>Ln 1, Col 1</div>
+            <div class="sg-sb-item">Spaces: 2</div>
+            <div class="sg-sb-item">UTF-8</div>
+            <div class="sg-sb-item" data-stat-lang>JSON</div>
+            <span class="grow"></span>
+            <div class="sg-sb-item highlight" data-stat-comp>Compass: 0° N</div>
+            <div class="sg-sb-item highlight" data-stat-pv>Live Preview: Active</div>
+            <div class="sg-sb-item" data-stat-nodes>0 nodes</div>
+          </footer>
+        </div>
+      </div>`;
+
     this.ta = this.el.querySelector('textarea');
+    this.gutter = this.el.querySelector('.sg-code-gutter');
+    this.pvPane = this.el.querySelector('.sg-code-preview-pane');
+    this.pvCanvas = this.el.querySelector('.sg-code-pv-canvas');
+    this.pvSelect = this.el.querySelector('.sg-code-pv-select');
+    this.pvMsg = this.el.querySelector('.sg-code-pv-msg');
+    this.pvChips = this.el.querySelector('.sg-code-pv-chips');
+    this.pvCompass = this.el.querySelector('.sg-code-pv-compass');
+    this.pvCompassLabel = this.el.querySelector('[data-comp-label]');
+    this.pvCompassNeedle = this.pvCompass?.querySelector('.needle');
+    this.sidebar = this.el.querySelector('.sg-code-sidebar');
+
+    this._bindEvents();
+  }
+
+  _bindEvents() {
     this.el.querySelector('[data-reload]').addEventListener('click', () => this.reload());
     this.el.querySelector('[data-apply]').addEventListener('click', () => this.apply());
     this.el.querySelector('[data-format]').addEventListener('click', () => {
-      try { this.ta.value = JSON.stringify(JSON.parse(this.ta.value), null, 2); this.studio.toast('Formatted'); }
-      catch (err) { this.studio.toast(`JSON error: ${err.message}`, 'err', 4000); }
+      try {
+        this.ta.value = JSON.stringify(JSON.parse(this.ta.value), null, 2);
+        this._updateGutter();
+        this.studio.toast('Formatted');
+      } catch (err) {
+        this.studio.toast(`JSON error: ${err.message}`, 'err', 4000);
+      }
     });
     this.el.querySelector('[data-copy]').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(this.ta.value); }
       catch { this.ta.select(); document.execCommand('copy'); }
       this.studio.toast('Copied to clipboard');
     });
-    this.reload();
+
+    // File switching in Explorer sidebar
+    this.el.querySelectorAll('[data-file]').forEach(b => {
+      b.addEventListener('click', () => this.switchFile(b.dataset.file));
+    });
+
+    // Activity bar
+    this.el.querySelectorAll('[data-act]').forEach(b => {
+      b.addEventListener('click', () => {
+        const act = b.dataset.act;
+        this.el.querySelectorAll('.sg-code-actbtn').forEach(btn => btn.classList.remove('active'));
+        b.classList.add('active');
+        if (act === 'explorer') {
+          this.sidebar.hidden = false;
+        } else if (act === 'compass') {
+          this.sidebar.hidden = false;
+          this.switchFile('compass.config.json');
+        } else if (act === 'preview') {
+          this.toggleSplitPreview();
+        } else if (act === 'reload') {
+          this.reload();
+        }
+      });
+    });
+
+    // Sidebar toggle & Preview toggle
+    this.el.querySelector('[data-toggle-sb]')?.addEventListener('click', () => {
+      this.sidebar.hidden = !this.sidebar.hidden;
+    });
+    this.el.querySelector('[data-toggle-pv]')?.addEventListener('click', () => {
+      this.toggleSplitPreview();
+    });
+
+    // Textarea input & cursor tracking
+    this.ta.addEventListener('input', () => {
+      this._updateGutter();
+      this._updateCursorPos();
+    });
+    this.ta.addEventListener('scroll', () => {
+      if (this.gutter) this.gutter.scrollTop = this.ta.scrollTop;
+    });
+    this.ta.addEventListener('keyup', () => this._updateCursorPos());
+    this.ta.addEventListener('click', () => this._updateCursorPos());
+
+    // Outline node filtering
+    const search = this.el.querySelector('.sg-code-outline-search input');
+    if (search) {
+      search.addEventListener('input', () => this._renderOutline(search.value.trim().toLowerCase()));
+    }
+
+    // Node selector in preview header
+    this.pvSelect?.addEventListener('change', () => {
+      this._loadPreview(this.pvSelect.value);
+    });
+    this.el.querySelector('[data-pv-refresh]')?.addEventListener('click', () => {
+      if (this.previewNodeId) this._loadPreview(this.previewNodeId);
+    });
+    this.el.querySelector('[data-pv-fs]')?.addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else this.pvPane?.requestFullscreen?.();
+    });
   }
-  reload() { this.ta.value = JSON.stringify(serializeGraphSubset(this.studio.app.graph), null, 2); }
+
+  toggleSplitPreview() {
+    this.splitPreviewVisible = !this.splitPreviewVisible;
+    this.pvPane.hidden = !this.splitPreviewVisible;
+    const statPv = this.el.querySelector('[data-stat-pv]');
+    if (statPv) statPv.textContent = `Live Preview: ${this.splitPreviewVisible ? 'Active' : 'Hidden'}`;
+    if (this.splitPreviewVisible && this.previewRenderer) {
+      setTimeout(() => {
+        this.previewRenderer.resize();
+        this._drawPreview();
+      }, 60);
+    }
+  }
+
+  switchFile(filename) {
+    this.currentFile = filename;
+    this.el.querySelectorAll('[data-file]').forEach(b => {
+      b.classList.toggle('active', b.dataset.file === filename);
+    });
+    const title = this.el.querySelector('.sg-code-tab-title');
+    if (title) title.textContent = filename;
+    const bcFile = this.el.querySelector('[data-bc-file]');
+    if (bcFile) bcFile.textContent = filename;
+    const iconUse = this.el.querySelector('.sg-code-tab use');
+    if (iconUse) {
+      iconUse.setAttribute('href', filename === 'compass.config.json' ? '#i-globe' : filename === 'environment.json' ? '#i-sun' : '#i-db');
+    }
+    const statLang = this.el.querySelector('[data-stat-lang]');
+    if (statLang) statLang.textContent = filename.endsWith('.json') ? 'JSON' : 'JS';
+    this.reloadFile();
+  }
+
+  reload() {
+    this.reloadFile();
+    this._renderOutline();
+    if (!this.previewNodeId) {
+      const firstNode = [...this.studio.app.graph.nodes.keys()][0];
+      if (firstNode) this.previewNodeId = firstNode;
+    }
+    if (this.previewNodeId) this._loadPreview(this.previewNodeId);
+  }
+
+  reloadFile() {
+    const g = this.studio.app.graph;
+    if (this.currentFile === 'compass.config.json') {
+      const compassData = this.studio.app.compass?.toJSON() || {
+        defaultStartHeading: g.environment?.defaultHeading ?? 0,
+        headingDeg: this.previewView.yawDeg ?? 0,
+        mode: 'fixed-dial',
+        theme: {
+          needleNorth: '#eb5757',
+          needleSouth: '#8798ab',
+          textColor: '#2c3e50',
+        },
+      };
+      this.ta.value = JSON.stringify(compassData, null, 2);
+    } else if (this.currentFile === 'environment.json') {
+      this.ta.value = JSON.stringify(g.environment || {}, null, 2);
+    } else {
+      this.ta.value = JSON.stringify(serializeGraphSubset(g), null, 2);
+    }
+    this._updateGutter();
+    this._updateCursorPos();
+  }
+
   apply() {
     let data;
     try { data = JSON.parse(this.ta.value); }
     catch (err) { this.studio.toast(`JSON error: ${err.message}`, 'err', 5000); return; }
+
+    const g = this.studio.app.graph;
+    if (this.currentFile === 'compass.config.json') {
+      try {
+        if (this.studio.app.compass) {
+          this.studio.app.compass.fromJSON(data);
+          this.studio.app.compass.defaultStartHeading = Number(data.defaultStartHeading) || 0;
+        }
+        g.environment = g.environment || {};
+        g.environment.compass = data;
+        g.environment.defaultHeading = data.defaultStartHeading;
+        this._updatePreviewCompass();
+        this.studio.toast('Compass configuration applied');
+        this.reload();
+      } catch (err) {
+        this.studio.toast(`Invalid compass config: ${err.message}`, 'err', 5000);
+      }
+      return;
+    }
+
+    if (this.currentFile === 'environment.json') {
+      try {
+        g.environment = data;
+        this.studio.mutated('Environment applied');
+        this.reload();
+      } catch (err) {
+        this.studio.toast(`Invalid environment: ${err.message}`, 'err', 5000);
+      }
+      return;
+    }
+
     try {
-      const sum = applyGraphSubset(this.studio.app.graph, data);
+      const sum = applyGraphSubset(g, data);
       this.studio.mutated(`Applied: +${sum.added} −${sum.removed} nodes, ${sum.moved} moved, ${sum.resized || 0} resized, +${sum.connected} −${sum.disconnected} links`);
       this.reload();
+      if (this.previewNodeId && g.nodes.has(this.previewNodeId)) {
+        this._loadPreview(this.previewNodeId);
+      }
     } catch (err) { this.studio.toast(`Invalid graph: ${err.message}`, 'err', 6000); }
+  }
+
+  _updateGutter() {
+    if (!this.gutter) return;
+    const lines = (this.ta.value.match(/\n/g) || []).length + 1;
+    let s = '';
+    for (let i = 1; i <= lines; i++) s += i + '<br>';
+    this.gutter.innerHTML = s;
+  }
+
+  _updateCursorPos() {
+    const sel = this.ta.selectionStart || 0;
+    const text = this.ta.value.slice(0, sel);
+    const lines = text.split('\n');
+    const row = lines.length;
+    const col = lines[lines.length - 1].length + 1;
+    const pos = this.el.querySelector('[data-stat-pos]');
+    if (pos) pos.textContent = `Ln ${row}, Col ${col}`;
+  }
+
+  _renderOutline(filter = '') {
+    const g = this.studio.app.graph;
+    const list = this.el.querySelector('.sg-code-outline-list');
+    const count = this.el.querySelector('.sg-code-node-count');
+    const statNodes = this.el.querySelector('[data-stat-nodes]');
+    if (!list) return;
+
+    const nodes = [...g.nodes.values()];
+    if (count) count.textContent = String(nodes.length);
+    if (statNodes) statNodes.textContent = `${nodes.length} nodes · ${g.edges.size} links`;
+
+    list.innerHTML = '';
+    const filtered = nodes.filter(n => !filter || n.id.toLowerCase().includes(filter) || (n.name || '').toLowerCase().includes(filter));
+
+    // Populate preview node dropdown too
+    if (this.pvSelect) {
+      this.pvSelect.innerHTML = nodes.map(n => `<option value="${n.id}" ${n.id === this.previewNodeId ? 'selected' : ''}>${escTxt(n.name || n.id)} (${Math.round(n.headingDeg ?? 0)}° ${compassOf(n.headingDeg ?? 0)})</option>`).join('');
+    }
+
+    for (const n of filtered) {
+      const item = h('button', `sg-code-outline-item ${n.id === this.previewNodeId ? 'active' : ''}`);
+      const head = Math.round(n.headingDeg ?? 0);
+      const card = compassOf(head);
+      item.innerHTML = `<span>${escTxt(n.name || n.id)}</span><span class="comp-badge">${head}° ${card}</span>`;
+      item.addEventListener('click', () => {
+        this.previewNodeId = n.id;
+        this.el.querySelectorAll('.sg-code-outline-item').forEach(el => el.classList.remove('active'));
+        item.classList.add('active');
+        if (this.pvSelect) this.pvSelect.value = n.id;
+        this._loadPreview(n.id);
+        this._highlightNodeInText(n.id);
+      });
+      list.append(item);
+    }
+  }
+
+  _highlightNodeInText(nodeId) {
+    if (this.currentFile !== 'world.json') return;
+    const idx = this.ta.value.indexOf(`"${nodeId}"`);
+    if (idx !== -1) {
+      this.ta.focus();
+      this.ta.setSelectionRange(idx, idx + nodeId.length + 2);
+      const linesBefore = this.ta.value.slice(0, idx).split('\n').length;
+      const lineHeight = 21;
+      this.ta.scrollTop = Math.max(0, (linesBefore - 4) * lineHeight);
+      if (this.gutter) this.gutter.scrollTop = this.ta.scrollTop;
+      this._updateCursorPos();
+    }
+  }
+
+  async _initPreview() {
+    if (this._previewBuilt || !this.pvCanvas) return;
+    const { PanoRenderer } = await import('../viewer/pano-renderer.js');
+    this.previewRenderer = new PanoRenderer(this.pvCanvas);
+    this._previewBuilt = true;
+
+    const look = (dx, dy) => {
+      this.previewView.yawDeg = ((this.previewView.yawDeg + dx) % 360 + 360) % 360;
+      this.previewView.pitchDeg = Math.max(-60, Math.min(60, this.previewView.pitchDeg + dy));
+      this._updatePreviewCompass();
+      this._drawPreview();
+    };
+
+    let drag = null;
+    this.pvCanvas.addEventListener('pointerdown', (e) => {
+      drag = { x: e.clientX, y: e.clientY };
+      this.pvCanvas.setPointerCapture(e.pointerId);
+    });
+    this.pvCanvas.addEventListener('pointermove', (e) => {
+      if (drag) {
+        look((drag.x - e.clientX) * 0.22, (e.clientY - drag.y) * 0.18);
+        drag = { x: e.clientX, y: e.clientY };
+      }
+    });
+    this.pvCanvas.addEventListener('pointerup', () => { drag = null; });
+    this.pvCanvas.addEventListener('pointercancel', () => { drag = null; });
+
+    this.pvCompass?.addEventListener('click', () => {
+      const target = this.studio.app.compass?.defaultStartHeading ?? 0;
+      this.previewView.yawDeg = target;
+      this._updatePreviewCompass();
+      this._drawPreview();
+    });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        if (!this.el.hidden && this.splitPreviewVisible && this.previewRenderer) {
+          this.previewRenderer.resize();
+          this._drawPreview();
+        }
+      }).observe(this.pvCanvas.parentElement || this.pvCanvas);
+    }
+  }
+
+  _drawPreview() {
+    if (!this.previewRenderer) return;
+    this.previewRenderer.resize();
+    this.previewRenderer.render({ ...this.previewView, mix: 0, hasB: false, zoom: 1, blurUv: 0 });
+  }
+
+  _updatePreviewCompass() {
+    const deg = Math.round(((this.previewView.yawDeg % 360) + 360) % 360);
+    const card = compassOf(deg);
+    if (this.pvCompassLabel) this.pvCompassLabel.textContent = `${deg}° ${card}`;
+    if (this.pvCompassNeedle) this.pvCompassNeedle.style.transform = `rotate(${-deg}deg)`;
+    const statComp = this.el.querySelector('[data-stat-comp]');
+    if (statComp) statComp.textContent = `Compass: ${deg}° ${card}`;
+  }
+
+  async _loadPreview(nodeId) {
+    await this._initPreview();
+    this.previewNodeId = nodeId;
+    const g = this.studio.app.graph;
+    const n = g.getNode(nodeId);
+    if (!n) return;
+
+    this.previewView.yawDeg = n.headingDeg ?? 0;
+    this.previewView.pitchDeg = 0;
+    this._updatePreviewCompass();
+
+    // WASD neighbor jump chips
+    this._renderPreviewChips(nodeId);
+
+    const msg = this.pvMsg;
+    if (msg) msg.hidden = true;
+
+    const url = variantUrlOf(n, this.studio.variant);
+    if (!url) {
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = n?.pano?.kind === 'asset'
+          ? 'Project asset — open walk view to render.'
+          : 'Procedural/Generated node preview.';
+      }
+      this._drawPreview();
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (this.previewRenderer) {
+        this.previewRenderer.setImageA(img, 0);
+        this._drawPreview();
+      }
+    };
+    img.onerror = () => {
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = `Missing image file: ${shortUrl(url)}`;
+      }
+      this._drawPreview();
+    };
+    img.src = url;
+  }
+
+  _renderPreviewChips(nodeId) {
+    if (!this.pvChips) return;
+    const g = this.studio.app.graph;
+    const slots = socketAssign(g, nodeId);
+    this.pvChips.innerHTML = '';
+    for (const s of SOCKETS) {
+      const e = slots[s.key];
+      if (!e) continue;
+      const to = g.getNode(g.otherEnd(e, nodeId));
+      if (!to) continue;
+      const b = h('button', 'sg-code-pv-chip', `${s.key} · ${to.name || to.id}`);
+      b.title = `Jump ${s.label} (${e.distM.toFixed(1)} m)`;
+      b.addEventListener('click', () => {
+        this.previewNodeId = to.id;
+        if (this.pvSelect) this.pvSelect.value = to.id;
+        this._loadPreview(to.id);
+        this._highlightNodeInText(to.id);
+      });
+      this.pvChips.append(b);
+    }
   }
 }
 

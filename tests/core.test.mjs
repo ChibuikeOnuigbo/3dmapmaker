@@ -17,6 +17,7 @@ import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
 import { buildWillowParish } from '../js/worlds/willow-parish.js';
 import { MapRenderer } from '../js/map/map-renderer.js';
+import { Compass } from '../js/ui/compass.js';
 import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset, CARD_MIN, CARD_MAX } from '../js/editors/script-editor.js';
 
 let passed = 0, failed = 0;
@@ -777,6 +778,81 @@ test('animated maps: MapRenderer renders cyclists, boats, bird flocks, destinati
   // Test speed multiplier
   r.setSpeedMultiplier(2.0);
   assert.equal(r.speedMultiplier, 2.0);
+});
+
+test('compass: OOP model calculates 8-wind & 16-wind cardinal directions and rotates needle', () => {
+  const c = new Compass({ defaultStartHeading: 0 });
+  assert.equal(c.headingDeg, 0);
+  assert.equal(c.cardinal, 'N');
+  assert.equal(c.cardinal16, 'N');
+
+  c.setHeading(45);
+  assert.equal(c.cardinal, 'NE');
+  assert.equal(c.cardinal16, 'NE');
+
+  c.setHeading(90);
+  assert.equal(c.cardinal, 'E');
+
+  c.setHeading(135);
+  assert.equal(c.cardinal, 'SE');
+
+  c.setHeading(180);
+  assert.equal(c.cardinal, 'S');
+
+  c.setHeading(225);
+  assert.equal(c.cardinal, 'SW');
+
+  c.setHeading(270);
+  assert.equal(c.cardinal, 'W');
+
+  c.setHeading(315);
+  assert.equal(c.cardinal, 'NW');
+
+  // Negative and wrapping values
+  c.setHeading(-90);
+  assert.equal(c.headingDeg, 270);
+  assert.equal(c.cardinal, 'W');
+
+  c.setHeading(450);
+  assert.equal(c.headingDeg, 90);
+  assert.equal(c.cardinal, 'E');
+
+  // Reset to default North
+  c.defaultStartHeading = 45;
+  c.resetNorth();
+  assert.equal(c.headingDeg, 45);
+  assert.equal(c.cardinal, 'NE');
+
+  // toJSON & fromJSON
+  const json = c.toJSON();
+  assert.equal(json.defaultStartHeading, 45);
+  assert.equal(json.cardinal, 'NE');
+
+  const c2 = new Compass();
+  c2.fromJSON(json);
+  assert.equal(c2.defaultStartHeading, 45);
+  assert.equal(c2.headingDeg, 45);
+  assert.equal(c2.cardinal, 'NE');
+
+  // Canvas rendering
+  const calls = [];
+  const mockCtx = {
+    save: () => calls.push('save'),
+    restore: () => calls.push('restore'),
+    translate: () => calls.push('translate'),
+    rotate: () => calls.push('rotate'),
+    beginPath: () => calls.push('beginPath'),
+    arc: () => calls.push('arc'),
+    fill: () => calls.push('fill'),
+    stroke: () => calls.push('stroke'),
+    moveTo: () => calls.push('moveTo'),
+    lineTo: () => calls.push('lineTo'),
+    closePath: () => calls.push('closePath'),
+    fillText: (text) => calls.push(`fillText:${text}`),
+  };
+  c.renderCanvas(mockCtx, 100, 100, 15);
+  assert.ok(calls.includes('rotate'), 'needle rotates with heading');
+  assert.ok(calls.includes('fillText:NE'), 'draws dynamic cardinal direction');
 });
 
 /* ---------------- runner ---------------- */

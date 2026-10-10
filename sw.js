@@ -36,6 +36,7 @@ const SHELL = [
   './js/io/zipex.js',
   './js/io/pworld.js',
   './js/io/desktop.js',
+  './js/ui/compass.js',
   './js/ui/world-library.js',
   './js/worlds/demo-worlds.js',
   './js/worlds/willow-parish.js',

@@ -13,3 +13,4 @@ dist-desktop/
 desktop/.data/
 *.pworld
 tools-render/.browser/
+images/

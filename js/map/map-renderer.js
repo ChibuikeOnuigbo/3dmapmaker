@@ -8,6 +8,8 @@
  * Styling follows familiar web-map conventions: light base, cased roads,
  * blue position dot with heading cone.
  */
+import { Compass } from '../ui/compass.js';
+
 const DPR = () => (typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1);
 const RAF = (fn) => {
   if (typeof requestAnimationFrame !== 'undefined') return requestAnimationFrame(fn);
@@ -59,6 +61,7 @@ export class MapRenderer {
     this.cam = { x: 0, y: 0, scale: 0.5 };      // world px at screen centre
     this.currentNodeId = null;
     this.currentYawDeg = 0;
+    this.compass = new Compass();
     this.route = null;
     this.visited = new Set();
     this.debug = false;
@@ -85,7 +88,10 @@ export class MapRenderer {
   }
   setCurrent(nodeId, yawDeg) {
     this.currentNodeId = nodeId;
-    if (yawDeg !== undefined) this.currentYawDeg = yawDeg;
+    if (yawDeg !== undefined) {
+      this.currentYawDeg = yawDeg;
+      this.compass.setHeading(yawDeg);
+    }
     if (nodeId) this.visited.add(nodeId);
     this.requestDraw();
   }
@@ -1055,37 +1061,9 @@ export class MapRenderer {
 
   _compassRose() {
     const { ctx, canvas } = this;
-    const r = 10 * DPR();
     const cx = canvas.width - 20 * DPR(), cy = 24 * DPR();
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    // North arrow tip (red)
-    ctx.fillStyle = '#eb5757';
-    ctx.beginPath();
-    ctx.moveTo(0, -r);
-    ctx.lineTo(r * 0.35, -1);
-    ctx.lineTo(0, -r * 0.25);
-    ctx.closePath();
-    ctx.fill();
-
-    // South arrow tip (slate)
-    ctx.fillStyle = '#8798ab';
-    ctx.beginPath();
-    ctx.moveTo(0, r);
-    ctx.lineTo(r * 0.35, 1);
-    ctx.lineTo(0, r * 0.25);
-    ctx.closePath();
-    ctx.fill();
-
-    // North label
-    ctx.fillStyle = '#2c3e50';
-    ctx.font = `700 ${Math.max(9, 9 * DPR())}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('N', 0, -r - 2);
-
-    ctx.restore();
+    this.compass.setHeading(this.currentYawDeg ?? 0);
+    this.compass.renderCanvas(ctx, cx, cy, 10, { dpr: DPR() });
   }
 
   _debugGrid() {
