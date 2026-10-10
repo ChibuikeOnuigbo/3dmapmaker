@@ -125,6 +125,20 @@ export class ProceduralWorldProvider extends GenerationProvider {
 
   /* ----------------------- sky ----------------------- */
   _paintSky(ctx, W, H, sky, env) {
+    if (env.kind === 'indoor') {
+      ctx.fillStyle = env.timeOfDay === 'night' ? '#181a20' : '#f0ece4';
+      ctx.fillRect(0, 0, W, H / 2 + 1);
+      // Soft ambient warm ceiling spotlights
+      for (let i = 0; i < 6; i++) {
+        const lx = (i / 6 + 0.08) * W, ly = H * 0.24;
+        const grad = ctx.createRadialGradient(lx, ly, 2, lx, ly, 55);
+        grad.addColorStop(0, 'rgba(255, 235, 180, 0.45)');
+        grad.addColorStop(1, 'rgba(255, 235, 180, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(lx, ly, 55, 0, Math.PI * 2); ctx.fill();
+      }
+      return;
+    }
     const g = ctx.createLinearGradient(0, 0, 0, H / 2);
     g.addColorStop(0, sky.top);
     g.addColorStop(1, sky.horizon);
@@ -328,7 +342,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
   _paintStructures(ctx, node, world, ppm, sky, weatherFog) {
     const W = this.W, H = this.H;
     const camH = 1.7;
-    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower', 'sheep', 'hedge', 'fence', 'bench', 'bush', 'flowers'].includes(f.type));
+    const feats = (world.environment.features || []).filter(f => ['building', 'tree', 'car', 'sign', 'tower', 'sheep', 'hedge', 'fence', 'bench', 'bush', 'flowers', 'furniture'].includes(f.type));
     const items = [];
     for (const f of feats) {
       const dx = (f.x - node.x) / ppm, dy = (node.y - f.y) / ppm;
@@ -368,6 +382,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
         : f.type === 'sign' ? 3
         : f.type === 'sheep' ? 0.85
         : f.type === 'flowers' ? 0.35
+        : f.type === 'furniture' ? (f.kind === 'stairs' ? 2.8 : f.kind === 'window' ? 2.6 : 1.2)
         : (f.hM ?? 1.2);
 
       drawWrapped((x) => {
@@ -383,6 +398,7 @@ export class ProceduralWorldProvider extends GenerationProvider {
         else if (f.type === 'bench') this._drawBench(ctx, f, x, halfWpx, topYFor(f.hM ?? 0.9, dist), botY, fogT, fogC, dist);
         else if (f.type === 'bush') this._drawBush(ctx, f, x, halfWpx, topYFor(f.hM ?? 1.6, dist), botY, fogT, fogC, dist);
         else if (f.type === 'flowers') this._drawFlowers(ctx, f, x, halfWpx, topYFor(0.35, dist), botY, fogT, fogC, dist);
+        else if (f.type === 'furniture') this._drawFurniture(ctx, f, x, halfWpx, topYFor(hM, dist), botY, fogT, fogC, dist);
       }, xC);
     }
   }
@@ -618,6 +634,48 @@ export class ProceduralWorldProvider extends GenerationProvider {
       ctx.fillStyle = this._shade(c, fogT * 0.7, fogC);
       const r = Math.max(1.1, h * (0.09 + rng() * 0.07));
       ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  _drawFurniture(ctx, f, xC, halfW, topY, botY, fogT, fogC, dist) {
+    const h = botY - topY, w = halfW * 2, x = xC - halfW;
+    ctx.fillStyle = 'rgba(20,22,25,0.3)';
+    ctx.beginPath(); ctx.ellipse(xC, botY, w * 0.5, Math.max(1.5, h * 0.08), 0, 0, Math.PI * 2); ctx.fill();
+
+    if (f.kind === 'bed') {
+      // Headboard
+      ctx.fillStyle = this._shade([74, 52, 42], fogT, fogC);
+      ctx.fillRect(x + w * 0.1, topY, w * 0.8, h * 0.45);
+      // Mattress & duvet
+      ctx.fillStyle = this._shade([240, 242, 245], fogT, fogC);
+      ctx.fillRect(x + w * 0.05, topY + h * 0.45, w * 0.9, h * 0.4);
+      // Pillows
+      ctx.fillStyle = this._shade([255, 255, 255], fogT, fogC);
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.3, topY + h * 0.48, w * 0.18, h * 0.1, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + w * 0.7, topY + h * 0.48, w * 0.18, h * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (f.kind === 'stairs') {
+      ctx.fillStyle = this._shade([130, 100, 75], fogT, fogC);
+      const steps = 6;
+      for (let i = 0; i < steps; i++) {
+        const sy = topY + (h / steps) * i;
+        ctx.fillRect(x + (w / steps) * i, sy, w - (w / steps) * i, h / steps);
+      }
+    } else if (f.kind === 'window') {
+      ctx.fillStyle = this._shade([135, 206, 250], fogT, fogC);
+      ctx.fillRect(x, topY, w, h);
+      ctx.strokeStyle = '#2c3e50';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, topY, w, h);
+    } else if (f.kind === 'bath') {
+      ctx.fillStyle = this._shade([235, 240, 245], fogT, fogC);
+      ctx.beginPath();
+      ctx.ellipse(xC, topY + h * 0.5, w * 0.45, h * 0.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = this._shade([90, 65, 50], fogT, fogC);
+      ctx.fillRect(x, topY + h * 0.3, w, h * 0.6);
     }
   }
 

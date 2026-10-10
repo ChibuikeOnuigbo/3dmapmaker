@@ -16,6 +16,7 @@ import { crc32, writeZip, readZip, safeZipPath } from '../js/io/zipex.js';
 import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
 import { buildWillowParish } from '../js/worlds/willow-parish.js';
+import { buildHotelSuite } from '../js/worlds/hotel-suite.js';
 import { MapRenderer } from '../js/map/map-renderer.js';
 import { Compass } from '../js/ui/compass.js';
 import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset, CARD_MIN, CARD_MAX } from '../js/editors/script-editor.js';
@@ -425,6 +426,23 @@ test('willow WASD: forward hop is one stride, A/D only where a path exists', asy
   const fwdJ = planMove(g, junction, 'forward', g.edgeBearing(g.edgesOf(junction)[0], junction));
   const lat = ['left', 'right'].map((d) => planMove(g, junction, d, fwdJ.bearing)).find((p) => p.ok);
   assert.ok(lat && lat.distanceM <= 8, 'junction lateral hop is one stride too');
+});
+
+test('hotel suite: indoor world with bedroom, stairs, adjoining bathroom, and WASD navigation', () => {
+  const { graph, startNodeId } = buildHotelSuite();
+  assert.equal(graph.id, 'demo_hotel_suite');
+  assert.equal(startNodeId, 'entry_door');
+  assert.ok(graph.nodes.size >= 20, `has ${graph.nodes.size} indoor nodes`);
+  assert.ok(graph.edges.size >= 20, `has ${graph.edges.size} connections`);
+  assert.ok(graph.nodes.has('stairs_mid'), 'contains mezzanine stairs');
+  assert.ok(graph.nodes.has('bed_pillows'), 'contains king bed');
+  assert.ok(graph.nodes.has('soaking_tub'), 'contains adjoining luxury bathroom');
+  assert.equal(graph.environment.kind, 'indoor');
+
+  // Verify WASD navigation: every step is between 0.5m and 3.5m (comfortable human room stride)
+  for (const e of graph.edges.values()) {
+    assert.ok(e.distM >= 0.5 && e.distM <= 3.5, `indoor step distance ${e.distM.toFixed(2)}m is out of indoor stride bounds`);
+  }
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */

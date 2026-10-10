@@ -384,6 +384,81 @@ export class MapRenderer {
       ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
     }
 
+    // walls (architectural floorplan boundaries)
+    ctx.strokeStyle = '#2b3442';
+    ctx.lineWidth = Math.max(2, 3.2 * s);
+    ctx.lineCap = 'round';
+    for (const f of feats) {
+      if (f.type !== 'wall') continue;
+      const x1 = w2sX(f.x1), y1 = w2sY(f.y1);
+      const x2 = w2sX(f.x2), y2 = w2sY(f.y2);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // furniture (indoor hotel & apartment floorplans)
+    for (const f of feats) {
+      if (f.type !== 'furniture') continue;
+      const ax = w2sX(f.x - f.w / 2), ay = w2sY(f.y - f.d / 2);
+      const rw = Math.max(4, f.w * s), rh = Math.max(4, f.d * s);
+
+      if (f.kind === 'bed') {
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(ax, ay, rw, rh);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ax + rw * 0.08, ay + rh * 0.08, rw * 0.84, rh * 0.84);
+        ctx.fillStyle = '#eceff1';
+        ctx.fillRect(ax + rw * 0.12, ay + rh * 0.12, rw * 0.35, rh * 0.22);
+        ctx.fillRect(ax + rw * 0.53, ay + rh * 0.12, rw * 0.35, rh * 0.22);
+        ctx.fillStyle = '#b0bec5';
+        ctx.fillRect(ax + rw * 0.08, ay + rh * 0.42, rw * 0.84, rh * 0.5);
+        ctx.strokeStyle = '#3e2723';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ax, ay, rw, rh);
+      } else if (f.kind === 'stairs') {
+        ctx.fillStyle = '#8d6e63';
+        ctx.fillRect(ax, ay, rw, rh);
+        ctx.strokeStyle = '#4e342e';
+        ctx.lineWidth = 1.2;
+        const steps = 7;
+        for (let i = 0; i <= steps; i++) {
+          const sy = ay + (rh / steps) * i;
+          ctx.beginPath(); ctx.moveTo(ax, sy); ctx.lineTo(ax + rw, sy); ctx.stroke();
+        }
+        ctx.strokeRect(ax, ay, rw, rh);
+      } else if (f.kind === 'bath') {
+        ctx.fillStyle = '#cfd8dc';
+        ctx.beginPath();
+        ctx.ellipse(ax + rw / 2, ay + rh / 2, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#81d4fa';
+        ctx.beginPath();
+        ctx.ellipse(ax + rw / 2, ay + rh / 2, rw * 0.4, rh * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#455a64';
+        ctx.stroke();
+      } else if (f.kind === 'desk' || f.kind === 'vanity') {
+        ctx.fillStyle = f.kind === 'vanity' ? '#eceff1' : '#5d4037';
+        ctx.fillRect(ax, ay, rw, rh);
+        ctx.strokeStyle = '#37474f';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ax, ay, rw, rh);
+      } else if (f.kind === 'armchair') {
+        ctx.fillStyle = '#455a64';
+        ctx.beginPath();
+        ctx.arc(ax + rw / 2, ay + rh / 2, Math.min(rw, rh) / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (f.kind === 'window') {
+        ctx.fillStyle = '#81d4fa';
+        ctx.fillRect(ax, ay, rw, rh);
+        ctx.strokeStyle = '#0288d1';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(ax, ay, rw, rh);
+      }
+    }
+
     // debug: zones
     if (this.debug) {
       for (const z of g.zones.zones.values()) {

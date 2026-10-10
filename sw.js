@@ -39,6 +39,7 @@ const SHELL = [
   './js/ui/compass.js',
   './js/ui/world-library.js',
   './js/worlds/demo-worlds.js',
+  './js/worlds/hotel-suite.js',
   './js/worlds/willow-parish.js',
   './js/ui/landing.js',
   './assets/landing-bg.jpg',

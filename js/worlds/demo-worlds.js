@@ -15,6 +15,9 @@ import { WorldGraph, bearingDeg } from '../core/world-graph.js';
 import { MapScale } from '../core/scale.js';
 import { rngFor } from '../gen/util.js';
 import { buildWillowParish } from './willow-parish.js';
+import { buildHotelSuite } from './hotel-suite.js';
+
+export { buildHotelSuite };
 
 let uid = 0;
 const nid = (p) => `${p}_${(uid++).toString(36)}`;
@@ -490,8 +493,9 @@ export function buildGreatVale() {
 }
 
 export const DEMO_WORLDS = [
+  { id: 'demo_hotel_suite', name: 'Grand Hotel Suite', tag: 'Indoor · Suite & Stairs', build: buildHotelSuite },
   { id: 'demo_chapel_lane', name: 'Chapel Lane', tag: 'Small', build: buildChapelLane },
   { id: 'demo_millbrook', name: 'Millbrook', tag: 'Medium', build: buildMillbrook },
   { id: 'demo_great_vale', name: 'Great Vale', tag: 'Large · 2,100+ nodes', build: buildGreatVale },
-  { id: 'demo_willow_parish', name: 'Willow Parish', tag: 'Real · AI photos', kind: 'real', modes: ['day', 'rain', 'night'], thumb: 'assets/willow/day/n3.jpg', build: buildWillowParish },
+  { id: 'demo_willow_parish', name: 'Willow Parish', tag: 'Village', kind: 'real', modes: ['day', 'rain', 'night'], thumb: 'assets/willow/day/n3.jpg', build: buildWillowParish },
 ];
