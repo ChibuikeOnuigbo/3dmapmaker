@@ -531,6 +531,39 @@ export class PanoramaViewer {
         ctx.restore();
         continue;
       }
+      if (act.kind === 'car' || act.kind === 'tram' || act.kind === 'cart') {
+        const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
+        const lenM = Math.max(0.5, Math.hypot(ax, ay));
+        const P = lenM / Math.max(0.2, act.speedMps || 1);
+        const s = (((t + (act.phase || 0)) / P) % 2 + 2) % 2;
+        const k = s < 1 ? s : 2 - s;
+        const dir = s < 1 ? 1 : -1;
+        const feetX = act.x0 + ax * k, feetY = act.y0 + ay * k;
+        const feet = this._projectWorld(feetX, feetY, 0, aspect);
+        const top = this._projectWorld(feetX, feetY, 1.45, aspect);
+        if (!feet || !top) continue;
+        const sx = (feet.nx * 0.5 + 0.5) * W;
+        const syF = (1 - (feet.ny * 0.5 + 0.5)) * H;
+        const syT = (1 - (top.ny * 0.5 + 0.5)) * H;
+        const bh = Math.max(3, syF - syT);
+        if (bh > H) continue;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(0.92, 1.25 - feet.distM / 60));
+        if (ctx.globalAlpha <= 0.02) { ctx.restore(); continue; }
+        ctx.fillStyle = 'rgba(20,22,20,0.4)';
+        ctx.beginPath(); ctx.ellipse(sx, syF, bh * 0.85, Math.max(1.5, bh * 0.1), 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = act.tint || '#34495e';
+        ctx.fillRect(sx - bh * 0.8, syT + bh * 0.25, bh * 1.6, bh * 0.7);
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillRect(sx - bh * 0.5, syT, bh * 1.0, bh * 0.35);
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(sx - bh * 0.55 * dir, syF - bh * 0.1, bh * 0.18, 0, Math.PI * 2);
+        ctx.arc(sx + bh * 0.55 * dir, syF - bh * 0.1, bh * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
       if (act.kind !== 'walker') continue;
       const ax = act.x1 - act.x0, ay = act.y1 - act.y0;
       const lenM = Math.max(0.5, Math.hypot(ax, ay));

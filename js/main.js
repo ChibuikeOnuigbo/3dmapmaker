@@ -925,8 +925,8 @@ class App {
     }
 
     // map widget controls (+ hide → FAB)
-    on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.3));
-    on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.3));
+    on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.35, null, { animate: true }));
+    on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.35, null, { animate: true }));
     on('#mapFit', 'click', () => this.mapRenderer.fit());
     on('#mapExpand', 'click', () => {
       const w = $('#mapWidget');

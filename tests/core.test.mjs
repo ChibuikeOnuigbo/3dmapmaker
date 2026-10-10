@@ -636,7 +636,7 @@ test('animated maps: all demo worlds feature living animated actors with bounded
     assert.ok(actors.length >= 6, `${w.name} has ${actors.length} actors, expected at least 6`);
     for (const a of actors) {
       assert.ok(a.id, 'actor has id');
-      assert.ok(['walker', 'dog', 'cat', 'cyclist', 'boat'].includes(a.kind), `unknown kind ${a.kind}`);
+      assert.ok(['walker', 'dog', 'cat', 'cyclist', 'boat', 'car', 'tram', 'cart'].includes(a.kind), `unknown kind ${a.kind}`);
       assert.ok(typeof a.name === 'string' && a.name.length > 0, 'actor has readable name');
       assert.ok(Number.isFinite(a.x0) && Number.isFinite(a.y0), 'actor start coordinate');
       assert.ok(Number.isFinite(a.x1) && Number.isFinite(a.y1), 'actor end coordinate');

@@ -383,6 +383,7 @@ export function buildMillbrook() {
     { id: 'mb_forge_dog', kind: 'dog', x0: -140, y0: 10, x1: -180, y1: 30, speedMps: 3.0, phase: 14, tint: '#42362a', name: 'Blacksmith terrier' },
     { id: 'mb_cyclist', kind: 'cyclist', x0: -160, y0: 0, x1: 140, y1: 0, speedMps: 6.0, phase: 8, tint: '#c0392b', name: 'Cyclist on Main Street' },
     { id: 'mb_river_boat', kind: 'boat', x0: -120, y0: 104, x1: 120, y1: 104, speedMps: 1.1, phase: 4, tint: '#e8f0fe', name: 'Rowboat on the Mill River' },
+    { id: 'mb_cart', kind: 'cart', x0: -180, y0: 0, x1: 160, y1: 0, speedMps: 3.8, phase: 20, tint: '#795548', name: 'Delivery carriage' },
   ];
 
   addZoneAssignments(g);
@@ -477,6 +478,7 @@ export function buildGreatVale() {
     { id: 'gv_park_dog', kind: 'dog', x0: 220, y0: 120, x1: 290, y1: 150, speedMps: 3.2, phase: 16, tint: '#583e26', name: 'Park retriever' },
     { id: 'gv_cyclist_1', kind: 'cyclist', x0: 50, y0: 120, x1: 450, y1: 120, speedMps: 6.2, phase: 14, tint: '#27ae60', name: 'Commuter on Avenue 1' },
     { id: 'gv_sailboat_lake', kind: 'boat', x0: 80, y0: 620, x1: 260, y1: 650, speedMps: 1.25, phase: 19, tint: '#fdfefe', name: 'Sailboat on Vale Lake' },
+    { id: 'gv_tram_ave', kind: 'tram', x0: 250, y0: 40, x1: 250, y1: 400, speedMps: 6.8, phase: 10, tint: '#c0392b', name: 'Vale Central Tram' },
   ];
 
   addZoneAssignments(g);

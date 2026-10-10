@@ -151,13 +151,33 @@ export class MapRenderer {
     this.requestDraw();
   }
 
-  zoomBy(f, around) {
+  zoomBy(f, around, { animate = false } = {}) {
     const c = around ?? { x: this.canvas.width / 2, y: this.canvas.height / 2 };
-    const before = this.screenToWorld(c.x, c.y);
-    this.cam.scale = Math.min(6, Math.max(0.02, this.cam.scale * f));
-    const after = this.screenToWorld(c.x, c.y);
-    this.cam.x += before.x - after.x; this.cam.y += before.y - after.y;
-    this.requestDraw();
+    if (!animate || !this.animated) {
+      const before = this.screenToWorld(c.x, c.y);
+      this.cam.scale = Math.min(6, Math.max(0.02, this.cam.scale * f));
+      const after = this.screenToWorld(c.x, c.y);
+      this.cam.x += before.x - after.x; this.cam.y += before.y - after.y;
+      this.requestDraw();
+      return;
+    }
+    const startScale = this.cam.scale;
+    const targetScale = Math.min(6, Math.max(0.02, startScale * f));
+    const t0 = Date.now(), dur = Math.max(100, Math.round(180 / (this.speedMultiplier || 1)));
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - t0) / dur);
+      const ease = 1 - Math.pow(1 - p, 3);
+      const curScale = startScale + (targetScale - startScale) * ease;
+      const before = this.screenToWorld(c.x, c.y);
+      this.cam.scale = curScale;
+      const after = this.screenToWorld(c.x, c.y);
+      this.cam.x += before.x - after.x; this.cam.y += before.y - after.y;
+      this.draw();
+      if (p < 1) this._zoomRaf = RAF(tick);
+      else this._zoomRaf = 0;
+    };
+    if (this._zoomRaf) CAF(this._zoomRaf);
+    this._zoomRaf = RAF(tick);
   }
 
   resize() {
@@ -212,6 +232,12 @@ export class MapRenderer {
       const dpr = this.canvas.width / rect.width;
       this.zoomBy(Math.exp((e.deltaY > 0 ? -1 : 1) * 0.14), { x: (e.clientX - rect.left) * dpr, y: (e.clientY - rect.top) * dpr });
     }, { passive: false });
+    el.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const dpr = this.canvas.width / rect.width;
+      this.zoomBy(1.4, { x: (e.clientX - rect.left) * dpr, y: (e.clientY - rect.top) * dpr }, { animate: true });
+    });
   }
 
   /* ================================ draw ================================ */
@@ -580,7 +606,7 @@ export class MapRenderer {
     }
 
     // animated actors (walkers, dogs, cats on coded routes)
-    this._drawActors(t, s, ppm2, inView);
+    this._drawActors(t, s, ppm2, inView, tod);
 
     // animated flying bird flocks across the map sky
     this._drawFlocks(t, W, H, s);
@@ -591,13 +617,16 @@ export class MapRenderer {
     // scale bar (meters — Spec §4 correctness on screen)
     this._scaleBar();
 
+    // compass rose (North indicator)
+    this._compassRose();
+
     if (this.debug) this._debugGrid();
 
     // keep animated layers moving when visible
     this._scheduleNextFrame();
   }
 
-  _drawActors(t, s, ppm2, inView) {
+  _drawActors(t, s, ppm2, inView, tod) {
     const actors = this.graph?.environment?.actors || [];
     if (!actors.length) return;
     const ctx = this.ctx;
@@ -685,6 +714,61 @@ export class MapRenderer {
         ctx.beginPath();
         ctx.arc(-r * 0.1, -r * 0.35, r * 0.48, 0, Math.PI * 2);
         ctx.fill();
+
+        // Night headlight cone
+        if (tod === 'night' || tod === 'dusk') {
+          const beam = ctx.createRadialGradient(r * 0.9, 0, 1, r * 0.9, 0, r * 3.2);
+          beam.addColorStop(0, 'rgba(255, 245, 180, 0.45)');
+          beam.addColorStop(1, 'rgba(255, 245, 180, 0)');
+          ctx.fillStyle = beam;
+          ctx.beginPath();
+          ctx.moveTo(r * 0.9, 0);
+          ctx.arc(r * 0.9, 0, r * 3.2, -0.38, 0.38);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      } else if (act.kind === 'car' || act.kind === 'tram' || act.kind === 'cart') {
+        ctx.save();
+        ctx.rotate(angle);
+        // Shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath();
+        ctx.rect(-r * 1.5, -r * 0.7, r * 3, r * 1.4);
+        ctx.fill();
+
+        // Night headlights beam
+        if (tod === 'night' || tod === 'dusk') {
+          const beam = ctx.createRadialGradient(r * 1.5, 0, 1, r * 1.5, 0, r * 4.5);
+          beam.addColorStop(0, 'rgba(255, 240, 180, 0.55)');
+          beam.addColorStop(1, 'rgba(255, 240, 180, 0)');
+          ctx.fillStyle = beam;
+          ctx.beginPath();
+          ctx.moveTo(r * 1.5, 0);
+          ctx.arc(r * 1.5, 0, r * 4.5, -0.42, 0.42);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Vehicle Body
+        ctx.fillStyle = act.tint || '#34495e';
+        ctx.strokeStyle = '#1a252f';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.rect(-r * 1.4, -r * 0.65, r * 2.8, r * 1.3);
+        ctx.fill();
+        ctx.stroke();
+
+        // Windshield / roof
+        ctx.fillStyle = act.kind === 'tram' ? '#e74c3c' : '#bdc3c7';
+        ctx.fillRect(-r * 0.6, -r * 0.45, r * 1.2, r * 0.9);
+
+        // Wheels
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-r * 1.1, -r * 0.75, r * 0.5, r * 0.15);
+        ctx.fillRect(r * 0.6, -r * 0.75, r * 0.5, r * 0.15);
+        ctx.fillRect(-r * 1.1, r * 0.6, r * 0.5, r * 0.15);
+        ctx.fillRect(r * 0.6, r * 0.6, r * 0.5, r * 0.15);
         ctx.restore();
       } else if (act.kind === 'boat') {
         ctx.save();
@@ -726,6 +810,17 @@ export class MapRenderer {
         ctx.beginPath();
         ctx.ellipse(0, 2, r * 1.1, r * 0.6, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        // Night lantern glow
+        if (tod === 'night' || tod === 'dusk') {
+          const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, r * 2.5);
+          glow.addColorStop(0, 'rgba(255, 220, 120, 0.45)');
+          glow.addColorStop(1, 'rgba(255, 220, 120, 0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
 
         ctx.fillStyle = act.tint || '#5a4632';
         ctx.strokeStyle = '#ffffff';
@@ -956,6 +1051,41 @@ export class MapRenderer {
     ctx.fillRect(x, y - 8, 2, 7); ctx.fillRect(x + lenPx - 2, y - 8, 2, 7);
     ctx.font = `${11 * DPR()}px system-ui`;
     ctx.fillText(chosen >= 1000 ? `${chosen / 1000} km` : `${chosen} m`, x + 4, y - 10);
+  }
+
+  _compassRose() {
+    const { ctx, canvas } = this;
+    const r = 10 * DPR();
+    const cx = canvas.width - 20 * DPR(), cy = 24 * DPR();
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // North arrow tip (red)
+    ctx.fillStyle = '#eb5757';
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * 0.35, -1);
+    ctx.lineTo(0, -r * 0.25);
+    ctx.closePath();
+    ctx.fill();
+
+    // South arrow tip (slate)
+    ctx.fillStyle = '#8798ab';
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(r * 0.35, 1);
+    ctx.lineTo(0, r * 0.25);
+    ctx.closePath();
+    ctx.fill();
+
+    // North label
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = `700 ${Math.max(9, 9 * DPR())}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('N', 0, -r - 2);
+
+    ctx.restore();
   }
 
   _debugGrid() {
