@@ -432,16 +432,20 @@ test('hotel suite: indoor world with bedroom, stairs, adjoining bathroom, and WA
   const { graph, startNodeId } = buildHotelSuite();
   assert.equal(graph.id, 'demo_hotel_suite');
   assert.equal(startNodeId, 'entry_door');
-  assert.ok(graph.nodes.size >= 20, `has ${graph.nodes.size} indoor nodes`);
-  assert.ok(graph.edges.size >= 20, `has ${graph.edges.size} connections`);
+  assert.ok(graph.nodes.size >= 50, `has ${graph.nodes.size} indoor nodes including dense filler transitions`);
+  assert.ok(graph.edges.size >= 50, `has ${graph.edges.size} connections`);
   assert.ok(graph.nodes.has('stairs_mid'), 'contains mezzanine stairs');
   assert.ok(graph.nodes.has('bed_pillows'), 'contains king bed');
   assert.ok(graph.nodes.has('soaking_tub'), 'contains adjoining luxury bathroom');
   assert.equal(graph.environment.kind, 'indoor');
 
-  // Verify WASD navigation: every step is between 0.5m and 3.5m (comfortable human room stride)
+  const door = graph.nodes.get('entry_door');
+  assert.ok(door.cv && Array.isArray(door.cv.visibleObjects), 'node carries OpenCV tracked objects');
+  assert.ok(typeof door.cv.description === 'string' && door.cv.description.length > 0, 'node has scene description');
+
+  // Verify WASD navigation: every step is between 0.25m and 3.5m (comfortable human room stride)
   for (const e of graph.edges.values()) {
-    assert.ok(e.distM >= 0.5 && e.distM <= 3.5, `indoor step distance ${e.distM.toFixed(2)}m is out of indoor stride bounds`);
+    assert.ok(e.distM >= 0.25 && e.distM <= 3.5, `indoor step distance ${e.distM.toFixed(2)}m is out of indoor stride bounds`);
   }
 });
 
