@@ -31,6 +31,7 @@ import {
   pworldFilename, formatBytes, worldFileProblem,
 } from './io/pworld.js';
 import { WorldLibrary } from './ui/world-library.js';
+import { visionEngine } from './ai/vision-model.js';
 
 /* Living-world accessories: every animated layer can follow the world
    ('auto'), or be forced ON/OFF by the user (persisted in prefs).       */
@@ -107,6 +108,10 @@ class App {
     this._searchIndex = [];
     this.displayMode = 'day';             // scene mode for worlds with variants
     this.compass = new Compass();
+    this.vision = visionEngine;
+    if (this.prefs.vision && typeof this.prefs.vision === 'object') {
+      Object.assign(this.vision.options, this.prefs.vision);
+    }
     this.viewPrefs = { movePad: true, map: true, locCard: true, compass: true, sharpen: { on: false, amt: 0.55 }, smooth: { on: false, amt: 0.5 }, speed: 65, speedV: 2, ...(this.prefs.view || {}) };
     // default 'walk': stride-by-stride dolly — same panorama 5 m closer,
     // repeated — so hops read as walking, never a jump (user directive)
@@ -686,9 +691,10 @@ class App {
     this.bus.on('map:nodeSelected', ({ nodeId }) => this.teleport(nodeId));
   }
 
-  tryMove(relativeDir) {
+  tryMove(relativeDir, pressMs = null) {
     if (!this.movement) return;
-    this._lastMove = { relativeDir };
+    const durMs = pressMs ?? 150;
+    this._lastMove = { relativeDir, pressMs: Math.max(20, Math.min(1200, durMs)) };
     this.movement.tryMove(relativeDir, this.viewer.view.yawDeg);
   }
 
@@ -751,6 +757,7 @@ class App {
       await this.viewer.transitionTo(display, heading, {
         direction: relativeDir,
         distM, teleport,
+        pressMs: this._lastMove?.pressMs ?? 150,
         durationMs: (teleport ? 0.6 : 1) * this.viewer.immersion.transitionMs,
       });
     }
@@ -838,9 +845,18 @@ class App {
       if (!scenePop.contains(e.target) && !sceneBtn.contains(e.target)) scenePop.classList.remove('open');
     });
 
-    // move pad
+    // move pad with press duration measurement
     document.querySelectorAll('#movePad .mbtn').forEach(b => {
-      b.addEventListener('click', () => this.tryMove(b.dataset.dir));
+      let bDown = 0;
+      b.addEventListener('pointerdown', () => { bDown = performance.now(); });
+      b.addEventListener('pointerup', () => {
+        const pressMs = Math.round(performance.now() - (bDown || performance.now()));
+        this.tryMove(b.dataset.dir, pressMs);
+        bDown = 0;
+      });
+      b.addEventListener('click', () => {
+        if (!bDown) this.tryMove(b.dataset.dir, 150);
+      });
     });
 
     // double click (or double tap) on the panorama: turn toward the
@@ -936,6 +952,64 @@ class App {
       });
     }
 
+    // Vision & Optics popup — real-time neural model features
+    const vp = $('#visionPop');
+    if (vp && !vp.dataset.bound) {
+      vp.dataset.bound = '1';
+      on('#visionBtn', 'click', () => {
+        if (vp.classList.contains('open')) { vp.classList.remove('open'); return; }
+        this._paintVisionPop();
+        this._placePop(vp, '#visionBtn');
+        vp.classList.add('open');
+      });
+      document.addEventListener('click', (e) => {
+        if (vp.classList.contains('open') && !vp.contains(e.target) && !$('#visionBtn').contains(e.target)) vp.classList.remove('open');
+      });
+      vp.addEventListener('keydown', (e) => { if (e.key === 'Escape') vp.classList.remove('open'); });
+
+      const toggleOpt = (key, btnId, name) => {
+        on(btnId, 'click', () => {
+          this.vision.options[key] = !this.vision.options[key];
+          prefsSvc.save({ vision: this.vision.options });
+          this._paintVisionPop();
+          this.viewer.invalidate();
+          this.toast(`${name}: ${this.vision.options[key] ? 'on' : 'off'}`, 'ok', 1100);
+        });
+      };
+
+      toggleOpt('rayTracing', '#swRayTracing', 'Ray Tracing');
+      toggleOpt('depth3D', '#swDepth3D', '3Dness (Depth Relief)');
+      toggleOpt('denoise', '#swDenoise', 'Realtime Denoise');
+      toggleOpt('viewIllusion', '#swViewIllusion', 'View Illusion');
+      toggleOpt('adaptiveMorph', '#swAdaptiveMorph', 'Adaptive Morph');
+
+      $('#depthReliefRange')?.addEventListener('input', (e) => {
+        this.vision.options.depthRelief = +e.target.value / 100;
+        prefsSvc.save({ vision: this.vision.options });
+        const valEl = $('#depthReliefVal');
+        if (valEl) valEl.textContent = `${e.target.value}%`;
+        this.viewer.invalidate();
+      });
+
+      $('#denoiseRange')?.addEventListener('input', (e) => {
+        this.vision.options.denoiseStrength = +e.target.value / 100;
+        prefsSvc.save({ vision: this.vision.options });
+        const valEl = $('#denoiseVal');
+        if (valEl) valEl.textContent = `${e.target.value}%`;
+        this.viewer.invalidate();
+      });
+
+      $('#segWideAngle')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-wa]');
+        if (!btn) return;
+        this.vision.options.wideAngleMode = btn.dataset.wa;
+        prefsSvc.save({ vision: this.vision.options });
+        this._paintVisionPop();
+        this.viewer.invalidate();
+        this.toast(`Wide-Angle Optics: ${btn.textContent}`, 'ok', 1100);
+      });
+    }
+
     // map widget controls (+ hide → FAB)
     on('#mapZoomIn', 'click', () => this.mapRenderer.zoomBy(1.35, null, { animate: true }));
     on('#mapZoomOut', 'click', () => this.mapRenderer.zoomBy(1 / 1.35, null, { animate: true }));
@@ -961,11 +1035,44 @@ class App {
     // resizing between phone/tablet/desktop layouts must re-anchor any popup
     // that is open right now (old screens: desktop offsets slid off-screen)
     window.addEventListener('resize', () => {
-      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn'], ['#accessoryPop', '#accessoryBtn'], ['#scenePop', '#sceneBtn']]) {
+      for (const [popSel, btnSel] of [['#mainMenu', '#menuBtn'], ['#motionPop', '#motionBtn'], ['#accessoryPop', '#accessoryBtn'], ['#visionPop', '#visionBtn'], ['#scenePop', '#sceneBtn']]) {
         const pop = $(popSel);
         if (pop && pop.classList.contains('open')) this._placePop(pop, btnSel);
       }
       this._applyViewPrefs();
+    });
+  }
+
+  _paintVisionPop() {
+    const vp = $('#visionPop');
+    if (!vp) return;
+    const opts = this.vision.options;
+    const setSw = (id, on) => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.toggle('on', !!on);
+      el.setAttribute('aria-checked', on ? 'true' : 'false');
+    };
+    setSw('#swRayTracing', opts.rayTracing);
+    setSw('#swDepth3D', opts.depth3D);
+    setSw('#swDenoise', opts.denoise);
+    setSw('#swViewIllusion', opts.viewIllusion);
+    setSw('#swAdaptiveMorph', opts.adaptiveMorph);
+
+    const dr = $('#depthReliefRange');
+    if (dr) {
+      dr.value = Math.round((opts.depthRelief ?? 0.4) * 100);
+      const valEl = $('#depthReliefVal');
+      if (valEl) valEl.textContent = `${dr.value}%`;
+    }
+    const dn = $('#denoiseRange');
+    if (dn) {
+      dn.value = Math.round((opts.denoiseStrength ?? 0.5) * 100);
+      const valEl = $('#denoiseVal');
+      if (valEl) valEl.textContent = `${dn.value}%`;
+    }
+    $('#segWideAngle')?.querySelectorAll('button').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.wa === opts.wideAngleMode);
     });
   }
 
@@ -1128,6 +1235,27 @@ class App {
         <span class="grow">Developer overlay<small>coordinates, nodes, scores</small></span>
         <span class="track"><span class="knob"></span></span>
       </button>
+      <div class="sep"></div><div class="lab">Vision & Optics Model</div>
+      <button class="mi sw ${this.vision.options.rayTracing ? 'on' : ''}" data-opt-ray role="menuitemcheckbox" aria-checked="${!!this.vision.options.rayTracing}">
+        <svg class="ic"><use href="#i-sun"/></svg>
+        <span class="grow">Ray Tracing<small>screen-space reflections & AO</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <button class="mi sw ${this.vision.options.depth3D ? 'on' : ''}" data-opt-3d role="menuitemcheckbox" aria-checked="${!!this.vision.options.depth3D}">
+        <svg class="ic"><use href="#i-globe"/></svg>
+        <span class="grow">3Dness (Subtle Relief)<small>gentle stereoscopic depth (not too much)</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <button class="mi sw ${this.vision.options.denoise ? 'on' : ''}" data-opt-denoise role="menuitemcheckbox" aria-checked="${!!this.vision.options.denoise}">
+        <svg class="ic"><use href="#i-sharpen"/></svg>
+        <span class="grow">Realtime Denoise<small>bilateral filtering & clarity</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
+      <button class="mi sw ${this.vision.options.viewIllusion ? 'on' : ''}" data-opt-illusion role="menuitemcheckbox" aria-checked="${!!this.vision.options.viewIllusion}">
+        <svg class="ic"><use href="#i-wind"/></svg>
+        <span class="grow">View Illusion<small>atmospheric aerial depth</small></span>
+        <span class="track"><span class="knob"></span></span>
+      </button>
       <div class="sep"></div><div class="lab">World</div>
       ${act('#i-save', 'Save world file…', 'name it · every image inside one .pworld', 'miSaveWorld')}
       ${act('#i-open', 'Open world file', '.pworld opens anywhere', 'miOpenWorld')}
@@ -1183,6 +1311,36 @@ class App {
       clearTimeout(this._smT);
       this._smT = setTimeout(() => this.reloadCurrentPanorama().catch(() => {}), 240);
     });
+
+    mm.querySelector('[data-opt-ray]')?.addEventListener('click', () => {
+      this.vision.options.rayTracing = !this.vision.options.rayTracing;
+      prefsSvc.save({ vision: this.vision.options });
+      this.viewer.invalidate();
+      this.toast(`Ray Tracing: ${this.vision.options.rayTracing ? 'on' : 'off'}`, 'ok', 1100);
+      rebuild();
+    });
+    mm.querySelector('[data-opt-3d]')?.addEventListener('click', () => {
+      this.vision.options.depth3D = !this.vision.options.depth3D;
+      prefsSvc.save({ vision: this.vision.options });
+      this.viewer.invalidate();
+      this.toast(`3Dness: ${this.vision.options.depth3D ? 'on' : 'off'}`, 'ok', 1100);
+      rebuild();
+    });
+    mm.querySelector('[data-opt-denoise]')?.addEventListener('click', () => {
+      this.vision.options.denoise = !this.vision.options.denoise;
+      prefsSvc.save({ vision: this.vision.options });
+      this.viewer.invalidate();
+      this.toast(`Realtime Denoise: ${this.vision.options.denoise ? 'on' : 'off'}`, 'ok', 1100);
+      rebuild();
+    });
+    mm.querySelector('[data-opt-illusion]')?.addEventListener('click', () => {
+      this.vision.options.viewIllusion = !this.vision.options.viewIllusion;
+      prefsSvc.save({ vision: this.vision.options });
+      this.viewer.invalidate();
+      this.toast(`View Illusion: ${this.vision.options.viewIllusion ? 'on' : 'off'}`, 'ok', 1100);
+      rebuild();
+    });
+
     /* named bindings, never positional: menu rows can be added freely */
     const wire = (id, fn) => {
       const el = mm.querySelector(`#${id}`);
@@ -2072,6 +2230,7 @@ class App {
 
   /* ================= keyboard ================= */
   _bindKeyboard() {
+    const keyPressStarts = new Map();
     document.addEventListener('keydown', (e) => {
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
@@ -2094,11 +2253,15 @@ class App {
       const dir = KEY_DIRS[e.code];
       if (dir) {
         e.preventDefault();
+        if (!keyPressStarts.has(e.code)) {
+          keyPressStarts.set(e.code, performance.now());
+        }
+        const pressMs = Math.round(performance.now() - keyPressStarts.get(e.code));
         if (this.movement?.state === 'walking' && (e.repeat || dir)) {
           // chain intent: the walk continues in the held direction on arrival
           this._pendingDir = dir;
-          this._lastMove = { relativeDir: dir };
-        } else this.tryMove(dir);
+          this._lastMove = { relativeDir: dir, pressMs };
+        } else this.tryMove(dir, pressMs);
         return;
       }
       switch (e.code) {
@@ -2113,7 +2276,10 @@ class App {
     });
     document.addEventListener('keyup', (e) => {
       const dir = KEY_DIRS[e.code];
-      if (dir && this._pendingDir === dir) this._pendingDir = null;
+      if (dir) {
+        keyPressStarts.delete(e.code);
+        if (this._pendingDir === dir) this._pendingDir = null;
+      }
     });
   }
 

@@ -10,6 +10,7 @@ import { PanoRenderer } from './pano-renderer.js';
 import { softClampPitch } from './completion.js';
 import { walkSchedule, strideEase, walkBobDeg } from './walk-steps.js';
 import { rngFor } from '../gen/util.js';
+import { visionEngine } from '../ai/vision-model.js';
 
 export class PanoramaViewer {
   /**
@@ -21,6 +22,7 @@ export class PanoramaViewer {
     this.canvas = canvas;
     this.bus = bus;
     this.renderer = new PanoRenderer(canvas);
+    this.vision = visionEngine;
     this.fx = fxCanvas ? fxCanvas.getContext('2d') : null;
 
     this.view = {
@@ -181,6 +183,7 @@ export class PanoramaViewer {
     this._transition = {
       t0: performance.now(), dur, dirZoom, fromZoom: this.view.zoom,
       style: this.motion.style,
+      pressMs: opts.pressMs ?? 150,
       walk: walk && sched.steps > 0
         ? { steps: sched.steps, dollyMax: sched.dollyMax, bob: sched.bobCycles, amt, back: opts.direction === 'backward' }
         : null,
@@ -244,7 +247,7 @@ export class PanoramaViewer {
         }
         this._walkBob = walkBobDeg(t, w.bob, w.amt) * (1 - t); // settle to zero by arrival
       } else {
-        const e = 1 - Math.pow(1 - t, 3);
+        const e = this.vision.evaluateMorphEasing(t, tr.pressMs ?? 150);
         this.view.mix = e;
         const dirZoom = 1 + (tr.dirZoom - 1) * (1 - e);
         this.view.zoom = dirZoom;
@@ -287,6 +290,13 @@ export class PanoramaViewer {
     this._lastSig = sig;
     this.paintCount++;
 
+    const vu = this.vision.computeShaderUniforms({
+      yawDeg: this.view.yawDeg + yawOff,
+      pitchDeg: this.view.pitchDeg + pitchOff,
+      fovDeg: this.view.fovDeg,
+      env: this.anchors?.environment || {},
+    });
+
     this.renderer.render({
       yawDeg: this.view.yawDeg + yawOff,
       pitchDeg: this.view.pitchDeg + pitchOff,
@@ -294,6 +304,7 @@ export class PanoramaViewer {
       mix: this.view.mix,
       hasB: this.view.hasB,
       zoom: this.view.zoom,
+      visionUniforms: vu,
     });
     this._renderFx(now, dt);
     this.onFrameRendered?.();   // post-processing hook (sharpen pass schedules here)

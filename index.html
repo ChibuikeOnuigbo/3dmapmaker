@@ -52,6 +52,7 @@
     <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"/></symbol>
     <symbol id="i-snow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M3.5 7l17 10M20.5 7l-17 10"/><path d="M12 2 10 4.5M12 2l2 2.5M12 22l-2-2.5m2 2.5 2-2.5M3.5 7 6.2 7.6M3.5 7 4.1 9.7M20.5 17l-2.7-.6m2.7.6-.6-2.7M20.5 7l-2.7.6m2.7-.6-.6 2.7M3.5 17l2.7-.6M3.5 17l.6 2.7"/></symbol>
     <symbol id="i-dawn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="15.5" r="3.6"/><path d="M12 8V5.9M6.3 9.8l1.4 1.4M17.7 9.8l-1.4 1.4M8.2 19.5h7.6"/><path d="M2.5 19.5h1.6m15.8 0h1.6M6 22.5h12"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-storm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13.5A6 6 0 1 1 15 7.5h1.8a4 4 0 0 1 2.3 7.2"/><path d="m12.5 11-3.4 5h3l-2 5 4.9-6.2h-3l1.9-3.8z"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
     <symbol id="i-sharpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/><path d="M19 2.5 20.5 5l2.5 1.5L20.5 8 19 10.5 17.5 8 15 6.5 17.5 5Z"/></symbol>
@@ -153,8 +154,69 @@
   <svg class="ic" aria-hidden="true"><use href="#i-speed"/></svg>
   <input id="speedRange" type="range" min="0" max="100" step="1" aria-label="Walk speed" title="Walk speed">
   <span id="speedTxt" aria-live="off">1.4 m/s</span>
+  <button class="mgear" id="visionBtn" title="Neural Vision & Optics — Ray tracing, 3Dness, denoise, wide angle, view illusion" aria-label="Neural vision settings" aria-haspopup="true"><svg class="ic"><use href="#i-eye"/></svg></button>
   <button class="mgear" id="motionBtn" title="Motion settings" aria-label="Motion settings" aria-haspopup="true"><svg class="ic"><use href="#i-sliders"/></svg></button>
   <button class="mgear" id="accessoryBtn" title="Accessory — living world effects" aria-label="Accessory — living world effects" aria-haspopup="true"><svg class="ic"><use href="#i-magic"/></svg></button>
+</div>
+
+<div class="pop" id="visionPop" role="menu" aria-label="Neural Vision & Optics model settings">
+  <div class="mfield">
+    <div class="mlabel">Neural Vision & Optics Model</div>
+    <div class="mhint">Active multi-task neural network calculating realtime ray tracing, subtle 3D depth, denoise, wide-angle optics, and adaptive morph movement.</div>
+  </div>
+  <div class="mfield">
+    <button class="mi sw on" id="swRayTracing" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-sun"/></svg>
+      <span class="grow">Ray Tracing<small>screen-space reflections & AO</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+  </div>
+  <div class="mfield">
+    <button class="mi sw on" id="swDepth3D" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-globe"/></svg>
+      <span class="grow">3Dness (Subtle Relief)<small>gentle parallax, not too much</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+    <div class="row-of-field" id="depthReliefRow" style="margin-top:6px;">
+      <input id="depthReliefRange" type="range" min="5" max="100" value="40" aria-label="3D relief strength">
+      <span class="pct" id="depthReliefVal">40%</span>
+    </div>
+  </div>
+  <div class="mfield">
+    <button class="mi sw on" id="swDenoise" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-sharpen"/></svg>
+      <span class="grow">Realtime Denoise & Enhance<small>bilateral filter + unsharp clarity</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+    <div class="row-of-field" id="denoiseRow" style="margin-top:6px;">
+      <input id="denoiseRange" type="range" min="10" max="100" value="50" aria-label="Denoise strength">
+      <span class="pct" id="denoiseVal">50%</span>
+    </div>
+  </div>
+  <div class="mfield">
+    <div class="mlabel">Wide-Angle Optics</div>
+    <div class="mseg" id="segWideAngle">
+      <button type="button" data-wa="off">Off</button>
+      <button type="button" data-wa="rectilinear">Rect</button>
+      <button type="button" data-wa="panini" class="on">Panini</button>
+    </div>
+    <div class="mhint">Panini cylindrical perspective keeps vertical architecture straight in wide FOV without edge stretching.</div>
+  </div>
+  <div class="mfield">
+    <button class="mi sw on" id="swViewIllusion" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-wind"/></svg>
+      <span class="grow">View Illusion<small>atmospheric aerial depth haze</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+  </div>
+  <div class="mfield">
+    <button class="mi sw on" id="swAdaptiveMorph" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-speed"/></svg>
+      <span class="grow">Adaptive Morph Easing<small>blends curves by keypress ms</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+    <div class="mhint">Combines cubic-out, cubic-in and smoothstep depending on button hold duration (ms). Strictly preserves walk speed and stride velocity.</div>
+  </div>
 </div>
 
 <div class="pop" id="motionPop" role="menu" aria-label="Motion settings">

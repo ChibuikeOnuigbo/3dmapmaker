@@ -38,6 +38,8 @@ const SHELL = [
   './js/io/desktop.js',
   './js/ui/compass.js',
   './js/ui/world-library.js',
+  './js/ai/vision-model.js',
+  './models/panorama_vision_weights.json',
   './js/worlds/demo-worlds.js',
   './js/worlds/hotel-suite.js',
   './js/worlds/willow-parish.js',

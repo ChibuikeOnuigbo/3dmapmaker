@@ -403,6 +403,25 @@ test('db: default data directory is a real per-OS location', () => {
   assert.ok(/PanoramaMaps|panorama-maps/.test(dir), `expected an app folder, got ${dir}`);
 });
 
+test('desktop: neural vision model endpoints provide predictions and model info', async () => {
+  const info = await jget('/api/model/info');
+  assert.equal(info.loaded, true, 'model weights loaded on desktop server');
+  assert.equal(info.hasOnnx, true, 'onnx model recognized');
+  assert.ok(info.heads?.rayTracing, 'has ray tracing head');
+
+  const res = await api('/api/model/predict', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ features: [0, 0, -1, 0, 0, 1.3, 4.0, 120, 0.5, 0, 1, 5, 1, 0.8, 0.5, 0.2] })
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  assert.ok(data.prediction.rayTracing.aoFactor >= 0);
+  assert.ok(data.prediction.depth3D.parallaxScale <= 0.08);
+  assert.ok(data.prediction.adaptiveMorph.wCubicOut > 0);
+});
+
 /* ---------------- runner ---------------- */
 (async () => {
   console.log('Panorama Maps — desktop app test suite');

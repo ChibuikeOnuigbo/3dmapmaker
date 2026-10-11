@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WorldDatabase, defaultDataDir, sha256Hex } from './db.mjs';
+import { VisionModelRunner } from './model-runner.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const APP_ROOT = path.resolve(HERE, '..');
@@ -220,6 +221,8 @@ export async function createDesktopApp({
     return { meta, warnings: imported.warnings, manifest: imported.manifest };
   }
 
+  const modelRunner = new VisionModelRunner();
+
   /* ---------- routes ---------- */
   const routes = {
     'GET /api/health': async () => ({
@@ -227,6 +230,20 @@ export async function createDesktopApp({
       db: { engine: db.engine, path: db.path, dir: db.dir },
       platform: process.platform, node: process.version,
     }),
+
+    'GET /api/model/info': async () => ({
+      loaded: modelRunner.loaded,
+      hasOnnx: modelRunner.hasOnnx(),
+      heads: modelRunner.modelData?.heads || null,
+      onnxPath: modelRunner.onnxPath,
+    }),
+
+    'POST /api/model/predict': async (req, res, params, { bodyJson }) => {
+      const body = await bodyJson();
+      const features = body?.features || new Array(16).fill(0);
+      const prediction = modelRunner.predict(features);
+      return { ok: true, prediction };
+    },
 
     'GET /api/storage': async () => ({ ...db.stats(), events: db.recentEvents(20) }),
 

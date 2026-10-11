@@ -773,6 +773,11 @@ body.landing-open #topbar { visibility: hidden; }
 
 /* motion settings popup */
 #motionPop { width: 264px; }
+#visionPop { width: 300px; max-height: 82vh; overflow-y: auto; }
+#visionPop .mi.sw { width: 100%; border-radius: var(--r-sm); }
+#visionPop .row-of-field { display: flex; align-items: center; gap: 8px; padding: 2px 4px; }
+#visionPop .row-of-field input[type="range"] { flex: 1; accent-color: var(--accent); }
+#visionPop .row-of-field .pct { font-size: 12px; font-weight: 650; color: var(--ink-2); width: 38px; text-align: right; }
 .mfield { padding: 2px 8px 10px; }
 .mfield + .mfield { border-top: 1px solid var(--line-soft); }
 .mlabel { font-size: 12px; font-weight: 700; color: var(--ink-2); margin: 6px 0 8px; display: flex; justify-content: space-between; align-items: center; }
