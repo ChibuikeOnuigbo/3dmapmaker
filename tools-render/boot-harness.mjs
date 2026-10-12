@@ -138,10 +138,10 @@ globalThis.indexedDB = {
 globalThis.location = globalThis.window.location;
 globalThis.devicePixelRatio = 1;
 globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
-/* real-asset (willow parish) demo uses fetch + createImageBitmap — shim both */
+/* real-asset (willow parish & hotel suite) demo uses fetch + createImageBitmap — shim both */
 globalThis.fetch = async (url) => {
   const u = String(url);
-  if (u.startsWith('assets/willow/')) {
+  if (u.startsWith('assets/willow/') || u.startsWith('assets/hotel/')) {
     // one DISTINCT small payload per URL, so embedding + de-duplication are
     // both exercised honestly (identical URLs still collapse, different do not)
     let h = 2166136261;
@@ -435,7 +435,7 @@ const hotelDef = DEMO_WORLDS.find((w) => w.id === 'demo_hotel_suite');
 check('hotel suite demo registered', !!hotelDef);
 if (hotelDef) {
   await app.loadDemoWorld(hotelDef);
-  await waitFor(() => app.graph?.id === 'demo_hotel_suite' && app.cache.metaOf(app.movement.currentNodeId), 'hotel suite boot', 20000);
+  await waitFor(() => app.graph?.id === 'demo_hotel_suite' && (app.cache.metaOf(app.movement.currentNodeId) || app.cache.metaOf(`${app.movement.currentNodeId}@${app.displayMode}`)), 'hotel suite boot', 20000);
   check('hotel suite loaded as current world', app.graph.id === 'demo_hotel_suite');
   check('hotel suite has >= 50 continuous indoor stations', app.graph.nodes.size >= 50, `${app.graph.nodes.size} stations`);
   check('starting node is entry_door', app.movement.currentNodeId === 'entry_door');

@@ -157,6 +157,16 @@ export function buildHotelSuite() {
     return visible;
   }
 
+  // Primary Hotel Suite Photographic Panorama Variants
+  const hotelPano = {
+    kind: 'urlset',
+    variants: {
+      dusk: 'assets/hotel/suite-master.jpg',
+      day: 'assets/hotel/suite-master.jpg',
+      night: 'assets/hotel/suite-master.jpg',
+    },
+  };
+
   // Register primary stations
   const nodeMap = new Map();
   for (const p of PRIMARY_STATIONS) {
@@ -168,7 +178,7 @@ export function buildHotelSuite() {
       name: p.name,
       headingDeg: p.head,
       zoneId: p.zone,
-      pano: { kind: 'generated' },
+      pano: hotelPano,
     });
     n.cv = {
       description: p.desc,
@@ -256,7 +266,7 @@ export function buildHotelSuite() {
         name: `${nA.name} ➔ ${nB.name} (${Math.round(t * 100)}%)`,
         headingDeg: Math.round(headInterp),
         zoneId: nA.zoneId,
-        pano: { kind: 'generated' },
+        pano: hotelPano,
       });
 
       fillerNode.cv = {

@@ -45,6 +45,7 @@ const SHELL = [
   './js/worlds/willow-parish.js',
   './js/ui/landing.js',
   './assets/landing-bg.jpg',
+  './assets/hotel/suite-master.jpg',
 ];
 
 self.addEventListener('install', (e) => {
