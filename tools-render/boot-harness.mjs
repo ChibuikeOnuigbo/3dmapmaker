@@ -457,6 +457,58 @@ if (hotelDef) {
   }
 }
 
+/* === DEMO 7 · Neo-Kyoto Skyway (Outdoor Futuristic 1) === */
+console.log('\n=== DEMO 7 · Neo-Kyoto Skyway (Outdoor Futuristic) ===');
+const kyotoDef = DEMO_WORLDS.find((w) => w.id === 'demo_neo_kyoto');
+check('neo-kyoto demo registered', !!kyotoDef);
+if (kyotoDef) {
+  await app.loadDemoWorld(kyotoDef);
+  await waitFor(() => app.graph?.id === 'demo_neo_kyoto' && (app.cache.metaOf(app.movement.currentNodeId) || app.cache.metaOf(`${app.movement.currentNodeId}@${app.displayMode}`)), 'neo kyoto boot', 20000);
+  check('neo-kyoto loaded as current world', app.graph.id === 'demo_neo_kyoto');
+  check('neo-kyoto has >= 25 futuristic stations', app.graph.nodes.size >= 25, `${app.graph.nodes.size} stations`);
+  check('starting node is concourse_center', app.movement.currentNodeId === 'concourse_center');
+  check('has maglev terminal station', app.graph.nodes.has('maglev_platform'));
+}
+
+/* === DEMO 8 · Solaris Orbital Colony (Outdoor Futuristic 2) === */
+console.log('\n=== DEMO 8 · Solaris Orbital Colony (Outdoor Futuristic) ===');
+const solarisDef = DEMO_WORLDS.find((w) => w.id === 'demo_solaris_colony');
+check('solaris colony demo registered', !!solarisDef);
+if (solarisDef) {
+  await app.loadDemoWorld(solarisDef);
+  await waitFor(() => app.graph?.id === 'demo_solaris_colony' && (app.cache.metaOf(app.movement.currentNodeId) || app.cache.metaOf(`${app.movement.currentNodeId}@${app.displayMode}`)), 'solaris boot', 20000);
+  check('solaris colony loaded as current world', app.graph.id === 'demo_solaris_colony');
+  check('solaris colony has >= 25 orbital stations', app.graph.nodes.size >= 25, `${app.graph.nodes.size} stations`);
+  check('starting node is solar_center', app.movement.currentNodeId === 'solar_center');
+  check('has planetary ring lookout', app.graph.nodes.has('ring_lookout_c'));
+}
+
+/* === DEMO 9 · The Obsidian Art Gallery (Indoor 2) === */
+console.log('\n=== DEMO 9 · The Obsidian Art Gallery (Indoor) ===');
+const galleryDef = DEMO_WORLDS.find((w) => w.id === 'demo_obsidian_gallery');
+check('obsidian gallery demo registered', !!galleryDef);
+if (galleryDef) {
+  await app.loadDemoWorld(galleryDef);
+  await waitFor(() => app.graph?.id === 'demo_obsidian_gallery' && (app.cache.metaOf(app.movement.currentNodeId) || app.cache.metaOf(`${app.movement.currentNodeId}@${app.displayMode}`)), 'gallery boot', 20000);
+  check('obsidian gallery loaded as current world', app.graph.id === 'demo_obsidian_gallery');
+  check('obsidian gallery has >= 25 gallery stations', app.graph.nodes.size >= 25, `${app.graph.nodes.size} stations`);
+  check('starting node is gallery_entrance', app.movement.currentNodeId === 'gallery_entrance');
+  check('has kinetic helix rotunda', app.graph.nodes.has('helix_north'));
+}
+
+/* === DEMO 10 · Subterranean Bio-Archive (Indoor 3) === */
+console.log('\n=== DEMO 10 · Subterranean Bio-Archive (Indoor) ===');
+const archiveDef = DEMO_WORLDS.find((w) => w.id === 'demo_sub_archive');
+check('sub-archive demo registered', !!archiveDef);
+if (archiveDef) {
+  await app.loadDemoWorld(archiveDef);
+  await waitFor(() => app.graph?.id === 'demo_sub_archive' && (app.cache.metaOf(app.movement.currentNodeId) || app.cache.metaOf(`${app.movement.currentNodeId}@${app.displayMode}`)), 'archive boot', 20000);
+  check('sub-archive loaded as current world', app.graph.id === 'demo_sub_archive');
+  check('sub-archive has >= 25 containment stations', app.graph.nodes.size >= 25, `${app.graph.nodes.size} stations`);
+  check('starting node is airlock_outer', app.movement.currentNodeId === 'airlock_outer');
+  check('has cryo storage silo', app.graph.nodes.has('cryo_approach'));
+}
+
 /* 500 m zone sanity inside the live app */
 const chapel = DEMO_WORLDS.find((w) => w.id === 'demo_chapel_lane').build();
 const dist = chapel.graph.scale.pxToM(500 * chapel.graph.scale.pixelsPerMeter);

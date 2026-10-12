@@ -17,6 +17,10 @@ import { validateWorldJson } from '../js/io/storage.js';
 import { buildChapelLane, buildMillbrook, buildGreatVale } from '../js/worlds/demo-worlds.js';
 import { buildWillowParish } from '../js/worlds/willow-parish.js';
 import { buildHotelSuite } from '../js/worlds/hotel-suite.js';
+import { buildNeoKyoto } from '../js/worlds/neo-kyoto.js';
+import { buildSolarisColony } from '../js/worlds/solaris-colony.js';
+import { buildObsidianGallery } from '../js/worlds/obsidian-gallery.js';
+import { buildSubArchive } from '../js/worlds/sub-archive.js';
 import { MapRenderer } from '../js/map/map-renderer.js';
 import { Compass } from '../js/ui/compass.js';
 import { VisionEngine } from '../js/ai/vision-model.js';
@@ -448,6 +452,53 @@ test('hotel suite: indoor world with bedroom, stairs, adjoining bathroom, and WA
   for (const e of graph.edges.values()) {
     assert.ok(e.distM >= 0.25 && e.distM <= 3.5, `indoor step distance ${e.distM.toFixed(2)}m is out of indoor stride bounds`);
   }
+});
+
+test('neo-kyoto: outdoor futuristic world with mag-lev, holo-concourse, and WASD navigation', () => {
+  const { graph, startNodeId } = buildNeoKyoto();
+  assert.equal(graph.id, 'demo_neo_kyoto');
+  assert.equal(startNodeId, 'concourse_center');
+  assert.ok(graph.nodes.size >= 25, `has ${graph.nodes.size} futuristic nodes`);
+  assert.ok(graph.nodes.has('maglev_platform'), 'contains mag-lev platform');
+  assert.ok(graph.nodes.has('kiosk_front'), 'contains ramen kiosk');
+  assert.ok(graph.nodes.has('overlook_edge_c'), 'contains skyline overlook');
+  assert.equal(graph.environment.kind, 'outdoor');
+  assert.equal(graph.environment.theme, 'cyberpunk');
+  assert.ok(graph.environment.actors.some(a => a.kind === 'tram'), 'has maglev train actor');
+});
+
+test('solaris-colony: outdoor futuristic world with geodesic biodome, solar core, and planetary ring overlook', () => {
+  const { graph, startNodeId } = buildSolarisColony();
+  assert.equal(graph.id, 'demo_solaris_colony');
+  assert.equal(startNodeId, 'solar_center');
+  assert.ok(graph.nodes.size >= 25, `has ${graph.nodes.size} orbital stations`);
+  assert.ok(graph.nodes.has('grove_west'), 'contains bioluminescent flora');
+  assert.ok(graph.nodes.has('ring_lookout_c'), 'contains planetary ring overlook');
+  assert.equal(graph.environment.kind, 'outdoor');
+  assert.equal(graph.environment.theme, 'orbital');
+});
+
+test('obsidian-gallery: indoor museum world with kinetic helix, mezzanine ramp, and private vault', () => {
+  const { graph, startNodeId } = buildObsidianGallery();
+  assert.equal(graph.id, 'demo_obsidian_gallery');
+  assert.equal(startNodeId, 'gallery_entrance');
+  assert.ok(graph.nodes.size >= 25, `has ${graph.nodes.size} museum gallery stations`);
+  assert.ok(graph.nodes.has('helix_north'), 'contains kinetic helix');
+  assert.ok(graph.nodes.has('ramp_high'), 'contains cantilevered ramp');
+  assert.ok(graph.nodes.has('vault_inner'), 'contains private vault');
+  assert.equal(graph.environment.kind, 'indoor');
+});
+
+test('sub-archive: indoor research world with cryo silo, server banks, catwalk, and airlock decon', () => {
+  const { graph, startNodeId } = buildSubArchive();
+  assert.equal(graph.id, 'demo_sub_archive');
+  assert.equal(startNodeId, 'airlock_outer');
+  assert.ok(graph.nodes.size >= 25, `has ${graph.nodes.size} bio-archive stations`);
+  assert.ok(graph.nodes.has('cryo_approach'), 'contains cryo silo');
+  assert.ok(graph.nodes.has('server_mid'), 'contains quantum server banks');
+  assert.ok(graph.nodes.has('catwalk_mid'), 'contains observation catwalk');
+  assert.ok(graph.nodes.has('cleanroom_portal'), 'contains decontamination chamber');
+  assert.equal(graph.environment.kind, 'indoor');
 });
 
 /* ---------------- sharpen: real clarity pass, not a toggle only ---------- */

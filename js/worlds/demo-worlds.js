@@ -16,8 +16,12 @@ import { MapScale } from '../core/scale.js';
 import { rngFor } from '../gen/util.js';
 import { buildWillowParish } from './willow-parish.js';
 import { buildHotelSuite } from './hotel-suite.js';
+import { buildNeoKyoto } from './neo-kyoto.js';
+import { buildSolarisColony } from './solaris-colony.js';
+import { buildObsidianGallery } from './obsidian-gallery.js';
+import { buildSubArchive } from './sub-archive.js';
 
-export { buildHotelSuite };
+export { buildHotelSuite, buildNeoKyoto, buildSolarisColony, buildObsidianGallery, buildSubArchive };
 
 let uid = 0;
 const nid = (p) => `${p}_${(uid++).toString(36)}`;
@@ -493,7 +497,14 @@ export function buildGreatVale() {
 }
 
 export const DEMO_WORLDS = [
-  { id: 'demo_hotel_suite', name: 'Grand Hotel Suite', tag: 'Indoor · Suite & Stairs', build: buildHotelSuite },
+  // 5 Custom Worlds (2 Outdoor Futuristic, 3 Indoor)
+  { id: 'demo_hotel_suite', name: 'Grand Hotel Suite', tag: 'Indoor · Suite & Stairs', category: 'indoor', build: buildHotelSuite },
+  { id: 'demo_neo_kyoto', name: 'Neo-Kyoto Skyway', tag: 'Futuristic · Mag-Lev', category: 'futuristic', build: buildNeoKyoto },
+  { id: 'demo_solaris_colony', name: 'Solaris Orbital Colony', tag: 'Futuristic · Biodome', category: 'futuristic', build: buildSolarisColony },
+  { id: 'demo_obsidian_gallery', name: 'The Obsidian Art Gallery', tag: 'Indoor · Kinetic Museum', category: 'indoor', build: buildObsidianGallery },
+  { id: 'demo_sub_archive', name: 'Subterranean Bio-Archive', tag: 'Indoor · Research Vault', category: 'indoor', build: buildSubArchive },
+
+  // Classic Reference Worlds
   { id: 'demo_chapel_lane', name: 'Chapel Lane', tag: 'Small', build: buildChapelLane },
   { id: 'demo_millbrook', name: 'Millbrook', tag: 'Medium', build: buildMillbrook },
   { id: 'demo_great_vale', name: 'Great Vale', tag: 'Large · 2,100+ nodes', build: buildGreatVale },
