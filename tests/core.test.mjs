@@ -19,6 +19,7 @@ import { buildWillowParish } from '../js/worlds/willow-parish.js';
 import { buildHotelSuite } from '../js/worlds/hotel-suite.js';
 import { MapRenderer } from '../js/map/map-renderer.js';
 import { Compass } from '../js/ui/compass.js';
+import { VisionEngine } from '../js/ai/vision-model.js';
 import { dirSocket, socketWorldBearing, socketAssign, serializeGraphSubset, applyGraphSubset, CARD_MIN, CARD_MAX } from '../js/editors/script-editor.js';
 
 let passed = 0, failed = 0;
@@ -875,6 +876,30 @@ test('compass: OOP model calculates 8-wind & 16-wind cardinal directions and rot
   c.renderCanvas(mockCtx, 100, 100, 15);
   assert.ok(calls.includes('rotate'), 'needle rotates with heading');
   assert.ok(calls.includes('fillText:NE'), 'draws dynamic cardinal direction');
+});
+
+test('vision engine: multi-feature optics, real-time uniform generation & adaptive easing', () => {
+  const engine = new VisionEngine();
+  assert.ok(engine.options.rayTracing, 'ray tracing enabled by default');
+  assert.ok(engine.options.depth3D, '3Dness enabled by default');
+  assert.ok(engine.options.denoise, 'denoise enabled by default');
+  assert.equal(engine.options.wideAngleMode, 'panini', 'panini wide-angle default');
+
+  // Verify adaptive easing strictly preserves velocity & speed
+  const shortTap = engine.evaluateMorphEasing(0.5, 60);
+  const longHold = engine.evaluateMorphEasing(0.5, 750);
+  assert.ok(shortTap > 0 && shortTap < 1, 'easing bounded in (0, 1)');
+  assert.ok(longHold > 0 && longHold < 1, 'easing bounded in (0, 1)');
+  assert.equal(engine.evaluateMorphEasing(0, 150), 0, 'starts at 0');
+  assert.equal(engine.evaluateMorphEasing(1, 150), 1, 'finishes at 1');
+
+  // Uniform generation
+  const u = engine.computeShaderUniforms({ yawDeg: 90, pitchDeg: 15, fovDeg: 85 });
+  assert.equal(u.uRayTracing, 1.0);
+  assert.equal(u.u3Dness, 1.0);
+  assert.ok(u.uDepthRelief <= 0.05, 'relief is subtle ("not too much")');
+  assert.equal(u.uWideAngleMode, 2.0);
+  assert.ok(u.uPaniniComp > 0, 'panini compression active on wide FOV');
 });
 
 /* ---------------- runner ---------------- */

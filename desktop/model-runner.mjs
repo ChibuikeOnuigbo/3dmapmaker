@@ -118,11 +118,14 @@ export class VisionModelRunner {
     const viewIllusion = parseHead(heads.viewIllusion);
     const adaptiveMorph = parseHead(heads.adaptiveMorph);
 
-    // Normalize adaptive morph weights so sum === 1.0 (velocity-preserving guarantee)
-    const wTotal = Math.max(1e-5, Math.abs(adaptiveMorph.w_cubic_out) + Math.abs(adaptiveMorph.w_cubic_in) + Math.abs(adaptiveMorph.w_smoothstep));
-    adaptiveMorph.w_cubic_out /= wTotal;
-    adaptiveMorph.w_cubic_in /= wTotal;
-    adaptiveMorph.w_smoothstep /= wTotal;
+    // Ensure non-negative and normalize so sum === 1.0 (velocity-preserving guarantee)
+    const wOutRaw = Math.max(0.01, adaptiveMorph.w_cubic_out);
+    const wInRaw = Math.max(0.01, adaptiveMorph.w_cubic_in);
+    const wSSRaw = Math.max(0.01, adaptiveMorph.w_smoothstep);
+    const wTotal = wOutRaw + wInRaw + wSSRaw;
+    adaptiveMorph.w_cubic_out = wOutRaw / wTotal;
+    adaptiveMorph.w_cubic_in = wInRaw / wTotal;
+    adaptiveMorph.w_smoothstep = wSSRaw / wTotal;
 
     return {
       raw: Array.from(rawOut),

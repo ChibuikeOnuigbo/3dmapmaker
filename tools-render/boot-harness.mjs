@@ -429,6 +429,34 @@ console.log('\n=== DEMO 5 · the .pworld file (self-contained world) ===');
   }
 }
 
+/* === DEMO 6 · The Grand Hotel Suite (Dense Indoor Scanning & Vision Model) === */
+console.log('\n=== DEMO 6 · The Grand Hotel Suite (Indoor & Vision Engine) ===');
+const hotelDef = DEMO_WORLDS.find((w) => w.id === 'demo_hotel_suite');
+check('hotel suite demo registered', !!hotelDef);
+if (hotelDef) {
+  await app.loadDemoWorld(hotelDef);
+  await waitFor(() => app.graph?.id === 'demo_hotel_suite' && app.cache.metaOf(app.movement.currentNodeId), 'hotel suite boot', 20000);
+  check('hotel suite loaded as current world', app.graph.id === 'demo_hotel_suite');
+  check('hotel suite has >= 50 continuous indoor stations', app.graph.nodes.size >= 50, `${app.graph.nodes.size} stations`);
+  check('starting node is entry_door', app.movement.currentNodeId === 'entry_door');
+
+  // Vision engine active on hotel suite
+  check('vision engine is attached to app', !!app.vision);
+  const vu = app.vision.computeShaderUniforms({ yawDeg: 0, pitchDeg: 0, fovDeg: 75, env: app.graph.environment });
+  check('ray tracing active in indoor environment', vu.uRayTracing === 1.0);
+  check('indoor 3Dness depth relief subtle', vu.u3Dness === 1.0 && vu.uDepthRelief > 0 && vu.uDepthRelief <= 0.05);
+
+  // Walk into intermediate filler node
+  app.graph.settings.walkSpeedMps = 30;
+  const nextNode = app.graph.getNode('entry_door_to_entry_hall_step1') || app.graph.getNode('entry_hall');
+  if (nextNode) {
+    app.viewer.view.yawDeg = bearingTo('entry_door', nextNode.id);
+    await app.tryMove('forward', 90); // 90ms quick tap
+    await waitFor(() => app.movement.currentNodeId === nextNode.id, 'walk to next station', 10000).catch(() => null);
+    check('walked through dense indoor step', app.movement.currentNodeId === nextNode.id);
+  }
+}
+
 /* 500 m zone sanity inside the live app */
 const chapel = DEMO_WORLDS.find((w) => w.id === 'demo_chapel_lane').build();
 const dist = chapel.graph.scale.pxToM(500 * chapel.graph.scale.pixelsPerMeter);

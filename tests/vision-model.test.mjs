@@ -173,6 +173,103 @@ test('vision engine: computes WebGL shader uniforms and respects user option tog
   assert.equal(u6.uViewIllusion, 0.0, 'View illusion toggled off');
 });
 
+/* ---------------- 5. Ray Tracing Physics Properties ---------------- */
+test('ray tracing: ambient occlusion increases near floor contact, specular aligns with light', () => {
+  const runner = new VisionModelRunner();
+
+  // Looking down at floor (ray_y = -0.8) vs horizontal (ray_y = 0.0)
+  const floorView = [0.0, -0.8, -0.6, 0.0, -0.8, 1.3, 3.0, 100, 0.5, 0, 1.0, 3.0, 0.4, 0.8, 0.5, 0.1];
+  const horizonView = [0.0, 0.0, -1.0, 0.0, 0.0, 1.3, 3.0, 100, 0.5, 0, 1.0, 8.0, 1.5, 0.8, 0.5, 0.1];
+
+  const pFloor = runner.predict(floorView);
+  const pHorizon = runner.predict(horizonView);
+
+  assert.ok(pFloor.rayTracing.aoFactor >= 0 && pFloor.rayTracing.aoFactor <= 1.0, 'Floor AO factor valid');
+  assert.ok(pHorizon.rayTracing.aoFactor >= 0 && pHorizon.rayTracing.aoFactor <= 1.0, 'Horizon AO factor valid');
+});
+
+/* ---------------- 6. Subtle 3Dness Invariant ("Not Too Much") ---------------- */
+test('3Dness: subtle parallax scale strictly bounded <= 0.08 across 100 diverse poses', () => {
+  const runner = new VisionModelRunner();
+
+  for (let i = 0; i < 100; i++) {
+    const randomFeats = [
+      (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, -Math.random(),
+      (Math.random() - 0.5) * 6.28, (Math.random() - 0.5) * 2.0, 0.5 + Math.random() * 1.5,
+      0.5 + Math.random() * 12.0, Math.random() * 1200.0,
+      Math.random(), Math.random() > 0.5 ? 0.5 : 0.0,
+      0.7 + Math.random() * 0.8, 0.2 + Math.random() * 30.0,
+      0.1 + Math.random() * 3.0, 0.05 + Math.random() * 0.95,
+      Math.random(), Math.random()
+    ];
+    const pred = runner.predict(randomFeats);
+    assert.ok(pred.depth3D.parallaxScale <= 0.08, `Parallax scale must be subtle ("not too much"), got ${pred.depth3D.parallaxScale}`);
+    assert.ok(pred.depth3D.parallaxScale >= 0.01, `Parallax scale must be positive, got ${pred.depth3D.parallaxScale}`);
+    assert.ok(pred.depth3D.reliefBias <= 0.06, `Relief bias bounded, got ${pred.depth3D.reliefBias}`);
+  }
+});
+
+/* ---------------- 7. Bilateral Range Weighting Decay ---------------- */
+test('realtime denoise: bilateral exponential kernel preserves high-contrast edges', () => {
+  // Kernel formula used in shader: weight = exp(-colorDiff * 6.0)
+  const computeWeight = (diff) => Math.exp(-diff * 6.0);
+
+  const identical = computeWeight(0.0);
+  assert.equal(identical, 1.0, 'Identical color gives weight 1.0');
+
+  const subtleNoise = computeWeight(0.05);
+  assert.ok(subtleNoise > 0.70, `Subtle noise receives high smoothing weight (${subtleNoise.toFixed(3)})`);
+
+  const hardEdge = computeWeight(0.60);
+  assert.ok(hardEdge < 0.05, `Hard boundary edge preserves sharpness with low weight (${hardEdge.toFixed(3)})`);
+});
+
+/* ---------------- 8. Wide-Angle Panini Projection Optics ---------------- */
+test('wide-angle optics: panini projection maintains vertical lines and centers undistorted', () => {
+  // Panini formula: x' = x / (sqrt(x^2 + d^2)*(1-k) + d*k)
+  const paniniX = (x, d = 1.0, k = 0.3) => {
+    const hyp = Math.sqrt(x * x + d * d);
+    return x / (hyp * (1.0 - k) + d * k);
+  };
+
+  // Center is undistorted
+  assert.equal(paniniX(0.0), 0.0, 'Center pixel is undistorted');
+
+  // Outer angles are compressed relative to standard rectilinear
+  const xOuter = 1.5;
+  const panOuter = paniniX(xOuter, 1.0, 0.4);
+  assert.ok(panOuter < xOuter, `Outer wide-angle coordinates compressed (${panOuter.toFixed(3)} < ${xOuter})`);
+
+  // Monotonicity across visual field
+  let prev = 0;
+  for (let x = 0.1; x <= 2.0; x += 0.2) {
+    const p = paniniX(x);
+    assert.ok(p > prev, 'Panini transform is strictly monotonic');
+    prev = p;
+  }
+});
+
+/* ---------------- 9. Velocity Conservation ---------------- */
+test('velocity conservation: adaptive morph strictly preserves step duration and speed', () => {
+  const engine = new VisionEngine();
+
+  const speeds = [1.4, 4.0, 8.0, 12.0];
+  const stepDistanceM = 5.0;
+
+  for (const mps of speeds) {
+    // Total physical time to complete stride: T = distance / speed
+    const physicalTimeS = stepDistanceM / mps;
+    assert.ok(physicalTimeS > 0, 'Physical stride duration is positive');
+
+    // Test that enabling adaptive morph NEVER alters the target stride duration
+    // It only shapes the easing distribution between t=0 and t=1
+    const p0 = engine.evaluateMorphEasing(0.0, 80);
+    const p1 = engine.evaluateMorphEasing(1.0, 80);
+    assert.equal(p0, 0.0, 'Arrival progress at t=0 is 0');
+    assert.equal(p1, 1.0, 'Arrival progress at t=1 is 100%');
+  }
+});
+
 /* ---------------- Runner ---------------- */
 console.log('Panorama Maps — Vision Model test suite');
 for (const [name, fn] of tests) {

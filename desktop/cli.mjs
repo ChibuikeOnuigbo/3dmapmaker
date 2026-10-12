@@ -17,6 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesktopApp, APP_ROOT } from './server.mjs';
 import { defaultDataDir } from './db.mjs';
+import { VisionModelRunner } from './model-runner.mjs';
 
 const argv = process.argv.slice(2);
 const cmd = argv[0] || 'stats';
@@ -137,6 +138,25 @@ try {
       };
       walk(db.assetsDir);
       console.log(`removed ${removed} unreferenced image file(s), freed ${mb(freed)}`);
+      break;
+    }
+    case 'model': {
+      const runner = new VisionModelRunner();
+      console.log(`Panorama Maps — Neural Vision & Optics Model
+  loaded      : ${runner.loaded}
+  onnx model  : ${runner.onnxPath} (exists: ${runner.hasOnnx()})
+  weights     : ${runner.weightsPath}
+  heads       : ${Object.keys(runner.modelData?.heads || {}).join(', ')}`);
+
+      if (flag('predict') || rest[0] === 'predict') {
+        const p = runner.predict([0, 0, -1, 0, 0, 1.3, 4.0, 150, 0.5, 0, 1.0, 5.0, 1.2, 0.8, 0.5, 0.2]);
+        console.log(`\n  Sample Prediction:`);
+        console.log(`  Ray Tracing AO      : ${p.rayTracing.aoFactor.toFixed(3)}`);
+        console.log(`  3Dness Parallax     : ${p.depth3D.parallaxScale.toFixed(3)} (subtle)`);
+        console.log(`  Realtime Denoise    : ${p.denoise.spatialSigma.toFixed(3)}`);
+        console.log(`  Panini Compression  : ${p.wideAngle.paniniCompression.toFixed(3)}`);
+        console.log(`  Adaptive Morph Easing: Cubic-Out ${(p.adaptiveMorph.wCubicOut*100).toFixed(1)}% · Cubic-In ${(p.adaptiveMorph.wCubicIn*100).toFixed(1)}% · Smoothstep ${(p.adaptiveMorph.wSmoothstep*100).toFixed(1)}%`);
+      }
       break;
     }
     default:
