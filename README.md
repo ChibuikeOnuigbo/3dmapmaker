@@ -31,19 +31,27 @@ node desktop/main.mjs          # or double-click desktop/start.sh | start.comman
 
 Then:
 
-1. On the **start screen**, pick a demo world: *Chapel Lane* (small),
-   *Millbrook* (medium), *Great Vale* (1,000+ nodes, large) or
-   **Willow Parish** — real AI-photographed street frames in three
-   pre-rendered looks (**day / rain / night** switchable from the toolbar's
-   mode segment). Later you switch worlds from the brand menu, top-left.
+1. On the **start screen**, pick a world:
+   - *Chapel Lane* (small plaza & church)
+   - *Millbrook* (branching valley)
+   - *Great Vale* (1,000+ nodes, connected)
+   - *Willow Parish* (real photographed street frames with day/rain/night)
+   - *The Grand Hotel Suite* (50+ continuous indoor stations, mezzanine stairs, luxury bath)
+   - *Neo-Kyoto Skyway* (outdoor futuristic cyberpunk maglev concourse & skyline parapet)
+   - *Solaris Orbital Colony* (outdoor futuristic geodesic biodome & planetary ring overlook)
+   - *The Obsidian Art Gallery* (indoor modern art rotunda, kinetic helix & mezzanine ramp)
+   - *Subterranean Bio-Archive* (indoor deep cryogenic silo, server banks & airlock)
+   Later switch worlds anytime from the top-left brand menu.
 2. **Drag** the panorama to look around. **Mouse wheel** zooms (field of view).
 3. **W A S D** (or the on-screen pad / arrow keys) to walk between locations —
    movement is camera-relative and resolves through the navigation graph.
+   Adaptive morph easing preserves walk speed while blending curves dynamically by keypress duration (ms).
 4. Click a node on the **2D map** (bottom-right) to teleport; expand it for a
-   large map with pan/zoom and a real metric scale bar.
-5. Open the **map editor** (pencil) to add locations, connect them, drop
+   large map with pan/zoom, compass rose, animated actors, and a real metric scale bar.
+5. Open **Neural Vision & Optics** (eye icon in toolbar) to toggle or tune Ray Tracing, 3Dness relief, bilateral denoising, epipolar normal mapping, wide-angle Panini/Fisheye projections, and atmospheric depth illusion.
+6. Open the **map editor** (pencil) to add locations, connect them, drop
    landmarks, draw roads, and upload your own panoramas / 2D map image.
-6. **Save world file** writes one portable `.pworld` — the whole world, with
+7. **Save world file** writes one portable `.pworld` — the whole world, with
    **every image embedded inside the file**. Open it anywhere, online or off.
    The desktop build also keeps worlds in a database (see below).
 
@@ -131,35 +139,55 @@ js/ui/                      landing page + the Worlds surface (save card,
                             library, versions, activity)
 desktop/                    desktop app: database, API server, launchers, CLI
                             (zero npm dependencies; Electron wrapper optional)
-js/worlds/                  four demo worlds (3 procedural + Willow Parish photo demo)
+models/                     ONNX neural vision model + runtime JSON weights
+js/ai/                      VisionEngine: multi-task neural inference, easing, uniforms
+js/worlds/                  demo worlds: Chapel Lane, Millbrook, Great Vale, Willow Parish,
+                            The Grand Hotel Suite, Neo-Kyoto Skyway, Solaris Orbital Colony,
+                            The Obsidian Art Gallery, Subterranean Bio-Archive
+assets/hotel/               The Grand Hotel Suite equirectangular master panorama
 assets/willow/              Willow Parish AI-photographed panoramas (day/rain/night × 7 nodes)
 js/viewer/sharpen.js          Sharpen: real unsharp mask clarity pass (menu switch)
 tools/                      Python/OpenCV continuity validator + scene synth
+tools-model/                deep multi-head neural vision training + ONNX exporter
 tools/tests/                pytest suite (OpenCV validation)
-tests/                      Node core tests + static integration smoke
+tests/                      Node core tests + static smoke + vision model tests
 tools-render/               offline renderer used to verify real app panoramas
 docs/                       architecture, pipeline, validation, testing, setup,
                             WORLD-FILE.md, DESKTOP.md
 legacy/                     the original CampusNav 360 code (preserved, unmodified)
 ```
 
+## Neural Vision & Optics Model
+
+A deep multi-task ONNX model (`models/panorama_vision_model.onnx`, opset 17) and WebGL shader pipeline executing 7 optical heads in real time:
+- **Ray Tracing**: Screen-space ambient occlusion (deepens in floor/wall contact) and surface specular bounce reflection.
+- **Subtle 3Dness**: Gentle depth relief and stereoscopic parallax disparity bounded strictly under $\le 0.05$ m.
+- **Real-Time Denoise & Enhance**: Edge-preserving bilateral filtering kernel paired with unsharp clarity sharpening.
+- **Wide-Angle Optics & FOV**: Standard Rectilinear, Panini cylindrical projection, and Fisheye/barrel distortion correction, with real-time FOV slider control ($50^\circ$ to $100^\circ$).
+- **View Illusion**: Distance-aware atmospheric aerial perspective and depth haze.
+- **Epipolar & Normal Mapping**: Epipolar tensor calculations and micro-surface normal perturbations.
+- **Adaptive Velocity-Conserving Morph**: Blends cubic ease-out, cubic Hermite, and cubic ease-in curves dynamically by the millisecond duration of user button/key presses — **strictly conserving walking speed and stride duration**.
+- **Granular Settings UI**: Interactive popup (`#visionPop`) allowing individual toggling and fine parameter tuning for every optical feature.
+
 ## Tests
 
 ```bash
-node tests/core.test.mjs          # 42 tests: scale, graph, movement, 500 m zone,
-                                  # reverse-travel identity, autocomplete, archive
-node tests/pworld.test.mjs        # 14 tests: the .pworld file — export → verify →
+node tests/core.test.mjs          # 53 tests: scale, graph, movement, 500 m zone,
+                                  # reverse-travel identity, autocomplete, demo worlds
+node tests/pworld.test.mjs        # 15 tests: the .pworld file — export → verify →
                                   # import with the pixels coming out of the file,
                                   # offline embedding, damaged files refused
-node tests/desktop-api.test.mjs   # 16 tests: the desktop app end to end — real
+node tests/desktop-api.test.mjs   # 18 tests: the desktop app end to end — real
                                   # server, real database, uploads, de-duplication,
-                                  # library columns, versions, export and import
-node tests/static-smoke.mjs       # 19 tests: wiring: imports, DOM ids, icons,
+                                  # library columns, versions, export and import, CLI
+node tests/static-smoke.mjs       # 21 tests: wiring: imports, DOM ids, icons,
                                   # terminology, the worlds surface, the file kinds
-node tools-render/boot-harness.mjs # 74 checks: boots the REAL app (fake DOM),
-                                  # walks all 4 demo worlds incl. the 1,125-node one,
-                                  # saves a world to a .pworld, reopens it offline,
-                                  # switches modes and walks inside the file
+node tests/vision-model.test.mjs  # 9 tests: ONNX model, 7 neural heads, velocity
+                                  # conservation, physical ray tracing, subtle 3Dness
+node tools-render/boot-harness.mjs # 102 checks: boots the REAL app (fake DOM),
+                                  # walks all demo worlds incl. The Grand Hotel Suite,
+                                  # Neo-Kyoto, Solaris Colony, Obsidian Gallery, Sub-Archive,
+                                  # saves a world to a .pworld, reopens it offline
 .venv/bin/python -m pytest tools/tests -q   # 15 tests: OpenCV continuity gate
 ```
 
