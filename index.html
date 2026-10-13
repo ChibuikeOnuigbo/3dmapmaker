@@ -170,6 +170,10 @@
       <span class="grow">Ray Tracing<small>screen-space reflections & AO</small></span>
       <span class="track"><span class="knob"></span></span>
     </button>
+    <div class="row-of-field" id="rayAoRow" style="margin-top:6px;">
+      <input id="rayAoRange" type="range" min="10" max="100" value="50" aria-label="AO shadow strength">
+      <span class="pct" id="rayAoVal">50%</span>
+    </div>
   </div>
   <div class="mfield">
     <button class="mi sw on" id="swDepth3D" role="menuitemcheckbox" aria-checked="true">
@@ -194,11 +198,23 @@
     </div>
   </div>
   <div class="mfield">
-    <div class="mlabel">Wide-Angle Optics</div>
+    <button class="mi sw on" id="swEpipolar" role="menuitemcheckbox" aria-checked="true">
+      <svg class="ic"><use href="#i-route"/></svg>
+      <span class="grow">Epipolar Flow & Normals<small>epipolar tensor & normal mapping</small></span>
+      <span class="track"><span class="knob"></span></span>
+    </button>
+  </div>
+  <div class="mfield">
+    <div class="mlabel">Wide-Angle Optics & FOV</div>
     <div class="mseg" id="segWideAngle">
       <button type="button" data-wa="off">Off</button>
       <button type="button" data-wa="rectilinear">Rect</button>
       <button type="button" data-wa="panini" class="on">Panini</button>
+      <button type="button" data-wa="fisheye">Fisheye</button>
+    </div>
+    <div class="row-of-field" id="visionFovRow" style="margin-top:6px;">
+      <input id="visionFovRange" type="range" min="50" max="100" value="75" aria-label="Field of view">
+      <span class="pct" id="visionFovVal">75°</span>
     </div>
     <div class="mhint">Panini cylindrical perspective keeps vertical architecture straight in wide FOV without edge stretching.</div>
   </div>

@@ -980,8 +980,17 @@ class App {
       toggleOpt('rayTracing', '#swRayTracing', 'Ray Tracing');
       toggleOpt('depth3D', '#swDepth3D', '3Dness (Depth Relief)');
       toggleOpt('denoise', '#swDenoise', 'Realtime Denoise');
+      toggleOpt('epipolarCalculations', '#swEpipolar', 'Epipolar & Normal Mapping');
       toggleOpt('viewIllusion', '#swViewIllusion', 'View Illusion');
       toggleOpt('adaptiveMorph', '#swAdaptiveMorph', 'Adaptive Morph');
+
+      $('#rayAoRange')?.addEventListener('input', (e) => {
+        this.vision.options.aoStrength = +e.target.value / 100;
+        prefsSvc.save({ vision: this.vision.options });
+        const valEl = $('#rayAoVal');
+        if (valEl) valEl.textContent = `${e.target.value}%`;
+        this.viewer.invalidate();
+      });
 
       $('#depthReliefRange')?.addEventListener('input', (e) => {
         this.vision.options.depthRelief = +e.target.value / 100;
@@ -997,6 +1006,13 @@ class App {
         const valEl = $('#denoiseVal');
         if (valEl) valEl.textContent = `${e.target.value}%`;
         this.viewer.invalidate();
+      });
+
+      $('#visionFovRange')?.addEventListener('input', (e) => {
+        const fov = +e.target.value;
+        this.viewer.setFov(fov);
+        const valEl = $('#visionFovVal');
+        if (valEl) valEl.textContent = `${fov}°`;
       });
 
       $('#segWideAngle')?.addEventListener('click', (e) => {
@@ -1056,9 +1072,16 @@ class App {
     setSw('#swRayTracing', opts.rayTracing);
     setSw('#swDepth3D', opts.depth3D);
     setSw('#swDenoise', opts.denoise);
+    setSw('#swEpipolar', opts.epipolarCalculations);
     setSw('#swViewIllusion', opts.viewIllusion);
     setSw('#swAdaptiveMorph', opts.adaptiveMorph);
 
+    const ra = $('#rayAoRange');
+    if (ra) {
+      ra.value = Math.round((opts.aoStrength ?? 0.5) * 100);
+      const valEl = $('#rayAoVal');
+      if (valEl) valEl.textContent = `${ra.value}%`;
+    }
     const dr = $('#depthReliefRange');
     if (dr) {
       dr.value = Math.round((opts.depthRelief ?? 0.4) * 100);
@@ -1070,6 +1093,13 @@ class App {
       dn.value = Math.round((opts.denoiseStrength ?? 0.5) * 100);
       const valEl = $('#denoiseVal');
       if (valEl) valEl.textContent = `${dn.value}%`;
+    }
+    const fovEl = $('#visionFovRange');
+    if (fovEl && this.viewer?.view) {
+      const curFov = Math.round(this.viewer.view.fovDeg || 75);
+      fovEl.value = curFov;
+      const valEl = $('#visionFovVal');
+      if (valEl) valEl.textContent = `${curFov}°`;
     }
     $('#segWideAngle')?.querySelectorAll('button').forEach(btn => {
       btn.classList.toggle('on', btn.dataset.wa === opts.wideAngleMode);

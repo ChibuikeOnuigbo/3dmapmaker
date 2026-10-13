@@ -43,10 +43,11 @@ uniform float uDepthRelief;   // displacement magnitude (subtle: 0.01..0.05)
 uniform float uDenoise;       // 0/1
 uniform float uDenoiseSigma;  // bilateral spatial sigma
 uniform float uUnsharpClarity;// sharpness enhancement
-uniform float uWideAngleMode; // 0=standard, 1=rectilinear-wide, 2=Panini
+uniform float uWideAngleMode; // 0=standard, 1=rectilinear-wide, 2=Panini, 3=fisheye
 uniform float uPaniniComp;    // Panini compression factor (0..1)
 uniform float uViewIllusion;  // 0/1 (atmospheric depth illusion)
 uniform float uDepthHaze;     // haze density
+uniform float uEpipolarNormals;// 0/1 epipolar flow and normal mapping
 
 const float PI = 3.141592653589793;
 
@@ -54,13 +55,19 @@ vec3 computeViewRay(){
   float t = uTanHalfFov * uZoom;
   vec2 screenCoords = vNdc;
 
-  // Panini Wide-Angle Cylindrical Perspective Projection
-  if (uWideAngleMode > 1.5 && uPaniniComp > 0.01) {
+  // Wide-Angle Optics
+  // Mode 2: Panini cylindrical perspective
+  if (uWideAngleMode > 1.5 && uWideAngleMode < 2.5 && uPaniniComp > 0.01) {
     float x = screenCoords.x * t * uAspect;
     float d = 1.0;
     float panK = uPaniniComp * 0.45;
     float hyp = sqrt(x * x + d * d);
     screenCoords.x = (x / (hyp * (1.0 - panK) + d * panK)) / (t * uAspect);
+  }
+  // Mode 3: Fisheye / Barrel correction
+  else if (uWideAngleMode > 2.5) {
+    float r2 = dot(screenCoords, screenCoords);
+    screenCoords *= (1.0 + r2 * 0.12);
   }
 
   vec3 right = vec3(cos(uYaw), 0.0, sin(uYaw));
@@ -140,6 +147,11 @@ vec3 applyRayTracingOptics(vec3 color, vec3 dir) {
   vec3 normal = vec3(0.0, sign(dir.y), 0.0);
   if (abs(dir.y) < 0.6) normal = normalize(vec3(dir.x, 0.0, dir.z));
   
+  if (uEpipolarNormals > 0.5) {
+    float lum = dot(color, vec3(0.299, 0.587, 0.114));
+    normal = normalize(normal + vec3(lum * 0.08, -lum * 0.04, lum * 0.08));
+  }
+
   vec3 reflectRay = reflect(dir, normal);
   float spec = pow(max(0.0, dot(reflectRay, lightDir)), 16.0) * uRaySpec;
   lit += vec3(spec * 0.4, spec * 0.38, spec * 0.35);
@@ -196,6 +208,7 @@ export class PanoRenderer {
       uPaniniComp: 0.3,
       uViewIllusion: 1.0,
       uDepthHaze: 0.05,
+      uEpipolarNormals: 1.0,
     };
     this._initGL();
   }
@@ -238,7 +251,7 @@ export class PanoRenderer {
       'uZoom', 'uBlur', 'uHeadA', 'uHeadB',
       'uRayTracing', 'uRayAo', 'uRaySpec', 'u3Dness', 'uDepthRelief',
       'uDenoise', 'uDenoiseSigma', 'uUnsharpClarity',
-      'uWideAngleMode', 'uPaniniComp', 'uViewIllusion', 'uDepthHaze'
+      'uWideAngleMode', 'uPaniniComp', 'uViewIllusion', 'uDepthHaze', 'uEpipolarNormals'
     ];
     for (const name of uniformNames) {
       this.u[name] = gl.getUniformLocation(prog, name);
@@ -327,6 +340,7 @@ export class PanoRenderer {
     if (this.u.uPaniniComp) gl.uniform1f(this.u.uPaniniComp, vu.uPaniniComp ?? 0.3);
     if (this.u.uViewIllusion) gl.uniform1f(this.u.uViewIllusion, vu.uViewIllusion ?? 1.0);
     if (this.u.uDepthHaze) gl.uniform1f(this.u.uDepthHaze, vu.uDepthHaze ?? 0.05);
+    if (this.u.uEpipolarNormals) gl.uniform1f(this.u.uEpipolarNormals, vu.uEpipolarNormals ?? 1.0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }

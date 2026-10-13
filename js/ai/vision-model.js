@@ -18,9 +18,11 @@ export class VisionEngine {
       rayTracing: true,
       depth3D: true,
       depthRelief: 0.4,       // 0..1 scale (calibrated to subtle 0.02..0.06m shift)
+      aoStrength: 0.5,        // 0..1 scale for ambient occlusion
       denoise: true,
       denoiseStrength: 0.5,   // 0..1 scale
-      wideAngleMode: 'panini', // 'off' | 'rectilinear' | 'panini'
+      epipolarCalculations: true,
+      wideAngleMode: 'panini', // 'off' | 'rectilinear' | 'panini' | 'fisheye'
       viewIllusion: true,
       adaptiveMorph: true,
       ...options,
@@ -106,7 +108,8 @@ export class VisionEngine {
 
     // 1. Ray tracing uniforms
     const rayActive = opts.rayTracing ? 1.0 : 0.0;
-    const rayAoStrength = rayActive * (isOutdoor ? 0.45 : 0.65);
+    const aoScale = opts.aoStrength ?? 0.5;
+    const rayAoStrength = rayActive * aoScale * (isOutdoor ? 0.9 : 1.3);
     const raySpecBoost = rayActive * (isNight ? 0.2 : 0.5);
 
     // 2. 3Dness uniforms (calibrated to subtle relief - "not too much")
@@ -118,19 +121,23 @@ export class VisionEngine {
     const denoiseSigma = denoiseActive * (0.0008 + opts.denoiseStrength * 0.0016);
     const unsharpClarity = denoiseActive * (0.2 + opts.denoiseStrength * 0.4);
 
-    // 4. Wide-Angle Optics
+    // 4. Wide-Angle Optics & Fisheye/Panini
     let wideMode = 0.0; // 0 = standard rectilinear
     let paniniComp = 0.0;
     if (opts.wideAngleMode === 'panini' && fovDeg >= 65) {
       wideMode = 2.0;
       paniniComp = Math.min(1.0, (fovDeg - 60) / 45);
+    } else if (opts.wideAngleMode === 'fisheye') {
+      wideMode = 3.0;
+      paniniComp = 0.6;
     } else if (opts.wideAngleMode === 'rectilinear') {
       wideMode = 1.0;
     }
 
-    // 5. View Illusion (Atmospheric Depth & Horizon Parallax)
+    // 5. View Illusion & Epipolar/Normal calculation
     const illusionActive = opts.viewIllusion ? 1.0 : 0.0;
     const depthHaze = illusionActive * (isOutdoor ? 0.08 : 0.03);
+    const epipolarActive = opts.epipolarCalculations ? 1.0 : 0.0;
 
     return {
       uRayTracing: rayActive,
@@ -145,6 +152,7 @@ export class VisionEngine {
       uPaniniComp: paniniComp,
       uViewIllusion: illusionActive,
       uDepthHaze: depthHaze,
+      uEpipolarNormals: epipolarActive,
     };
   }
 

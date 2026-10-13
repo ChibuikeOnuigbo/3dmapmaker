@@ -171,6 +171,19 @@ test('vision engine: computes WebGL shader uniforms and respects user option tog
   engine.setOption('viewIllusion', false);
   const u6 = engine.computeShaderUniforms();
   assert.equal(u6.uViewIllusion, 0.0, 'View illusion toggled off');
+
+  engine.setOption('epipolarCalculations', false);
+  const u7 = engine.computeShaderUniforms();
+  assert.equal(u7.uEpipolarNormals, 0.0, 'Epipolar calculations toggled off');
+
+  engine.setOption('wideAngleMode', 'fisheye');
+  const u8 = engine.computeShaderUniforms();
+  assert.equal(u8.uWideAngleMode, 3.0, 'Fisheye mode active');
+
+  engine.setOption('rayTracing', true);
+  engine.setOption('aoStrength', 0.2);
+  const u9 = engine.computeShaderUniforms();
+  assert.ok(u9.uRayAo > 0 && u9.uRayAo < u1.uRayAo, 'AO strength tuned lower');
 });
 
 /* ---------------- 5. Ray Tracing Physics Properties ---------------- */
