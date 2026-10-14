@@ -459,6 +459,65 @@ export class MapRenderer {
       }
     }
 
+    // Loop 2: 3D Physical World Anchors & Custom Architecture
+    const wObjs = g.environment.worldObjects || [];
+    const ppm = g.scale.pixelsPerMeter || 2;
+    for (const obj of wObjs) {
+      const ox = w2sX(obj.x * ppm - (obj.w * ppm) / 2);
+      const oy = w2sY(obj.y * ppm - (obj.d * ppm) / 2);
+      const ow = Math.max(6, obj.w * ppm * s);
+      const od = Math.max(6, obj.d * ppm * s);
+
+      if (g.environment.theme === 'cyberpunk') {
+        ctx.fillStyle = '#0a101d';
+        ctx.fillRect(ox, oy, ow, od);
+        ctx.strokeStyle = obj.id.includes('maglev') ? '#00e5ff' : (obj.id.includes('holo') ? '#ff007f' : '#ffea00');
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(ox, oy, ow, od);
+        if (s > 0.45) {
+          ctx.fillStyle = ctx.strokeStyle;
+          ctx.font = `bold ${Math.max(9, 9 * DPR())}px system-ui`;
+          ctx.fillText(obj.name.split(' ')[0], ox + 2, oy - 3);
+        }
+      } else if (g.environment.theme === 'orbital') {
+        ctx.fillStyle = '#1e293b';
+        if (obj.id.includes('solar') || obj.id.includes('lattice')) {
+          ctx.beginPath();
+          ctx.arc(ox + ow / 2, oy + od / 2, Math.max(ow, od) / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else {
+          ctx.fillRect(ox, oy, ow, od);
+          ctx.strokeStyle = '#10b981';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(ox, oy, ow, od);
+        }
+      } else if (g.environment.theme === 'gallery') {
+        ctx.fillStyle = '#181a20';
+        ctx.fillRect(ox, oy, ow, od);
+        ctx.strokeStyle = obj.id.includes('helix') ? '#f3ba2f' : '#64748b';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(ox, oy, ow, od);
+      } else if (g.environment.theme === 'lab') {
+        ctx.fillStyle = '#0f172a';
+        if (obj.id.includes('silo')) {
+          ctx.beginPath();
+          ctx.arc(ox + ow / 2, oy + od / 2, Math.max(ow, od) / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#06b6d4';
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+        } else {
+          ctx.fillRect(ox, oy, ow, od);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(ox, oy, ow, od);
+        }
+      }
+    }
+
     // debug: zones
     if (this.debug) {
       for (const z of g.zones.zones.values()) {
