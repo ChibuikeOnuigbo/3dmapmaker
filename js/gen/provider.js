@@ -125,6 +125,85 @@ export class ProceduralWorldProvider extends GenerationProvider {
 
   /* ----------------------- sky ----------------------- */
   _paintSky(ctx, W, H, sky, env) {
+    if (env.theme === 'gallery') {
+      ctx.fillStyle = '#1c1e24';
+      ctx.fillRect(0, 0, W, H / 2 + 1);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) {
+        const gx = (i / 8) * W;
+        ctx.strokeRect(gx + 12, H * 0.08, W / 8 - 24, H * 0.22);
+        const spot = ctx.createRadialGradient(gx + W / 16, H * 0.19, 4, gx + W / 16, H * 0.19, 70);
+        spot.addColorStop(0, 'rgba(255, 245, 220, 0.55)');
+        spot.addColorStop(1, 'rgba(255, 245, 220, 0)');
+        ctx.fillStyle = spot;
+        ctx.fillRect(gx, H * 0.08, W / 8, H * 0.35);
+      }
+      ctx.restore();
+      return;
+    }
+    if (env.theme === 'lab') {
+      ctx.fillStyle = '#0e1117';
+      ctx.fillRect(0, 0, W, H / 2 + 1);
+      ctx.save();
+      for (let i = 0; i < 16; i++) {
+        const bx = (i / 16) * W;
+        ctx.fillStyle = '#181f2a';
+        ctx.fillRect(bx, 0, W / 32, H * 0.36);
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(0, 255, 200, 0.8)' : 'rgba(255, 170, 0, 0.8)';
+        ctx.fillRect(bx + 4, H * 0.26, 6, 12);
+      }
+      ctx.restore();
+      return;
+    }
+    if (env.theme === 'cyberpunk') {
+      const g = ctx.createLinearGradient(0, 0, 0, H / 2);
+      g.addColorStop(0, '#060814');
+      g.addColorStop(1, '#1b122e');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H / 2 + 1);
+      ctx.save();
+      for (let i = 0; i < 24; i++) {
+        const sx = (i / 24) * W + 10;
+        const sh = 110 + (i * 37) % 240;
+        const sw = 36 + (i * 17) % 30;
+        const sy = H / 2 - sh;
+        ctx.fillStyle = i % 2 === 0 ? '#0b1020' : '#10162a';
+        ctx.fillRect(sx, sy, sw, sh);
+        ctx.fillStyle = i % 3 === 0 ? 'rgba(0, 240, 255, 0.75)' : (i % 3 === 1 ? 'rgba(255, 0, 128, 0.75)' : 'rgba(255, 230, 0, 0.65)');
+        ctx.fillRect(sx + sw - 3, sy + 10, 2, sh - 15);
+      }
+      ctx.restore();
+      return;
+    }
+    if (env.theme === 'orbital') {
+      const g = ctx.createLinearGradient(0, 0, 0, H / 2);
+      g.addColorStop(0, '#02040c');
+      g.addColorStop(1, '#0c1836');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H / 2 + 1);
+      ctx.save();
+      for (let i = 0; i < 70; i++) {
+        const sx = ((i * 173) % W);
+        const sy = ((i * 97) % Math.floor(H * 0.42));
+        ctx.fillStyle = i % 4 === 0 ? '#bfe3ff' : '#ffffff';
+        ctx.beginPath(); ctx.arc(sx, sy, (i % 3 === 0 ? 1.5 : 1), 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(255, 220, 140, 0.35)';
+      ctx.lineWidth = 14;
+      ctx.beginPath();
+      ctx.ellipse(W * 0.5, H * 0.38, W * 0.45, H * 0.12, -0.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(180, 210, 240, 0.22)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 12; i++) {
+        const lx = (i / 12) * W;
+        ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx, H / 2); ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
     if (env.kind === 'indoor') {
       ctx.fillStyle = env.timeOfDay === 'night' ? '#181a20' : '#f0ece4';
       ctx.fillRect(0, 0, W, H / 2 + 1);
