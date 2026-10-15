@@ -42,11 +42,29 @@ Date: 2026-10-08 · Branch state: arena/373b11d1-3dmapmaker (desktop build + wor
 | Feature | State | Evidence |
 |---|---|---|
 | Animated procedural worlds (Chapel Lane, Millbrook, Great Vale) | SUPPORTED + TESTED | boot-harness 58 checks walk them; live `/tools-render/` previews from committed generator |
-| AI real demo worlds (Willow Wood, day/rain/night) | SUPPORTED + TESTED | `assets/stills/willow-*.png`; expanded to a 34 spot village graph (102 planned frames); generation grounded by identity chaining to the committed village style; day batch for nodes 8 to 27 done (41 of 102 frames present); remaining: day 28 to 34 then rain and night across all spots |
+| AI real demo worlds (Willow Parish, day/rain/night) | SUPPORTED + TESTED | 637-node village graph with day/rain/night variant switching |
+| Loop 1 Custom World: The Grand Hotel Suite | SUPPORTED + TESTED | `js/worlds/hotel-suite.js`; 50+ continuous indoor stations, mezzanine stairs, luxury bath, OpenCV tracking, `assets/hotel/suite-master.jpg` |
+| Loop 2 Custom World: Neo-Kyoto Skyway | SUPPORTED + TESTED | `js/worlds/neo-kyoto.js`; outdoor futuristic cyberpunk maglev concourse, holographic array, skyline parapet, and wet reflective deck |
+| Loop 2 Custom World: Solaris Orbital Colony | SUPPORTED + TESTED | `js/worlds/solaris-colony.js`; outdoor futuristic geodesic biodome, solar harvester core, planetary ring overlook, and luminescent flora |
+| Loop 2 Custom World: The Obsidian Art Gallery | SUPPORTED + TESTED | `js/worlds/obsidian-gallery.js`; indoor modernist rotunda, titanium kinetic helix sculpture, cantilevered mezzanine ramp, terrazzo floor |
+| Loop 2 Custom World: Subterranean Bio-Archive | SUPPORTED + TESTED | `js/worlds/sub-archive.js`; indoor cryogenic specimen silo, quantum data banks, observation catwalk, and decontamination chamber |
 | Void mode (empty world import) | SUPPORTED | start-null guard removed; move pads/keys toasts "this world has no places" |
 | Project open/save/export `.pmap` | SUPPORTED | ProjectArchive export/import round-trip, atomic staged import |
 | World save/open `.pworld` (self contained) | SUPPORTED + TESTED | see the world file table above |
 | Auto-save to IndexedDB | SUPPORTED | debounced persist on every world change |
+
+### Neural Vision, Optics & Adaptive Morph
+| Feature | State | Evidence |
+|---|---|---|
+| ONNX Neural Vision Model (`models/panorama_vision_model.onnx`, opset 17) | SUPPORTED + TESTED | `desktop/model-runner.mjs`, `js/ai/vision-model.js`; 7 output heads |
+| Screen-Space Ray Tracing & Ambient Occlusion | SUPPORTED + TESTED | `pano-renderer.js` WebGL shader; floor/wall contact AO & specular bounce |
+| Subtle 3Dness Parallax Relief | SUPPORTED + TESTED | strictly bounded $\le 0.05$m to eliminate warping artifacts |
+| Real-time Denoise & Enhance | SUPPORTED + TESTED | bilateral range-weighted kernel + unsharp mask clarity sharpening |
+| Epipolar Flow & Normal Mapping | SUPPORTED + TESTED | micro-surface normal perturbations & epipolar curl tensor |
+| Wide-Angle Optics & FOV Control | SUPPORTED + TESTED | Rectilinear, Panini, and Fisheye barrel distortion correction with $50^\circ$–$100^\circ$ slider |
+| Atmospheric View Illusion | SUPPORTED + TESTED | distance-aware aerial perspective and horizon depth haze |
+| Adaptive Velocity-Conserving Morph | SUPPORTED + TESTED | keypress ms dynamic blend ($t^{0.45}$ tap, cubic Hermite, $t^{1.65}$ hold) with zero speed alteration |
+| Settings UI (`#visionPop`) | SUPPORTED + TESTED | granular toggles and tuning sliders for all model features |
 
 ### Navigation
 | Feature | State | Evidence |
