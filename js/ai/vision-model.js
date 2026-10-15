@@ -134,15 +134,18 @@ export class VisionEngine {
       wideMode = 1.0;
     }
 
-    // 5. View Illusion & Epipolar/Normal calculation
+    // 5. View Illusion, Head Pivot Parallax & Light Bounce
     const illusionActive = opts.viewIllusion ? 1.0 : 0.0;
     const depthHaze = illusionActive * (isOutdoor ? 0.08 : 0.03);
+    const headPivot = illusionActive * (opts.headParallax ?? 0.08);
+    const lightBounce = rayActive * (opts.lightBounce ?? 0.45) * (isOutdoor ? 0.6 : 0.9);
     const epipolarActive = opts.epipolarCalculations ? 1.0 : 0.0;
 
     return {
       uRayTracing: rayActive,
       uRayAo: rayAoStrength,
       uRaySpec: raySpecBoost,
+      uLightBounce: lightBounce,
       u3Dness: depthActive,
       uDepthRelief: subtleRelief,
       uDenoise: denoiseActive,
@@ -152,6 +155,7 @@ export class VisionEngine {
       uPaniniComp: paniniComp,
       uViewIllusion: illusionActive,
       uDepthHaze: depthHaze,
+      uHeadPivotParallax: headPivot,
       uEpipolarNormals: epipolarActive,
     };
   }

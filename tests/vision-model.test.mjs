@@ -184,6 +184,11 @@ test('vision engine: computes WebGL shader uniforms and respects user option tog
   engine.setOption('aoStrength', 0.2);
   const u9 = engine.computeShaderUniforms();
   assert.ok(u9.uRayAo > 0 && u9.uRayAo < u1.uRayAo, 'AO strength tuned lower');
+  assert.ok(u9.uLightBounce > 0, 'Light bounce active when ray tracing is on');
+
+  engine.setOption('viewIllusion', true);
+  const u10 = engine.computeShaderUniforms();
+  assert.ok(u10.uHeadPivotParallax > 0, 'Head pivot parallax active in view illusion');
 });
 
 /* ---------------- 5. Ray Tracing Physics Properties ---------------- */

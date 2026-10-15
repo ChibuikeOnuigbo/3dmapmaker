@@ -48,6 +48,8 @@ uniform float uPaniniComp;    // Panini compression factor (0..1)
 uniform float uViewIllusion;  // 0/1 (atmospheric depth illusion)
 uniform float uDepthHaze;     // haze density
 uniform float uEpipolarNormals;// 0/1 epipolar flow and normal mapping
+uniform float uHeadPivotParallax;// head & neck pivot parallax relief
+uniform float uLightBounce;   // indirect ambient light bounce gain
 
 const float PI = 3.141592653589793;
 
@@ -76,7 +78,15 @@ vec3 computeViewRay(){
   vec3 fwd   = fwdH * cos(uPitch) + up * sin(uPitch);
   vec3 upv   = up * cos(uPitch) - fwdH * sin(uPitch);
 
-  return normalize(right * (screenCoords.x * t * uAspect) + upv * (screenCoords.y * t) + fwd);
+  vec3 ray = normalize(right * (screenCoords.x * t * uAspect) + upv * (screenCoords.y * t) + fwd);
+
+  // Head / Pivot Parallax: subtle neck rotational offset simulates stereoscopic depth
+  if (uViewIllusion > 0.5 && uHeadPivotParallax > 0.001) {
+    vec3 pivotOffset = (right * sin(uYaw * 0.5) + upv * sin(uPitch * 0.5)) * uHeadPivotParallax;
+    ray = normalize(ray + pivotOffset * 0.1);
+  }
+
+  return ray;
 }
 
 vec2 eqUv(vec3 d, float head){
@@ -134,7 +144,7 @@ vec2 apply3DDepthRelief(vec2 uv, vec3 dir) {
   return vec2(fract(uv.x + reliefShift), clamp(uv.y + reliefShift * 0.4, 0.001, 0.999));
 }
 
-// Ray Tracing: Specular highlight reflection and ambient occlusion
+// Ray Tracing: Specular highlight reflection, ambient occlusion & light bounce
 vec3 applyRayTracingOptics(vec3 color, vec3 dir) {
   if (uRayTracing < 0.5) return color;
 
@@ -142,7 +152,14 @@ vec3 applyRayTracingOptics(vec3 color, vec3 dir) {
   float ao = 1.0 - clamp(abs(dir.y) * 0.35 * uRayAo, 0.0, 0.45);
   vec3 lit = color * ao;
 
-  // 2. Ray-marched specular reflection off glossy surfaces
+  // 2. Indirect ambient light bounce from ground plane upward
+  if (uLightBounce > 0.01) {
+    float upwardFacing = clamp(-dir.y, 0.0, 1.0);
+    vec3 bounceAmbient = vec3(0.18, 0.16, 0.14) * uLightBounce * upwardFacing;
+    lit += bounceAmbient * (1.0 - ao * 0.5);
+  }
+
+  // 3. Ray-marched specular reflection off glossy surfaces
   vec3 lightDir = normalize(vec3(0.3, 0.8, -0.5));
   vec3 normal = vec3(0.0, sign(dir.y), 0.0);
   if (abs(dir.y) < 0.6) normal = normalize(vec3(dir.x, 0.0, dir.z));
@@ -209,6 +226,8 @@ export class PanoRenderer {
       uViewIllusion: 1.0,
       uDepthHaze: 0.05,
       uEpipolarNormals: 1.0,
+      uHeadPivotParallax: 0.08,
+      uLightBounce: 0.45,
     };
     this._initGL();
   }
@@ -251,7 +270,8 @@ export class PanoRenderer {
       'uZoom', 'uBlur', 'uHeadA', 'uHeadB',
       'uRayTracing', 'uRayAo', 'uRaySpec', 'u3Dness', 'uDepthRelief',
       'uDenoise', 'uDenoiseSigma', 'uUnsharpClarity',
-      'uWideAngleMode', 'uPaniniComp', 'uViewIllusion', 'uDepthHaze', 'uEpipolarNormals'
+      'uWideAngleMode', 'uPaniniComp', 'uViewIllusion', 'uDepthHaze', 'uEpipolarNormals',
+      'uHeadPivotParallax', 'uLightBounce'
     ];
     for (const name of uniformNames) {
       this.u[name] = gl.getUniformLocation(prog, name);
@@ -341,6 +361,8 @@ export class PanoRenderer {
     if (this.u.uViewIllusion) gl.uniform1f(this.u.uViewIllusion, vu.uViewIllusion ?? 1.0);
     if (this.u.uDepthHaze) gl.uniform1f(this.u.uDepthHaze, vu.uDepthHaze ?? 0.05);
     if (this.u.uEpipolarNormals) gl.uniform1f(this.u.uEpipolarNormals, vu.uEpipolarNormals ?? 1.0);
+    if (this.u.uHeadPivotParallax) gl.uniform1f(this.u.uHeadPivotParallax, vu.uHeadPivotParallax ?? 0.08);
+    if (this.u.uLightBounce) gl.uniform1f(this.u.uLightBounce, vu.uLightBounce ?? 0.45);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
