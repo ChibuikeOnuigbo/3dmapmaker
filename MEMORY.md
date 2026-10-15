@@ -63,6 +63,9 @@ Date: 2026-10-08 · Branch state: arena/373b11d1-3dmapmaker (desktop build + wor
 | Epipolar Flow & Normal Mapping | SUPPORTED + TESTED | micro-surface normal perturbations & epipolar curl tensor |
 | Wide-Angle Optics & FOV Control | SUPPORTED + TESTED | Rectilinear, Panini, and Fisheye barrel distortion correction with $50^\circ$–$100^\circ$ slider |
 | Atmospheric View Illusion | SUPPORTED + TESTED | distance-aware aerial perspective and horizon depth haze |
+| Head / Neck Pivot Parallax | SUPPORTED + TESTED | Loop 3: physical neck pivot rotational offset in WebGL ray computation |
+| Indirect Light Bounce Radiance | SUPPORTED + TESTED | Loop 3: ground-plane upward indirect diffuse radiance bounce in ray tracing |
+| Neural Model Inference Telemetry | SUPPORTED + TESTED | Loop 3: live telemetry status badge in `#visionPop` (Opset 17, 7/7 heads) |
 | Adaptive Velocity-Conserving Morph | SUPPORTED + TESTED | keypress ms dynamic blend ($t^{0.45}$ tap, cubic Hermite, $t^{1.65}$ hold) with zero speed alteration |
 | Settings UI (`#visionPop`) | SUPPORTED + TESTED | granular toggles and tuning sliders for all model features |
 
