@@ -9,3 +9,9 @@ Thumbs.db
 .venv/
 __pycache__/
 *.pyc
+dist-desktop/
+Agent/desktop/.data/
+*.pworld
+panorama/tools-render/.browser/
+images/
+**/node_modules/

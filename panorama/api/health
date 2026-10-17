@@ -1,0 +1,6 @@
+{
+  "mode": "web",
+  "build": "static",
+  "database": null,
+  "note": "The plain web build ships this static marker so the desktop bridge can ask whether a database is behind the app without a 404 in the console. The desktop build answers /api/health from its own server, which takes precedence over this file."
+}
