@@ -1,25 +1,25 @@
 /**
  * tools-render/get-browser.mjs — get a browser the harness can drive.
  *
- *   node tools-render/get-browser.mjs            install into tools-render/.browser
- *   node tools-render/get-browser.mjs --check    only report what is already there
+ *   node panorama/tools-render/get-browser.mjs            install into panorama/tools-render/.browser
+ *   node panorama/tools-render/get-browser.mjs --check    only report what is already there
  *
  * The world E2E harness (tools-render/world-e2e.mjs) needs two things:
  *
  *   playwright-core       the driver
  *   a chromium binary     the browser, plus its system libraries
  *
- * This script fetches both into `tools-render/.browser/` (git ignored, never
+ * This script fetches both into `panorama/tools-render/.browser/` (git ignored, never
  * part of the app) so a fresh checkout can run the browser tests with one
  * command and no system packages:
  *
- *   node tools-render/get-browser.mjs
- *   node tools-render/world-e2e.mjs
+ *   node panorama/tools-render/get-browser.mjs
+ *   node panorama/tools-render/world-e2e.mjs
  *
  * If you already have Chromium (or Chrome) on the machine, you do not need
  * this at all — point the harness straight at it:
  *
- *   PM_CHROMIUM=/usr/bin/chromium node tools-render/world-e2e.mjs
+ *   PM_CHROMIUM=/usr/bin/chromium node panorama/tools-render/world-e2e.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -113,11 +113,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const out = await provision();
       console.log('\nready:');
       console.log(JSON.stringify(out, null, 2));
-      console.log('\nnow run:  node tools-render/world-e2e.mjs');
+      console.log('\nnow run:  node panorama/tools-render/world-e2e.mjs');
     } catch (err) {
       console.error(`\ncould not provision a browser: ${err.message}`);
       console.error('If the machine has no network, use your own Chromium instead:');
-      console.error('  PM_CHROMIUM=/path/to/chromium node tools-render/world-e2e.mjs');
+      console.error('  PM_CHROMIUM=/path/to/chromium node panorama/tools-render/world-e2e.mjs');
       process.exit(1);
     }
   }

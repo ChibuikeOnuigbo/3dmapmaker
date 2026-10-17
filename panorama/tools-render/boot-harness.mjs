@@ -3,7 +3,7 @@
  * behind a minimal fake DOM + the pure-JS Canvas2D shim, then walks all three
  * demo worlds, proving the same runtime path a browser takes.
  *
- * Usage:  node tools-render/boot-harness.mjs
+ * Usage:  node panorama/tools-render/boot-harness.mjs
  */
 import { FakeCanvas } from './canvas2d.mjs';
 import { readFileSync } from 'node:fs';

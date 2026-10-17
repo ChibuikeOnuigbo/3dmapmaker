@@ -8,7 +8,7 @@
  *   export a .pworld (server side) → import that file back → delete → restore
  *   a revision → verify the database tells the truth about sizes.
  *
- *   node tests/desktop-api.test.mjs
+ *   node panorama/tests/desktop-api.test.mjs
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -422,6 +422,23 @@ test('desktop: neural vision model endpoints provide predictions and model info'
   assert.ok(data.prediction.rayTracing.aoFactor >= 0);
   assert.ok(data.prediction.depth3D.parallaxScale <= 0.08);
   assert.ok(data.prediction.adaptiveMorph.wCubicOut > 0);
+});
+
+test('desktop: serves the panorama site and the Agent model weights by path', async () => {
+  const home = await api('/');
+  assert.equal(home.status, 200);
+  const html = await home.text();
+  assert.ok(html.includes('<title>Panorama Maps'), 'the desktop root serves panorama/index.html');
+  assert.ok(html.includes('visionPop'), 'the app shell is the real site, not a stub');
+
+  const weights = await api('/models/panorama_vision_weights.json');
+  assert.equal(weights.status, 200, 'Agent/models is served at /models/');
+  const w = await weights.json();
+  assert.equal(w.inDim, 16);
+  assert.ok(w.heads.rayTracing && w.heads.adaptiveMorph, 'the canonical weights file is the one served');
+
+  const alias = await api('/Agent/models/panorama_vision_weights.json');
+  assert.equal(alias.status, 200, 'the Agent/ path is also reachable');
 });
 
 /* ---------------- runner ---------------- */

@@ -47,7 +47,7 @@ files. The CampusNav source itself (`legacy/index.html`, `legacy/css`,
 ### Desktop build (Linux · Windows · macOS)
 | Feature | State | Evidence |
 |---|---|---|
-| The same app served from disk with a database behind it | SUPPORTED + TESTED | `Agent/desktop/server.mjs`; `panorama/tests/desktop-api.test.mjs` 16/16 |
+| The same app served from disk with a database behind it | SUPPORTED + TESTED | `Agent/desktop/server.mjs`; `panorama/tests/desktop-api.test.mjs` 19/19 |
 | Worlds database (SQLite via `node:sqlite`, JSON fallback): worlds, assets, revisions, events, settings | SUPPORTED + TESTED | schema + CRUD on both engines |
 | Images content addressed (identical image stored once) | SUPPORTED + TESTED | two rows, one file on disk |
 | Library columns: world, places, images, size, updated (updated sits under the name) | SUPPORTED + TESTED | library response + browser e2e assertions |

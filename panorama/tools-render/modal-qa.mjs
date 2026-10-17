@@ -3,7 +3,7 @@
  *
  * Usage (any machine with Chromium):
  *   npm i -D playwright            # npx playwright install chromium
- *   node tools-render/modal-qa.mjs [baseUrl]
+ *   node panorama/tools-render/modal-qa.mjs [baseUrl]
  *
  * The sandbox CI cannot download Chromium (CDN firewalled, NSS libs absent),
  * so this script is the reproducible QA record: it captures desktop/tablet/

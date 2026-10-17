@@ -5,7 +5,7 @@
  * import graph resolution, HTML element IDs used by JS, referenced assets,
  * service-worker shell list, and product terminology rules (Spec §2).
  *
- *   node tests/static-smoke.mjs
+ *   node panorama/tests/static-smoke.mjs
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

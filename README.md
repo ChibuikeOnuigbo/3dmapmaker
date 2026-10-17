@@ -195,7 +195,7 @@ node panorama/tests/core.test.mjs          # 53 tests: scale, graph, movement, 5
 node panorama/tests/pworld.test.mjs        # 15 tests: the .pworld file — export → verify →
                                   # import with the pixels coming out of the file,
                                   # offline embedding, damaged files refused
-node panorama/tests/desktop-api.test.mjs   # 18 tests: the desktop app end to end — real
+node panorama/tests/desktop-api.test.mjs   # 19 tests: the desktop app end to end — real
                                   # server, real database, uploads, de-duplication,
                                   # library columns, versions, export and import, CLI
 node panorama/tests/static-smoke.mjs       # 21 tests: wiring: imports, DOM ids, icons,

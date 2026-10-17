@@ -482,8 +482,10 @@ export async function createDesktopApp({
     }
 
     /* ---------- neural model artifacts (Agent/models) ---------- */
-    if (pathname.startsWith('/models/')) {
-      const modelAbs = safeJoin(MODEL_ROOT, pathname.slice('/models'.length));
+    const modelPrefix = pathname.startsWith('/Agent/models/') ? '/Agent/models'
+      : pathname.startsWith('/models/') ? '/models' : null;
+    if (modelPrefix) {
+      const modelAbs = safeJoin(MODEL_ROOT, pathname.slice(modelPrefix.length));
       if (!modelAbs) return text(res, 403, 'forbidden');
       const modelExt = path.extname(modelAbs).toLowerCase();
       if (!STATIC_EXT.has(modelExt)) return text(res, 404, 'not found');

@@ -8,7 +8,7 @@
  * network, no store — which is exactly the "I deleted the photos and the
  * world still walks" promise.
  *
- *   node tests/pworld.test.mjs
+ *   node panorama/tests/pworld.test.mjs
  */
 import assert from 'node:assert/strict';
 import { WorldGraph } from '../js/core/world-graph.js';

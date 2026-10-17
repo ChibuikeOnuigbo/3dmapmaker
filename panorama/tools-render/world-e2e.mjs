@@ -2,9 +2,9 @@
  * tools-render/world-e2e.mjs — the world file and the worlds database,
  * driven through the REAL app in a REAL browser.
  *
- *   node tools-render/world-e2e.mjs                # everything (web + desktop)
- *   node tools-render/world-e2e.mjs --phase web    # static build only
- *   node tools-render/world-e2e.mjs --keep         # keep the temp workspace
+ *   node panorama/tools-render/world-e2e.mjs                # everything (web + desktop)
+ *   node panorama/tools-render/world-e2e.mjs --phase web    # static build only
+ *   node panorama/tools-render/world-e2e.mjs --keep         # keep the temp workspace
  *
  * What it proves, in order:
  *
@@ -29,12 +29,12 @@
  * usual way). Point the script at one:
  *
  *   PM_CHROMIUM=/path/to/chromium PM_CHROMIUM_LIBS=/path/with/libnss3.so \
- *     node tools-render/world-e2e.mjs
+ *     node panorama/tools-render/world-e2e.mjs
  *
  * or install the two packages the sandbox needs and let it find them:
  *
  *   npm i playwright-core @sparticuz/chromium   # in any folder
- *   NODE_PATH=$PWD/node_modules node tools-render/world-e2e.mjs
+ *   NODE_PATH=$PWD/node_modules node panorama/tools-render/world-e2e.mjs
  *
  * Without a browser the script prints how to get one and exits 0 (skipped),
  * so CI stays green on machines that cannot run one.
@@ -512,7 +512,7 @@ console.log(`Panorama Maps — world file E2E\n  workspace ${tmp}\n  screenshots
 
 const browserInfo = await launchBrowser();
 if (browserInfo.skip) {
-  console.log(`\n⏭  skipped: ${browserInfo.skip}\n   get one with:\n     node tools-render/get-browser.mjs\n     node tools-render/world-e2e.mjs\n   or point it at a Chromium you already have:\n     PM_CHROMIUM=/path/to/chromium node tools-render/world-e2e.mjs`);
+  console.log(`\n⏭  skipped: ${browserInfo.skip}\n   get one with:\n     node panorama/tools-render/get-browser.mjs\n     node panorama/tools-render/world-e2e.mjs\n   or point it at a Chromium you already have:\n     PM_CHROMIUM=/path/to/chromium node panorama/tools-render/world-e2e.mjs`);
   process.exit(0);
 }
 await browserInfo.browser.close().catch(() => {});      // the check above only wanted to know we can

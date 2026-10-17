@@ -4,7 +4,7 @@
  * Automated core tests (Spec §22, §59–§63). DOM-free: runs the pure
  * world/movement/scale/completion/archive logic under Node.
  *
- *   node tests/core.test.mjs
+ *   node panorama/tests/core.test.mjs
  */
 import assert from 'node:assert/strict';
 import { MapScale } from '../js/core/scale.js';

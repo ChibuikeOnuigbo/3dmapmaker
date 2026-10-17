@@ -5,7 +5,7 @@
  *   1. visual inspection of the procedural provider,
  *   2. feeding the OpenCV continuity pipeline end-to-end.
  *
- *   node tools-render/render-panoramas.mjs [outdir] [chainLength]
+ *   node panorama/tools-render/render-panoramas.mjs [outdir] [chainLength]
  */
 import fs from 'node:fs';
 import path from 'node:path';

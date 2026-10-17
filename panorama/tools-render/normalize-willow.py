@@ -3,12 +3,14 @@
 
 Run after every generation batch (see ../GENERATION-LOG.md):
   python3 -m venv .venv && .venv/bin/pip install opencv-python-headless
-  .venv/bin/python tools-render/normalize-willow.py
+  .venv/bin/python panorama/tools-render/normalize-willow.py
 """
 import cv2, glob, os
 
+SITE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 FIXED = 0
-for p in sorted(glob.glob(os.path.join('assets', 'willow', '*', '*.jpg'))):
+for p in sorted(glob.glob(os.path.join(SITE_ROOT, 'assets', 'willow', '*', '*.jpg'))):
     im = cv2.imread(p)
     if im is None:
         continue

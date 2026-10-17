@@ -18,14 +18,16 @@ A frame's suspicion score = how many suspect edges it participates in; the
 worst-scoring frames are the hallucination breaks to regenerate (as camera-
 shift edits of their best-correlated EXISTING neighbor).
 
-Usage: .venv/bin/python tools-render/chain-audit.py [--top 15]
-Output: console table + tools-render/chain-audit.txt (committed for the ledger)
+Usage: .venv/bin/python panorama/tools-render/chain-audit.py [--top 15]
+Output: console table + panorama/tools-render/chain-audit.txt (committed for the ledger)
 """
 import sys, os
 import cv2
 import numpy as np
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SITE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(SITE_ROOT)
+ROOT = SITE_ROOT
 DAY = os.path.join(ROOT, 'assets', 'willow', 'day')
 
 TOP_HIST_CORREL = 0.72
@@ -114,11 +116,11 @@ def graph_edges():
     """
     import subprocess, json, os
     js = """
-import { densify } from './js/worlds/willow-parish.js';
+import { densify } from './panorama/js/worlds/willow-parish.js';
 const { edges } = densify();
 console.log(JSON.stringify(edges));
 """
-    out = subprocess.run(['node', '--input-type=module', '-e', js], cwd=ROOT,
+    out = subprocess.run(['node', '--input-type=module', '-e', js], cwd=REPO_ROOT,
                          capture_output=True, text=True, check=True)
     raw = json.loads(out.stdout)
     adj = {}
