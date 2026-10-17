@@ -1,6 +1,6 @@
-# Agent — AI Models, Data Stores & Runtime Subsystem (`Agent/`)
+# Agent data store — models, desktop database & runtime (`Agent/`)
 
-The `Agent/` directory is the dedicated storage and execution environment for the platform's artificial intelligence models, persistent databases, neural runtime tools, and validation pipelines.
+The `Agent/` directory is the dedicated storage and execution environment for the platform's artificial intelligence models, persistent databases, neural runtime tools, and validation pipelines. It holds code and data only — every Markdown document in this repository lives in `panorama/` (with the sole exception of the root `README.md`).
 
 ---
 
@@ -102,4 +102,4 @@ Whenever new models, datasets, or database schemas are introduced:
 1. Store all weights and ONNX model artifacts inside `Agent/models/`.
 2. Keep desktop server endpoints and database code inside `Agent/desktop/`.
 3. Keep training and validation code inside `Agent/tools-model/` and `Agent/tools/`.
-4. Document any new data structures or endpoints directly in this `Agent/README.md`.
+4. Document any new data structures or endpoints in `panorama/docs/AGENT-DATA-STORE.md`.

@@ -13,10 +13,11 @@ that way in every future update:
   `index.html`, `css/`, `js/`, `assets/`, `api/`, `manifest.webmanifest`,
   `sw.js`, `tests/`, `tools-render/`, `legacy/`, `qa/`, `docs/`, `MEMORY.md`,
   `GENERATION-LOG.md`, `finx_genmap.md`.
-- **`Agent/`** — every model and data store: `models/` (ONNX + JSON weights,
-  canonical), `desktop/` (server, SQLite/JSON database, CLI, launchers,
-  Electron wrapper), `tools-model/` (training + ONNX export), `tools/`
-  (OpenCV validation + pytest).
+- **`Agent/`** — every model and data store, and no Markdown: `models/` (ONNX
+  + JSON weights, canonical), `desktop/` (server, SQLite/JSON database, CLI,
+  launchers, Electron wrapper), `tools-model/` (training + ONNX export),
+  `tools/` (OpenCV validation + pytest). Its full explanation lives in
+  `panorama/docs/AGENT-DATA-STORE.md`.
 
 Runtime paths are explicit now: the desktop server serves `panorama/`
 (`APP_ROOT`) and exposes `Agent/models` at `/models/`; the web client reads

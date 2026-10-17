@@ -150,7 +150,6 @@ The repository is organized into three clean operational domains:
 │   └── docs/                       Architecture, desktop, world file, testing, setup
 │
 └── Agent/                          AI models, data stores & desktop runtime
-    ├── README.md                   Subsystem documentation & every data store explained
     ├── models/                     ONNX model + runtime JSON weights (canonical data)
     ├── desktop/                    Desktop server, SQLite/JSON database, launchers, CLI
     ├── tools-model/                PyTorch neural training & ONNX export pipeline
@@ -171,7 +170,8 @@ The repository is organized into three clean operational domains:
 
 Generation datasets and volatile caches stay out of Git (`.pworld` files,
 `node_modules`, `dist-desktop`, `tools-render/.browser` are ignored). Every
-data store in `Agent/` is explained in [`Agent/README.md`](Agent/README.md);
+data store in `Agent/` is explained in
+[`panorama/docs/AGENT-DATA-STORE.md`](panorama/docs/AGENT-DATA-STORE.md);
 the web build and full reference work are indexed in
 [`panorama/README.md`](panorama/README.md).
 

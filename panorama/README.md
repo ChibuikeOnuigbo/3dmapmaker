@@ -91,3 +91,5 @@ node panorama/tools-render/boot-harness.mjs # boots the real app across all demo
 - **`docs/TESTING.md`** — Node, headless browser and OpenCV test harnesses.
 - **`docs/SETUP.md`** — setup guide and developer controls.
 - **`docs/EXISTING-ARCHITECTURE-REPORT.md`** — baseline codebase audit.
+- **`docs/AGENT-DATA-STORE.md`** — every model, database, training and
+  validation data store under `../Agent/`, explained component by component.
