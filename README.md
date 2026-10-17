@@ -21,12 +21,13 @@ SAME WORLD + REAL DISTANCE + REAL POSITION + REAL GRAPH CONNECTION
 
 ```bash
 # WEB — any static file server works: no build, no install, no database
-cd 3dmapmaker
+# Run this from the repository root so Agent/models is reachable too.
 python3 -m http.server 8080
-# open http://localhost:8080
+# open http://localhost:8080/panorama/
 
 # DESKTOP — the same app with a worlds database (Linux · Windows · macOS)
-node desktop/main.mjs          # or double-click desktop/start.sh | start.command | start.bat
+node Agent/desktop/main.mjs
+# or double-click Agent/desktop/start.sh | start.command | start.bat
 ```
 
 Then:
@@ -66,22 +67,22 @@ them, lose the website, go offline: the world still opens and still walks.
 Every world can be saved this way — the demos, worlds you built, worlds you
 imported — from the toolbar **Worlds** button, the Panels menu, either map
 studio, the scripting studio, or `Ctrl`/`Cmd`+`S`. Format, layout and integrity:
-[docs/WORLD-FILE.md](docs/WORLD-FILE.md).
+[panorama/docs/WORLD-FILE.md](panorama/docs/WORLD-FILE.md).
 
 ### The desktop build
 
-`node desktop/main.mjs` serves this same app from disk with a real database
-behind it — worlds, their images (content addressed, so duplicates cost
-nothing), version history and an activity log. Zero npm dependencies
+`node Agent/desktop/main.mjs` serves this same app
+from disk with a real database behind it — worlds, their images (content addressed,
+so duplicates cost nothing), version history and an activity log. Zero npm dependencies
 (`node:http` + `node:fs` + `node:sqlite`), with a plain-file fallback for
 older Node versions, and optional Electron installers if you want a packaged
 window instead of a browser tab. Full guide, including where your worlds are
-kept on each OS: [docs/DESKTOP.md](docs/DESKTOP.md).
+kept on each OS: [panorama/docs/DESKTOP.md](panorama/docs/DESKTOP.md).
 
 The web build stays deliberately database-free: files are the currency there,
 the database is the desktop convenience, and both speak the same `.pworld`.
 
-Full controls are in [docs/SETUP.md](docs/SETUP.md).
+Full controls are in [panorama/docs/SETUP.md](panorama/docs/SETUP.md).
 
 ---
 
@@ -106,11 +107,11 @@ WorldGraph (truth) → GenerationContextBuilder (full world context)
   silently one meter. The mandatory **500 m church-zone test** is built into
   Chapel Lane and enforced by unit tests.
 * **Providers** — the interface is ready for a server-side AI image API (keys
-  must stay server-side; see [docs/GENERATION-PIPELINE.md](docs/GENERATION-PIPELINE.md)).
+  must stay server-side; see [panorama/docs/GENERATION-PIPELINE.md](panorama/docs/GENERATION-PIPELINE.md)).
   Ships with a deterministic **procedural development provider** that renders
   each equirectangular frame *from the world model itself* — guaranteeing
   continuity today while documenting the exact seam for a real AI backend.
-* **Validation** — a Python/OpenCV gate (`tools/panorama_validate.py`)
+* **Validation** — a Python/OpenCV gate (`Agent/tools/panorama_validate.py`)
   combines ORB feature matching, geometric consistency, structure, color,
   brightness, perceptual hashing and metadata with a **distance-aware
   threshold**. Unrelated images (the "church → beach" case) are rejected with
@@ -125,41 +126,58 @@ WorldGraph (truth) → GenerationContextBuilder (full world context)
 
 ## Repository layout
 
+The repository is organized into three clean operational domains:
+
 ```
-index.html                  app shell (zero external deps)
-css/app.css                 design system
-js/core/                    WorldGraph, MapScale, movement, events
-js/viewer/                  WebGL equirect renderer, viewer, AutoComplete
-js/gen/                     provider, context builder, LRU cache, utils
-js/map/                     2D canvas map renderer
-js/editors/                 simple + advanced editors
-js/io/                      .pworld world file, .pmap archive (ZIP),
-                            IndexedDB storage, FS Access, desktop bridge
-js/ui/                      landing page + the Worlds surface (save card,
-                            library, versions, activity)
-desktop/                    desktop app: database, API server, launchers, CLI
-                            (zero npm dependencies; Electron wrapper optional)
-models/                     ONNX neural vision model + runtime JSON weights
-js/ai/                      VisionEngine: multi-task neural inference, easing, uniforms
-js/worlds/                  demo worlds: Chapel Lane, Millbrook, Great Vale, Willow Parish,
-                            The Grand Hotel Suite, Neo-Kyoto Skyway, Solaris Orbital Colony,
-                            The Obsidian Art Gallery, Subterranean Bio-Archive
-assets/hotel/               The Grand Hotel Suite equirectangular master panorama
-assets/willow/              Willow Parish AI-photographed panoramas (day/rain/night × 7 nodes)
-js/viewer/sharpen.js          Sharpen: real unsharp mask clarity pass (menu switch)
-tools/                      Python/OpenCV continuity validator + scene synth
-tools-model/                deep multi-head neural vision training + ONNX exporter
-tools/tests/                pytest suite (OpenCV validation)
-tests/                      Node core tests + static smoke + vision model tests
-tools-render/               offline renderer used to verify real app panoramas
-docs/                       architecture, pipeline, validation, testing, setup,
-                            WORLD-FILE.md, DESKTOP.md
-legacy/                     the original CampusNav 360 code (preserved, unmodified)
+3dmapmaker/
+├── README.md                       This file — the only Markdown document at the root
+│
+├── panorama/                       Standalone web application, tests & full reference work
+│   ├── README.md                   Web build guide + reference archive index
+│   ├── index.html                  Standalone web shell (zero external dependencies)
+│   ├── css/                        Design system and stylesheet modules
+│   ├── js/                         Client app (core, viewer, editors, map, ui, ai)
+│   ├── assets/                     Panoramas (hotel suite master, Willow Parish modes)
+│   ├── api/                        Static web-build health marker
+│   ├── manifest.webmanifest        PWA web manifest
+│   ├── sw.js                       Service Worker offline caching shell
+│   ├── tests/                      Node test suites (core, pworld, desktop, smoke, vision)
+│   ├── tools-render/               Offline renderer, boot harness and browser E2E
+│   ├── legacy/                     Original CampusNav 360 code (preserved, unmodified)
+│   ├── MEMORY.md                   Master state record & verified specifications
+│   ├── GENERATION-LOG.md           Historical generation ledger
+│   ├── finx_genmap.md              Camera-shift fill ledger & standing protocol
+│   └── docs/                       Architecture, desktop, world file, testing, setup
+│
+└── Agent/                          AI models, data stores & desktop runtime
+    ├── README.md                   Subsystem documentation & every data store explained
+    ├── models/                     ONNX model + runtime JSON weights (canonical data)
+    ├── desktop/                    Desktop server, SQLite/JSON database, launchers, CLI
+    ├── tools-model/                PyTorch neural training & ONNX export pipeline
+    └── tools/                      OpenCV physical-invariant validation suite
 ```
+
+### Where new work goes (standing rule)
+
+| What you are adding | Where it belongs |
+|---|---|
+| Pages, styles, viewer/editor logic, maps, demo worlds | `panorama/js/`, `panorama/css/`, `panorama/assets/` |
+| Tests, render harnesses, QA captures | `panorama/tests/`, `panorama/tools-render/` |
+| Architecture notes, specifications, ledgers | `panorama/docs/`, `panorama/MEMORY.md` |
+| ONNX models, weights, training/export scripts | `Agent/models/`, `Agent/tools-model/` |
+| Desktop server, database, CLI, launchers | `Agent/desktop/` |
+| OpenCV validation tools and fixtures | `Agent/tools/` |
+| Top-level orientation | `README.md` (the only Markdown file at the root) |
+
+Generation datasets and volatile caches stay out of Git (`.pworld` files,
+`node_modules`, `dist-desktop`, `tools-render/.browser` are ignored). Every
+data store in `Agent/` is explained in [`Agent/README.md`](Agent/README.md);
+the web build and full reference work are indexed in
+[`panorama/README.md`](panorama/README.md).
 
 ## Neural Vision & Optics Model
 
-A deep multi-task ONNX model (`models/panorama_vision_model.onnx`, opset 17) and WebGL shader pipeline executing 7 optical heads in real time:
+A deep multi-task ONNX model (`Agent/models/panorama_vision_model.onnx`, opset 17) and WebGL shader pipeline executing 7 optical heads in real time:
 - **Ray Tracing**: Screen-space ambient occlusion (deepens in floor/wall contact) and surface specular bounce reflection.
 - **Subtle 3Dness**: Gentle depth relief and stereoscopic parallax disparity bounded strictly under $\le 0.05$ m.
 - **Real-Time Denoise & Enhance**: Edge-preserving bilateral filtering kernel paired with unsharp clarity sharpening.
@@ -172,23 +190,23 @@ A deep multi-task ONNX model (`models/panorama_vision_model.onnx`, opset 17) and
 ## Tests
 
 ```bash
-node tests/core.test.mjs          # 53 tests: scale, graph, movement, 500 m zone,
+node panorama/tests/core.test.mjs          # 53 tests: scale, graph, movement, 500 m zone,
                                   # reverse-travel identity, autocomplete, demo worlds
-node tests/pworld.test.mjs        # 15 tests: the .pworld file — export → verify →
+node panorama/tests/pworld.test.mjs        # 15 tests: the .pworld file — export → verify →
                                   # import with the pixels coming out of the file,
                                   # offline embedding, damaged files refused
-node tests/desktop-api.test.mjs   # 18 tests: the desktop app end to end — real
+node panorama/tests/desktop-api.test.mjs   # 18 tests: the desktop app end to end — real
                                   # server, real database, uploads, de-duplication,
                                   # library columns, versions, export and import, CLI
-node tests/static-smoke.mjs       # 21 tests: wiring: imports, DOM ids, icons,
+node panorama/tests/static-smoke.mjs       # 21 tests: wiring: imports, DOM ids, icons,
                                   # terminology, the worlds surface, the file kinds
-node tests/vision-model.test.mjs  # 9 tests: ONNX model, 7 neural heads, velocity
+node panorama/tests/vision-model.test.mjs  # 9 tests: ONNX model, 7 neural heads, velocity
                                   # conservation, physical ray tracing, subtle 3Dness
-node tools-render/boot-harness.mjs # 102 checks: boots the REAL app (fake DOM),
+node panorama/tools-render/boot-harness.mjs # 102 checks: boots the REAL app (fake DOM),
                                   # walks all demo worlds incl. The Grand Hotel Suite,
                                   # Neo-Kyoto, Solaris Colony, Obsidian Gallery, Sub-Archive,
                                   # saves a world to a .pworld, reopens it offline
-.venv/bin/python -m pytest tools/tests -q   # 15 tests: OpenCV continuity gate
+.venv/bin/python -m pytest Agent/tools/tests -q   # 15 tests: OpenCV continuity gate
 ```
 
 The world file and the worlds database are also driven end to end **in a real
@@ -197,14 +215,14 @@ the network layer, and the file is opened on a clean machine:
 
 ```bash
 npm i playwright-core @sparticuz/chromium     # any folder; or use your own Chromium
-NODE_PATH=$PWD/node_modules node tools-render/world-e2e.mjs
-# writes screenshots to qa/world-file/ and 78 browser checks
+NODE_PATH=$PWD/node_modules node panorama/tools-render/world-e2e.mjs
+# writes screenshots to panorama/qa/world-file/ and 78 browser checks
 ```
 
 Spec-by-spec status (map worlds, demo worlds, generation rules, behavior):
-[docs/SPEC-COMPLIANCE.md](docs/SPEC-COMPLIANCE.md)
+[panorama/docs/SPEC-COMPLIANCE.md](panorama/docs/SPEC-COMPLIANCE.md)
 
-See [docs/TESTING.md](docs/TESTING.md) for the end-to-end verification, which
+See [panorama/docs/TESTING.md](panorama/docs/TESTING.md) for the end-to-end verification, which
 renders **real app panoramas** and validates the whole chain with OpenCV.
 
 ## Design rules honored
