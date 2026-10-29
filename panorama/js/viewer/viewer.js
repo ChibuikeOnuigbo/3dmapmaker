@@ -42,6 +42,9 @@ export class PanoramaViewer {
     // popup (prefs) — style 'morph' | 'fade' | 'snap', amount 0..1 scales the
     // dolly zoom of the morph
     this.motion = { style: 'morph', amount: 0.8, durMs: null };
+    // neural model context fed from the app (walk speed, last press duration,
+    // last step distance) so the 7-head model drives per-frame optics
+    this._visionCtx = { speedMps: 4, pressMs: 150, distanceM: 0 };
     this._drag = null;
     this._vel = { x: 0, y: 0 };
     this._running = false;
@@ -138,6 +141,16 @@ export class PanoramaViewer {
     this.invalidate();
     this.view.fovDeg = Math.min(this.view.maxFov, Math.max(this.view.minFov, fovDeg));
     this._emitView();
+  }
+
+  /** App-supplied neural context (walk speed, last button/key press duration,
+      last step distance). Used by the vision model to pick per-frame optics. */
+  setVisionContext(ctx) {
+    if (!ctx) return;
+    if (ctx.speedMps != null) this._visionCtx.speedMps = ctx.speedMps;
+    if (ctx.pressMs != null) this._visionCtx.pressMs = ctx.pressMs;
+    if (ctx.distanceM != null) this._visionCtx.distanceM = ctx.distanceM;
+    this.invalidate();
   }
 
   setPitchLimits(limits) {
@@ -290,12 +303,23 @@ export class PanoramaViewer {
     this._lastSig = sig;
     this.paintCount++;
 
-    const vu = this.vision.computeShaderUniforms({
-      yawDeg: this.view.yawDeg + yawOff,
-      pitchDeg: this.view.pitchDeg + pitchOff,
-      fovDeg: this.view.fovDeg,
-      env: this.anchors?.environment || {},
-    });
+    const vu = this.vision.weightsLoaded
+      ? this.vision.computeNeuralUniforms({
+          yawDeg: this.view.yawDeg + yawOff,
+          pitchDeg: this.view.pitchDeg + pitchOff,
+          fovDeg: this.view.fovDeg,
+          env: this.anchors?.environment || {},
+          speedMps: this._visionCtx.speedMps,
+          pressMs: this._visionCtx.pressMs,
+          zoom: this.view.zoom,
+          distanceM: this._visionCtx.distanceM,
+        })
+      : this.vision.computeShaderUniforms({
+          yawDeg: this.view.yawDeg + yawOff,
+          pitchDeg: this.view.pitchDeg + pitchOff,
+          fovDeg: this.view.fovDeg,
+          env: this.anchors?.environment || {},
+        });
 
     this.renderer.render({
       yawDeg: this.view.yawDeg + yawOff,

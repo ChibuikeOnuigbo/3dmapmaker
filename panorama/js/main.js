@@ -680,6 +680,7 @@ class App {
     this.bus.on('position:changed', async ({ nodeId, edge, fromId, teleport }) => {
       this.mapRenderer.setWalkProgress(null);
       this._lastDistM = edge?.distM ?? this._lastDistM ?? 0;
+      this.viewer?.setVisionContext?.({ distanceM: this._lastDistM });
       await this._enterNode(nodeId, { fromId, teleport, relativeDir: this._lastMove?.relativeDir ?? null, distM: this._lastDistM });
       // chained walking (key held down)
       if (this._pendingDir) { const d = this._pendingDir; this._pendingDir = null; this.tryMove(d); }
@@ -695,6 +696,9 @@ class App {
     if (!this.movement) return;
     const durMs = pressMs ?? 150;
     this._lastMove = { relativeDir, pressMs: Math.max(20, Math.min(1200, durMs)) };
+    // feed the just-measured press duration into the neural vision model
+    // (adaptive morph easing + per-frame optics)
+    this.viewer?.setVisionContext?.({ pressMs: this._lastMove.pressMs });
     this.movement.tryMove(relativeDir, this.viewer.view.yawDeg);
   }
 
@@ -1396,6 +1400,8 @@ class App {
     const speedMult = +(Math.max(0.6, Math.min(3.0, (mps / 4) * 1.3))).toFixed(2);
     this.mapRenderer?.setSpeedMultiplier?.(speedMult);
     this._applyMotion();
+    // feed walk speed into the neural vision model so per-frame optics track it
+    this.viewer?.setVisionContext?.({ speedMps: mps });
   }
 
   /** Apply motion prefs to the live viewer + re-time the transition so a
@@ -2146,6 +2152,35 @@ class App {
     this.mapRenderer.setCurrent(n.id, this.viewer.view.yawDeg);
   }
 
+  /** Live readout of the 7 neural-head model's current predictions (the
+      neural feature tensor driving per-frame ray tracing, relief, haze,
+      Panini compression and adaptive-morph curve weights). */
+  _debugVisionRow() {
+    if (!this.vision?.weightsLoaded) return '';
+    const v = this.viewer?.view || {};
+    const env = this.graph?.environment || {};
+    const neu = this.vision.computeNeuralUniforms({
+      yawDeg: v.yawDeg ?? 0,
+      pitchDeg: v.pitchDeg ?? 0,
+      fovDeg: v.fovDeg ?? 75,
+      env,
+      speedMps: this.graph?.settings?.walkSpeedMps ?? 4,
+      pressMs: this._lastMove?.pressMs ?? 150,
+      zoom: v.zoom ?? 1,
+      distanceM: this._lastDistM ?? 0,
+    });
+    const n = neu._neural;
+    const kv = (k, val) => `<span class="kv"><span class="k">${k}</span><span class="v">${val}</span></span>`;
+    return `<div class="sec"></div>`
+      + kv('vision.ao', n.rayTracing.ao_factor.toFixed(2))
+      + kv('vision.spec', n.rayTracing.specular_intensity.toFixed(2))
+      + kv('vision.bounce', n.rayTracing.light_bounce_gain.toFixed(2))
+      + kv('vision.relief', n.depth3D.depth_relief_bias.toFixed(3))
+      + kv('vision.haze', n.viewIllusion.aerial_haze.toFixed(2))
+      + kv('vision.panini', n.wideAngle.panini_compression.toFixed(2))
+      + kv('vision.morph', `${n.adaptiveMorph.w_cubic_out.toFixed(2)}/${n.adaptiveMorph.w_cubic_in.toFixed(2)}/${n.adaptiveMorph.w_smoothstep.toFixed(2)}`);
+  }
+
   _startDebugOverlay() {
     setInterval(() => {
       const el = $('#debugOverlay');
@@ -2178,7 +2213,8 @@ class App {
         + kv('continuity sim', meta?.validation?.sim != null ? meta.validation.sim.toFixed(2) + ` (need ≥ ${meta.validation.expectedMin?.toFixed(2) ?? '—'})` : '—')
         + kv('cache', `${this.cache.decodedCount}/${this.cache.capacity} decoded`)
         + kv('AutoComplete', this.acEnabled ? (report?.complete === false ? `repaired T${report.topMissingPct.toFixed(1)}% B${report.bottomMissingPct.toFixed(1)}%` : 'on · complete') : 'OFF')
-        + kv('render', `${meta?.renderMs ?? '—'} ms`);
+        + kv('render', `${meta?.renderMs ?? '—'} ms`)
+        + this._debugVisionRow();
       // heading cone & dynamic cardinal compass follow the live view
       if (this._viewDirty) {
         this.compass?.setHeading(v.yawDeg);

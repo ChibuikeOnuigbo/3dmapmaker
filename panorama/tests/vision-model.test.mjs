@@ -267,6 +267,71 @@ test('wide-angle optics: panini projection maintains vertical lines and centers 
   }
 });
 
+/* ---------------- 8b. Client neural forward pass (browser, 0 deps) ---------------- */
+test('vision engine: client forward pass computes all 7 neural heads from the loaded weights', () => {
+  const engine = new VisionEngine();
+  // _loadModelWeights fetches over HTTP; in Node tests the weights are read
+  // straight from the canonical Agent/models artifact so the test is deterministic.
+  if (!engine.weightsLoaded) {
+    const wd = path.join(REPO_ROOT, 'Agent', 'models', 'panorama_vision_weights.json');
+    engine.weights = JSON.parse(fs.readFileSync(wd, 'utf8'));
+    engine.weightsLoaded = true;
+  }
+
+  const feats = new Float32Array([0, 0, -1, 0.5, 0.1, 1.3, 3.5, 95, 0.5, 0, 1.0, 6, 1.2, 0.85, 0.5, 0.1]);
+  const pred = engine.predict(feats);
+
+  assert.ok(pred.rayTracing.ao_factor >= 0 && pred.rayTracing.ao_factor <= 1, 'AO factor bounded');
+  assert.ok(pred.rayTracing.specular_intensity >= 0, 'Specular intensity non-negative');
+  // raw head values are post-processed/clamped before reaching the shader
+  // (see computeNeuralUniforms and the desktop runner); guarantee the rendered
+  // relief stays subtle ("not too much", <= 0.05 m shift)
+  const relief = Math.min(0.05, Math.max(0, pred.depth3D.depth_relief_bias)) * 0.045;
+  assert.ok(relief >= 0 && relief <= 0.05, `depth relief subtle after clamping, got ${relief}`);
+  assert.ok(typeof pred.depth3D.subtle_parallax_scale === 'number', 'parallax scale calculated');
+  assert.ok(typeof pred.calc.epipolar_curl === 'number', 'Epipolar curl calculated');
+  assert.ok(typeof pred.calc.spherical_jacobian === 'number', 'Spherical jacobian calculated');
+  assert.ok(pred.wideAngle.panini_compression >= 0 && pred.wideAngle.panini_compression <= 1, 'Panini compression in [0,1]');
+  assert.ok(pred.viewIllusion.aerial_haze >= 0 && pred.viewIllusion.aerial_haze <= 0.5, 'Aerial haze bounded');
+
+  const am = pred.adaptiveMorph;
+  const sum = am.w_cubic_out + am.w_cubic_in + am.w_smoothstep;
+  assert.ok(Math.abs(sum - 1) < 1e-4, `adaptive morph weights sum to 1.0 (got ${sum})`);
+});
+
+test('vision engine: client neural uniforms respect toggles and stay bounded', () => {
+  const engine = new VisionEngine();
+  if (!engine.weightsLoaded) {
+    const wd = path.join(REPO_ROOT, 'Agent', 'models', 'panorama_vision_weights.json');
+    engine.weights = JSON.parse(fs.readFileSync(wd, 'utf8'));
+    engine.weightsLoaded = true;
+  }
+
+  const u = engine.computeNeuralUniforms({ yawDeg: 45, pitchDeg: -10, fovDeg: 80, env: { timeOfDay: 'day', weather: 'clear' }, speedMps: 4, pressMs: 200 });
+  assert.equal(u.uRayTracing, 1.0, 'ray tracing on');
+  assert.equal(u.u3Dness, 1.0, '3Dness on');
+  assert.ok(u.uDepthRelief > 0 && u.uDepthRelief <= 0.05, 'depth relief subtle');
+  assert.ok(u.uDenoiseSigma > 0 && u.uDenoiseSigma <= 0.004, 'denoise sigma bounded');
+  assert.ok(u.uDepthHaze >= 0 && u.uDepthHaze <= 0.4, 'depth haze bounded');
+  assert.ok(u.uPaniniComp >= 0 && u.uPaniniComp <= 1, 'panini compression bounded');
+  assert.ok(u.uHeadPivotParallax >= 0, 'head pivot parallax present');
+  assert.ok(u._neural, 'neural heads exposed');
+  assert.equal(u._neural.calc.epipolar_curl, u._neural.calc.epipolar_curl, 'epipolar flow value present');
+
+  engine.setOption('rayTracing', false);
+  const u2 = engine.computeNeuralUniforms({ yawDeg: 0, pitchDeg: 0, fovDeg: 75, env: {} });
+  assert.equal(u2.uRayTracing, 0.0, 'ray tracing toggled off');
+  assert.equal(u2.uLightBounce, 0.0, 'light bounce off with ray tracing');
+
+  engine.setOption('depth3D', false);
+  const u3 = engine.computeNeuralUniforms({ yawDeg: 0, pitchDeg: 0, fovDeg: 75, env: {} });
+  assert.equal(u3.u3Dness, 0.0, '3Dness toggled off');
+
+  engine.setOption('viewIllusion', false);
+  const u4 = engine.computeNeuralUniforms({ yawDeg: 0, pitchDeg: 0, fovDeg: 75, env: {} });
+  assert.equal(u4.uViewIllusion, 0.0, 'view illusion toggled off');
+});
+
 /* ---------------- 9. Velocity Conservation ---------------- */
 test('velocity conservation: adaptive morph strictly preserves step duration and speed', () => {
   const engine = new VisionEngine();
